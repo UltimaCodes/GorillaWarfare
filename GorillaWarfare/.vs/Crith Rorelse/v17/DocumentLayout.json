@@ -1,0 +1,309 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|c:\\unity\\projects\\fps\\crith rorelse\\assets\\scripts\\launcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\launcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\playercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\playercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\menumanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\menumanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\roommanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\roommanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\playermanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\playermanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\iteminfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\iteminfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\guninfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\guninfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\gun.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\gun.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\singleshotgun.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\singleshotgun.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\billboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\billboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\spawnpoint.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\spawnpoint.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\idamageable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\idamageable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\spawnmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\spawnmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\scoreboarditem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\scoreboarditem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\scoreboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\scoreboard.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\playernamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\playernamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\usernamedisplay.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\usernamedisplay.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|C:\\Unity\\Projects\\FPS\\Crith Rorelse\\assets\\scripts\\item.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{15357095-CADB-DA5D-6025-BC8C5C91C006}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\item.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 10,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "MenuManager.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\MenuManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\MenuManager.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\MenuManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\MenuManager.cs",
+              "ViewState": "AQIAABoAAAAAAAAAAADwvy8AAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-06-13T06:48:07.682Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "Billboard.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Billboard.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Billboard.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Billboard.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Billboard.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABEAAAArAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T19:36:30.987Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "Spawnpoint.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Spawnpoint.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Spawnpoint.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Spawnpoint.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Spawnpoint.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAEAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T16:34:18.076Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "IDamageable.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\IDamageable.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\IDamageable.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\IDamageable.cs",
+              "RelativeToolTip": "Assets\\Scripts\\IDamageable.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAATAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:50:40.399Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "SingleShotGun.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\SingleShotGun.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\SingleShotGun.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\SingleShotGun.cs",
+              "RelativeToolTip": "Assets\\Scripts\\SingleShotGun.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABcAAAAsAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:39:03.142Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Gun.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Gun.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Gun.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Gun.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Gun.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAcAAAApAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:38:07.957Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "Item.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Item.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Item.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Item.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Item.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAAfAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:04:37.822Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "GunInfo.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\GunInfo.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\GunInfo.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\GunInfo.cs",
+              "RelativeToolTip": "Assets\\Scripts\\GunInfo.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAcAAAAYAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:01:14.808Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "ItemInfo.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\ItemInfo.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\ItemInfo.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\ItemInfo.cs",
+              "RelativeToolTip": "Assets\\Scripts\\ItemInfo.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T15:00:16.658Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "PlayerController.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerController.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\PlayerController.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerController.cs",
+              "RelativeToolTip": "Assets\\Scripts\\PlayerController.cs",
+              "ViewState": "AQIAAHwAAAAAAAAAAAAcwNcAAAA2AAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-16T19:05:01.408Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Launcher.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Launcher.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Launcher.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Launcher.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Launcher.cs",
+              "ViewState": "AQIAAHYAAAAAAAAAAAAkwIwAAAAFAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-16T12:30:49.184Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "RoomManager.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\RoomManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\RoomManager.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\RoomManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\RoomManager.cs",
+              "ViewState": "AQIAAAUAAAAAAAAAAAAmwAwAAAAFAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-16T18:25:09.497Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PlayerManager.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\PlayerManager.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\PlayerManager.cs",
+              "ViewState": "AQIAACAAAAAAAAAAAAAwwCUAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-16T18:53:05.21Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "ScoreboardItem.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\ScoreboardItem.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\ScoreboardItem.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\ScoreboardItem.cs",
+              "RelativeToolTip": "Assets\\Scripts\\ScoreboardItem.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABAAAAAhAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T20:18:59.019Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "Scoreboard.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Scoreboard.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Scoreboard.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\Scoreboard.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Scoreboard.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAADYAAAAJAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T20:23:34.651Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "SpawnManager.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\SpawnManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\SpawnManager.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\SpawnManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\SpawnManager.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABQAAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T16:36:56.254Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "UsernameDisplay.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\UsernameDisplay.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\UsernameDisplay.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\UsernameDisplay.cs",
+              "RelativeToolTip": "Assets\\Scripts\\UsernameDisplay.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA8AAAAoAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T19:39:41.389Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "PlayerNameManager.cs",
+              "DocumentMoniker": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerNameManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\PlayerNameManager.cs",
+              "ToolTip": "C:\\Unity\\Projects\\FPS\\Crith Rorelse\\Assets\\Scripts\\PlayerNameManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\PlayerNameManager.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABsAAAA+AAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-05-17T19:44:16.704Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
