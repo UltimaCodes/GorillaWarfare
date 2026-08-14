@@ -9,6 +9,12 @@ but the packs are good and free so here it is.
 - Impact Sounds — footsteps, bullet impacts, hit sounds
 - Sci-Fi Sounds — weapon fire, death
 
+## Models
+
+Rigged monkey from [OpenGameArt](https://opengameart.org/content/monkey-3d-model-rigged-fbx) —
+CC0. 34 bones, skinned, and it maps to Unity's Humanoid rig so humanoid animations can be
+retargeted onto it.
+
 ## Movement
 
 Quake 3 / CPM movement is based on
