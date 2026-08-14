@@ -28,7 +28,9 @@ public static class AssetFixups
 
         GameObject before = AssetDatabase.LoadAssetAtPath<GameObject>(monkeyPath);
         SkinnedMeshRenderer skin = before != null ? before.GetComponentInChildren<SkinnedMeshRenderer>(true) : null;
-        float rawHeight = skin != null ? skin.sharedMesh.bounds.size.y : 0f;
+        // SMD is Z-up and the fbx export didn't convert, so the model's height is along Z, not Y.
+        // MonkeyRig rotates it upright at runtime; here we just need to measure the right axis.
+        float rawHeight = skin != null ? skin.sharedMesh.bounds.size.z : 0f;
 
         // bounds already have the current import scale baked in, so divide it back out to get
         // the true height. Without this, running twice measures the scaled mesh and resets the

@@ -14,20 +14,24 @@ public class MonkeyRig : MonoBehaviour
     [Header("Model")]
     [SerializeField] string modelResource = "Models/Gorilla/gorilla";
 
+    // The source is Z-up (Source engine SMD) and the fbx carries that through, so he imports
+    // lying on his back. Stand him up here rather than re-exporting.
+    [SerializeField] Vector3 modelRotation = new Vector3(-90f, 0f, 0f);
+
     // Bone names as data, not code - the last model used b_Spine02 style names, this one is
     // Rigify's DEF- convention. Swapping models shouldn't mean editing this file.
     [Header("Bones")]
-    [SerializeField] string spineBone = "DEF-chest";
-    [SerializeField] string headBone = "DEF-head";
-    [SerializeField] string leftThighBone = "DEF-thigh.01.L";
-    [SerializeField] string leftShinBone = "DEF-shin.01.L";
-    [SerializeField] string rightThighBone = "DEF-thigh.01.R";
-    [SerializeField] string rightShinBone = "DEF-shin.01.R";
-    [SerializeField] string leftUpperArmBone = "DEF-upper_arm.01.L";
-    [SerializeField] string leftForeArmBone = "DEF-forearm.01.L";
-    [SerializeField] string rightUpperArmBone = "DEF-upper_arm.01.R";
-    [SerializeField] string rightForeArmBone = "DEF-forearm.01.R";
-    [SerializeField] string rightHandBone = "DEF-hand.R";
+    [SerializeField] string spineBone = "SPINE3";
+    [SerializeField] string headBone = "Head";
+    [SerializeField] string leftThighBone = "LEFTHIP";
+    [SerializeField] string leftShinBone = "LEFTKNEE";
+    [SerializeField] string rightThighBone = "RIGHTHIP";
+    [SerializeField] string rightShinBone = "RIGHTKNEE";
+    [SerializeField] string leftUpperArmBone = "LEFTSHOULDER";
+    [SerializeField] string leftForeArmBone = "LEFTELBOW";
+    [SerializeField] string rightUpperArmBone = "RIGHTSHOULDER";
+    [SerializeField] string rightForeArmBone = "RIGHTELBOW";
+    [SerializeField] string rightHandBone = "RIGHTHOLD";
 
     [Header("Gait")]
     [SerializeField] float strideRate = 2.6f;      // swings per metre travelled
@@ -78,7 +82,7 @@ public class MonkeyRig : MonoBehaviour
 
         // Capsule pivot is at the middle, model pivot is at the feet.
         model.transform.localPosition = new Vector3(0f, -1f, 0f);
-        model.transform.localRotation = Quaternion.identity;
+        model.transform.localRotation = Quaternion.Euler(modelRotation);
 
         // Belt and braces against the T-pose: if anything ever re-imports this as Humanoid or
         // Generic, the Animator would stamp its own pose over everything we write here.
