@@ -3,7 +3,6 @@ using Photon.Pun;
 using TMPro;
 using UnityEngine;
 
-/// <summary>Shows the owning player's nickname above a remote player.</summary>
 public class UsernameDisplay : MonoBehaviour
 {
     [SerializeField] PhotonView playerPV;
@@ -13,13 +12,11 @@ public class UsernameDisplay : MonoBehaviour
     {
         if (playerPV == null || text == null)
         {
-            Debug.LogError("[UsernameDisplay] missing PhotonView or text reference.", this);
             enabled = false;
             return;
         }
 
-        // Your own nameplate would sit inside your head. Return rather than falling through:
-        // the old code disabled the object and then kept going to touch Owner anyway.
+        // Don't want my own name floating inside my head.
         if (playerPV.IsMine)
         {
             gameObject.SetActive(false);
@@ -27,14 +24,12 @@ public class UsernameDisplay : MonoBehaviour
         }
 
         if (!TryApplyNickname())
-            StartCoroutine(ApplyNicknameWhenOwnerArrives());
+            StartCoroutine(WaitForOwner());
     }
 
-    // Owner is not guaranteed to be populated the moment an instantiated object awakes, and
-    // dereferencing it blindly threw a NullReferenceException on the remote clients that lost
-    // that race.
     bool TryApplyNickname()
     {
+        // Owner isn't always set the instant an instantiated object wakes up.
         if (playerPV.Owner == null)
             return false;
 
@@ -43,7 +38,7 @@ public class UsernameDisplay : MonoBehaviour
         return true;
     }
 
-    IEnumerator ApplyNicknameWhenOwnerArrives()
+    IEnumerator WaitForOwner()
     {
         for (int i = 0; i < 120; i++)
         {
@@ -53,6 +48,6 @@ public class UsernameDisplay : MonoBehaviour
                 yield break;
         }
 
-        Debug.LogWarning($"[UsernameDisplay] view {playerPV.ViewID} never resolved an Owner.", this);
+        Debug.LogWarning($"View {playerPV.ViewID} never got an Owner.", this);
     }
 }

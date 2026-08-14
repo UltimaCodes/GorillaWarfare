@@ -10,7 +10,6 @@ public class SpawnManager : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning("[SpawnManager] a second instance exists; destroying the duplicate.", this);
             Destroy(gameObject);
             return;
         }
@@ -19,7 +18,7 @@ public class SpawnManager : MonoBehaviour
         spawnpoints = GetComponentsInChildren<Spawnpoint>();
 
         if (spawnpoints.Length == 0)
-            Debug.LogError("[SpawnManager] no Spawnpoint children found; players cannot spawn.", this);
+            Debug.LogError("No spawnpoints under SpawnManager - nobody can spawn.", this);
     }
 
     void OnDestroy()
@@ -28,16 +27,11 @@ public class SpawnManager : MonoBehaviour
             Instance = null;
     }
 
-    /// <summary>Returns a random spawnpoint, or null if none are configured.</summary>
     public Transform GetSpawnpoint()
     {
-        // Previously indexed straight into the array: with no spawnpoints, Random.Range(0, 0)
-        // returns 0 and spawnpoints[0] threw IndexOutOfRangeException.
+        // Random.Range(0, 0) returns 0, so an empty array used to blow up here.
         if (spawnpoints == null || spawnpoints.Length == 0)
-        {
-            Debug.LogError("[SpawnManager] GetSpawnpoint called with no spawnpoints configured.", this);
             return null;
-        }
 
         return spawnpoints[Random.Range(0, spawnpoints.Length)].transform;
     }

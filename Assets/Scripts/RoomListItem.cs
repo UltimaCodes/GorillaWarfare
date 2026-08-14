@@ -17,13 +17,9 @@ public class RoomListItem : MonoBehaviour
 
     public void OnClick()
     {
-        // Launcher lives in the Menu scene and is destroyed on scene load; a stale button click
-        // during the transition would otherwise dereference a null Instance.
+        // Launcher dies with the menu scene, so a click mid-transition finds nothing.
         if (Launcher.Instance == null)
-        {
-            Debug.LogWarning("[RoomListItem] clicked with no Launcher present.", this);
             return;
-        }
 
         Launcher.Instance.JoinRoom(info);
     }

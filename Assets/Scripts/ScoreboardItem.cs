@@ -17,10 +17,7 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
         this.player = player;
 
         if (player == null)
-        {
-            Debug.LogError("[ScoreboardItem] initialised with a null player.", this);
             return;
-        }
 
         if (usernameText != null)
         {
@@ -36,9 +33,8 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
         if (player == null)
             return;
 
-        // Default to "0" rather than leaving whatever the prefab shipped with: a player who has
-        // not yet scored has no custom property at all, so these rows previously displayed the
-        // prefab's placeholder text until their first kill or death.
+        // Fall back to "0" - before your first kill the property doesn't exist yet and
+        // the row just showed whatever placeholder text was on the prefab.
         if (killsText != null)
             killsText.text = player.CustomProperties.TryGetValue("kills", out object kills) ? kills.ToString() : "0";
 

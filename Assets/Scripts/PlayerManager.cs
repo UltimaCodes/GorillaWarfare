@@ -7,13 +7,9 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 public class PlayerManager : MonoBehaviour
 {
-    // Forward slash, not Path.Combine: this string is a Resources key sent over the network,
-    // and Path.Combine produces a backslash on Windows.
     const string playerControllerPrefab = "PhotonPrefabs/PlayerController";
 
-    // Find() previously scanned every object in the scene on each call, and it is called on
-    // every kill. Owners are stable for the lifetime of the object, so a registry answers in
-    // constant time; the scan is kept only as a fallback for the window before Owner resolves.
+    // Find() runs on every kill and used to scan the whole scene each time.
     static readonly Dictionary<Player, PlayerManager> registry = new Dictionary<Player, PlayerManager>();
 
     PhotonView PV;
@@ -52,14 +48,14 @@ public class PlayerManager : MonoBehaviour
     {
         if (SpawnManager.Instance == null)
         {
-            Debug.LogError("[Spawn] no SpawnManager in scene; cannot create controller.", this);
+            Debug.LogError("No SpawnManager in the scene.", this);
             return;
         }
 
         Transform spawnpoint = SpawnManager.Instance.GetSpawnpoint();
         if (spawnpoint == null)
         {
-            Debug.LogError("[Spawn] SpawnManager returned no spawnpoint; cannot create controller.", this);
+            Debug.LogError("SpawnManager gave us no spawnpoint.", this);
             return;
         }
 
@@ -68,8 +64,8 @@ public class PlayerManager : MonoBehaviour
 
     public void Die()
     {
-        // Guarded: dying without a controller -- which happens if CreateController bailed out --
-        // used to throw inside PhotonNetwork.Destroy and leave the player permanently dead.
+        // If CreateController bailed earlier this is null, and destroying null left you
+        // dead for good.
         if (controller != null)
             PhotonNetwork.Destroy(controller);
 
@@ -104,9 +100,8 @@ public class PlayerManager : MonoBehaviour
         if (registry.TryGetValue(player, out PlayerManager cached) && cached != null)
             return cached;
 
-        // FirstOrDefault, not SingleOrDefault: Single throws if a duplicate ever exists, which
-        // would turn a cosmetic desync into an exception. FindObjectsByType replaces the
-        // FindObjectsOfType deprecated in Unity 6.
+        // Fallback for the window before Owner resolves. First, not Single - Single throws
+        // if there's ever a duplicate.
         PlayerManager found = FindObjectsByType<PlayerManager>(FindObjectsSortMode.None)
             .FirstOrDefault(x => x.PV != null && x.PV.Owner == player);
 

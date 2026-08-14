@@ -3,23 +3,18 @@ using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
 
-/// <summary>
-/// On-screen network state readout for diagnosing the late-join visibility bug.
-///
-/// Installs itself at runtime, so it needs no scene or prefab changes -- which also means
-/// nothing here can be clobbered by the Unity Editor re-serializing an asset.
-///
-/// Evidence so far says a client stops receiving Photon events once it has loaded the game
-/// scene: the room creator never sees later joiners, never gets them on the scoreboard (which
-/// is driven by OnPlayerEnteredRoom, a pure callback with no instantiation involved), yet can
-/// still move and be seen by others. Everything a late joiner knows could have come from its
-/// join-time snapshot -- buffered instantiates plus PlayerList -- with no live traffic at all.
-///
-/// So this reports the inbound path directly: the message-queue flag, live callback counters,
-/// and how long since anything arrived.
-///
-/// Toggle with F3. Remove this file once the bug is fixed.
-/// </summary>
+// Throwaway debug HUD for the late-join visibility bug.
+//
+// Symptom: whoever made the room never sees anyone who joins after them, can't shoot them,
+// and never gets them on the scoreboard - but can move around fine and IS seen by them.
+// Scoreboard rows come from OnPlayerEnteredRoom, which has nothing to do with spawning, so
+// the inbound side is what's broken, not Instantiate.
+//
+// Everything a late joiner knows could have come from its join snapshot (buffered spawns +
+// PlayerList), so they might be just as deaf and only look fine. Hence the callback counters.
+//
+// Installs itself, so no scene or prefab wiring to lose. F3 toggles.
+// TODO: delete this once the bug is closed.
 public class NetworkDebugOverlay : MonoBehaviourPunCallbacks
 {
     const float refreshInterval = 0.5f;
@@ -90,8 +85,7 @@ public class NetworkDebugOverlay : MonoBehaviourPunCallbacks
 
         sb.AppendLine("=== NETWORK DEBUG (F3 to hide) ===");
 
-        // The decisive line. PhotonHandler gates sending, serializing AND dispatching on this
-        // single flag, so if it is False the client is deaf and mute even though the game runs.
+        // PhotonHandler gates sending, serializing and dispatching on this one flag.
         sb.AppendLine($"MESSAGE QUEUE RUNNING: {PhotonNetwork.IsMessageQueueRunning}   <<< must be True");
         sb.AppendLine($"state={PhotonNetwork.NetworkClientState} region={PhotonNetwork.CloudRegion ?? "?"} ping={PhotonNetwork.GetPing()}ms");
 
@@ -110,7 +104,7 @@ public class NetworkDebugOverlay : MonoBehaviourPunCallbacks
             sb.Append($" {p.ActorNumber}{(p.IsMasterClient ? "*" : "")}");
         sb.AppendLine();
 
-        // If these stay at 0 while other players are joining, inbound events are not arriving.
+        // Still 0 while someone joins = nothing is reaching us.
         string since = lastInboundTime < 0f ? "never" : $"{Time.unscaledTime - lastInboundTime:F1}s ago";
         sb.AppendLine($"callbacks: entered={enteredCount} left={leftCount} props={propsCount}");
         sb.AppendLine($"last inbound: {lastInbound} ({since})");
