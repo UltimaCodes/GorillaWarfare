@@ -31,7 +31,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // Camera on the prefab is Untagged so Camera.main is useless. Billboards need this.
     public static Camera LocalCamera { get; private set; }
 
-    PlayerManager playerManager;
 
     Rigidbody rb;
     PhotonView PV;
@@ -40,34 +39,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         rb = GetComponent<Rigidbody>();
         PV = GetComponent<PhotonView>();
-
-        ResolvePlayerManager();
-    }
-
-    // Runs everywhere, and the owner's PlayerManager view might not be registered here yet.
-    // This used to chain straight off PhotonView.Find and throw, killing the rest of Awake.
-    bool ResolvePlayerManager()
-    {
-        if (playerManager != null)
-            return true;
-
-        object[] data = PV.InstantiationData;
-        if (data == null || data.Length == 0)
-        {
-            Debug.LogError($"[Spawn] view={PV.ViewID} has no InstantiationData; cannot resolve PlayerManager.", this);
-            return false;
-        }
-
-        int managerViewID = (int)data[0];
-        PhotonView managerView = PhotonView.Find(managerViewID);
-        if (managerView == null)
-        {
-            Debug.LogWarning($"[Spawn] view={PV.ViewID} could not find PlayerManager view {managerViewID}. Will retry on demand.", this);
-            return false;
-        }
-
-        playerManager = managerView.GetComponent<PlayerManager>();
-        return playerManager != null;
     }
 
     void Start()
@@ -128,7 +99,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         Debug.Log(
             $"[Spawn:{phase}] view={PV.ViewID} mine={PV.IsMine} owner={PV.Owner?.NickName ?? "<none>"} " +
             $"pos={transform.position} active={gameObject.activeInHierarchy} " +
-            $"renderers={drawing}/{renderers.Length} manager={(playerManager == null ? "NULL" : "ok")} " +
+            $"renderers={drawing}/{renderers.Length} " +
             $"players={PhotonNetwork.CurrentRoom?.PlayerCount} master={PhotonNetwork.IsMasterClient}", this);
     }
 
@@ -323,14 +294,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (currentHealth <= 0)
         {
+            // Credit first - Die() destroys this object on the way out.
+            RoomManager.CreditKill(info.Sender);
             Die();
-
-            // Losing a kill credit shouldn't take the death down with it.
-            PlayerManager killer = PlayerManager.Find(info.Sender);
-            if (killer != null)
-                killer.GetKill();
-            else
-                Debug.LogWarning($"[Kill] no PlayerManager for sender {info.Sender?.NickName ?? "<none>"}; kill not credited.", this);
         }
     }
 
@@ -338,14 +304,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         GameAudio.PlayAt(GameAudio.Death, transform.position, 0.8f);
 
-        // If Awake lost the race the view is surely up by now. Dying with a null manager
-        // would leave you stuck dead.
-        if (!ResolvePlayerManager())
-        {
-            Debug.LogError($"[Spawn] view={PV.ViewID} died with no PlayerManager; cannot respawn.", this);
-            return;
-        }
+        RoomManager.CreditDeath(PhotonNetwork.LocalPlayer);
 
-        playerManager.Die();
+        if (RoomManager.Instance != null)
+            RoomManager.Instance.RespawnLocalPlayer();
     }
 }

@@ -36,10 +36,10 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
         // Fall back to "0" - before your first kill the property doesn't exist yet and
         // the row just showed whatever placeholder text was on the prefab.
         if (killsText != null)
-            killsText.text = player.CustomProperties.TryGetValue("kills", out object kills) ? kills.ToString() : "0";
+            killsText.text = player.CustomProperties.TryGetValue(RoomManager.KillsKey, out object kills) ? kills.ToString() : "0";
 
         if (deathsText != null)
-            deathsText.text = player.CustomProperties.TryGetValue("deaths", out object deaths) ? deaths.ToString() : "0";
+            deathsText.text = player.CustomProperties.TryGetValue(RoomManager.DeathsKey, out object deaths) ? deaths.ToString() : "0";
     }
 
     public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
@@ -47,7 +47,7 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
         if (player == null || targetPlayer != player)
             return;
 
-        if (changedProps.ContainsKey("kills") || changedProps.ContainsKey("deaths"))
+        if (changedProps.ContainsKey(RoomManager.KillsKey) || changedProps.ContainsKey(RoomManager.DeathsKey))
             UpdateStats();
     }
 }
