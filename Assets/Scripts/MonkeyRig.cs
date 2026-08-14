@@ -49,6 +49,10 @@ public class MonkeyRig : MonoBehaviour
     // position deltas tell us everything we need.
     public float LookPitch { get; set; }
 
+    /// Exposed so the editor check can report why the gait isn't moving.
+    public bool GroundedForTest => grounded;
+    public string DebugState => $"speed={planarSpeed:F2} dist={distanceThisFrame:F3} phase={gaitPhase:F2} grounded={grounded}";
+
     float planarSpeed;
     bool grounded = true;
     Vector3 lastPosition;
@@ -63,6 +67,7 @@ public class MonkeyRig : MonoBehaviour
     Quaternion leftUpperRest, leftForeRest, rightUpperRest, rightForeRest;
 
     float gaitPhase;
+    float distanceThisFrame;
 
     public Transform RightHand { get; private set; }
 
@@ -154,24 +159,35 @@ public class MonkeyRig : MonoBehaviour
     // LateUpdate so we're writing bones after anything else has had its say this frame.
     void LateUpdate()
     {
+        Tick(Time.deltaTime);
+    }
+
+    // Time comes in as a parameter so this can be driven outside play mode, where deltaTime is
+    // always 0 and the gait could never be exercised. Nothing else about it changes.
+    public void Tick(float dt)
+    {
         if (model == null)
             return;
 
-        Measure();
+        Measure(dt);
         DriveLegs();
         DriveAim();
         DriveArms();
     }
 
-    void Measure()
+    void Measure(float dt)
     {
         Vector3 position = transform.position;
         Vector3 delta = position - lastPosition;
         delta.y = 0f;
         lastPosition = position;
 
-        float dt = Time.deltaTime;
-        planarSpeed = dt > 0f ? delta.magnitude / dt : 0f;
+        distanceThisFrame = delta.magnitude;
+
+        // Hold the last speed through a zero-length frame rather than dropping to standstill;
+        // a hitch shouldn't snap the legs straight.
+        if (dt > 0f)
+            planarSpeed = distanceThisFrame / dt;
 
         // Same probe FootstepPlayer uses: capsule is 2 tall on a centred pivot, so the feet sit
         // 1 below, plus slack for slopes and steps.
@@ -183,9 +199,10 @@ public class MonkeyRig : MonoBehaviour
     {
         float speed01 = Mathf.Clamp01(planarSpeed / referenceSpeed);
 
-        // Phase advances with distance covered, not with time, so the legs stay in step with
-        // the ground however fast you're going.
-        gaitPhase += planarSpeed * strideRate * Time.deltaTime;
+        // Advance by distance actually travelled. It used to compute speed by dividing by
+        // deltaTime and then multiply deltaTime straight back in, which is the same number with
+        // a division by zero waiting in it - the legs froze solid any frame dt was 0.
+        gaitPhase += distanceThisFrame * strideRate;
 
         // Airborne: hold a tucked pose instead of pedalling through the sky.
         float swing = grounded ? Mathf.Sin(gaitPhase) * maxLegSwing * speed01 : -18f;
