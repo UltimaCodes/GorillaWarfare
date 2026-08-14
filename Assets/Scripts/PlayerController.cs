@@ -24,14 +24,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     const float maxHealth = 100f;
     float currentHealth = maxHealth;
 
-    // Pitch is applied to cameraHolder, which is not covered by any PhotonTransformView.
-    // We send it ourselves as a single float so remote players can see where we're aiming.
+    // Pitch lives on cameraHolder, which nothing replicates - we send it ourselves.
     float remoteVerticalLook;
     const float pitchLerpSpeed = 15f;
 
-    // The player camera is Untagged, so Camera.main returns null and anything needing the local
-    // view (nameplate billboards) had to guess with FindObjectOfType -- which can return another
-    // player's camera in the window before Start destroys it. Publishing it here is unambiguous.
+    // Camera on the prefab is Untagged so Camera.main is useless. Billboards need this.
     public static Camera LocalCamera { get; private set; }
 
     PlayerManager playerManager;
@@ -47,9 +44,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         ResolvePlayerManager();
     }
 
-    // Runs on every client, including ones that may not have registered the owner's
-    // PlayerManager view yet. Previously this chained straight off PhotonView.Find and threw
-    // a NullReferenceException on a late join, aborting the rest of Awake.
+    // Runs everywhere, and the owner's PlayerManager view might not be registered here yet.
+    // This used to chain straight off PhotonView.Find and throw, killing the rest of Awake.
     bool ResolvePlayerManager()
     {
         if (playerManager != null)
@@ -95,17 +91,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             if (ui != null)
                 Destroy(ui);
 
-            // The invisibility report is "others can't see me". Re-check a remote player a
-            // couple of seconds in, once replication has had time to deliver something, so we
-            // can tell "never spawned" from "spawned in the wrong place" from "spawned fine".
+            // Check again once replication has had a moment, so we can tell "never spawned"
+            // from "spawned somewhere silly".
             StartCoroutine(LogSpawnAfterSettle());
         }
     }
 
     void OnDestroy()
     {
-        // Respawning destroys and recreates the controller, so a stale static would otherwise
-        // point at a destroyed camera until the replacement's Start runs.
+        // Respawning recreates the controller, so don't leave a dead camera in the static.
         if (LocalCamera != null && PV != null && PV.IsMine)
             LocalCamera = null;
     }
@@ -116,8 +110,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         LogSpawn("settled");
     }
 
-    // Diagnostic for the late-join visibility bug. Reports where the object actually is and
-    // whether anything is drawing, rather than assuming the failure is a rendering one.
+    // TODO: rip this out once the late-join visibility bug is closed.
     void LogSpawn(string phase)
     {
         Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
@@ -250,9 +243,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation, 0f, 0f);
     }
 
-    // Remote players: drive cameraHolder from the replicated pitch. Lerped rather than snapped
-    // because serialization only fires 10-30x/second, so raw values would visibly step.
-    // cameraHolder survives on remote clients -- Start() destroys the Camera child, not its parent.
+    // Lerped, not snapped - serialization only fires 20x/sec so raw values visibly step.
+    // cameraHolder survives on remote clients; Start only kills the Camera child.
     void ApplyRemoteLook()
     {
         if (cameraHolder == null)
@@ -262,8 +254,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation, 0f, 0f);
     }
 
-    // Observed by the root PhotonView alongside PhotonTransformView. Sends one float rather
-    // than adding a fourth PhotonView to cameraHolder purely to carry vertical aim.
+    // One float on the existing root view, rather than a whole extra PhotonView on cameraHolder.
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
         if (stream.IsWriting)
@@ -327,8 +318,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             Die();
 
-            // Another unguarded cross-client lookup: the killer's PlayerManager may not be
-            // resolvable here, and losing a kill credit shouldn't take the death with it.
+            // Losing a kill credit shouldn't take the death down with it.
             PlayerManager killer = PlayerManager.Find(info.Sender);
             if (killer != null)
                 killer.GetKill();
@@ -339,8 +329,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void Die()
     {
-        // Retry the lookup here: if Awake lost the race, the view is almost certainly
-        // registered by now, and dying with a null manager would strand the player dead.
+        // If Awake lost the race the view is surely up by now. Dying with a null manager
+        // would leave you stuck dead.
         if (!ResolvePlayerManager())
         {
             Debug.LogError($"[Spawn] view={PV.ViewID} died with no PlayerManager; cannot respawn.", this);

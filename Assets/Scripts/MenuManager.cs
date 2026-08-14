@@ -43,19 +43,15 @@ public class MenuManager : MonoBehaviour
             }
         }
 
-        // A typo in a menu name used to close every menu and open nothing, leaving a blank
-        // screen with no indication of why.
+        // Otherwise a typo just closes everything and you stare at a blank screen.
         if (!found)
-            Debug.LogError($"[MenuManager] no menu named '{menuName}'; every menu is now closed.", this);
+            Debug.LogError($"No menu called '{menuName}'.", this);
     }
 
     public void OpenMenu(Menu menu)
     {
         if (menu == null)
-        {
-            Debug.LogError("[MenuManager] OpenMenu called with a null menu.", this);
             return;
-        }
 
         for (int i = 0; i < menus.Length; i++)
         {

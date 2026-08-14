@@ -32,17 +32,13 @@ public class Scoreboard : MonoBehaviourPunCallbacks
         if (player == null || container == null || scoreboardItemPrefab == null)
             return;
 
-        // Adding a player who already has a row used to overwrite the dictionary entry and
-        // orphan the old GameObject, leaking a row that could never be removed again.
+        // Adding twice used to orphan the first row - it stayed on screen forever.
         if (scoreboardItems.ContainsKey(player))
             return;
 
         ScoreboardItem item = Instantiate(scoreboardItemPrefab, container).GetComponent<ScoreboardItem>();
         if (item == null)
-        {
-            Debug.LogError("[Scoreboard] item prefab has no ScoreboardItem component.", this);
             return;
-        }
 
         item.Initialize(player);
         scoreboardItems[player] = item;
@@ -50,9 +46,8 @@ public class Scoreboard : MonoBehaviourPunCallbacks
 
     void RemoveScoreboardItem(Player player)
     {
-        // Previously indexed the dictionary directly, throwing KeyNotFoundException whenever a
-        // player left who had never been added -- which happens for anyone who joins and leaves
-        // while this scoreboard is mid-initialisation.
+        // Was indexing straight into the dictionary, which threw for anyone who left
+        // without ever being added.
         if (player == null || !scoreboardItems.TryGetValue(player, out ScoreboardItem item))
             return;
 
