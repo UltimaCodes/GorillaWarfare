@@ -84,6 +84,15 @@ public class MonkeyRig : MonoBehaviour
         model.transform.localPosition = new Vector3(0f, -1f, 0f);
         model.transform.localRotation = Quaternion.Euler(modelRotation);
 
+        // The fbx ships with no material, so bind ours here rather than relying on fbx
+        // material import lining up.
+        Material skinMat = Resources.Load<Material>("Models/Gorilla/GorillaMat");
+        if (skinMat != null)
+        {
+            foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
+                r.sharedMaterial = skinMat;
+        }
+
         // Belt and braces against the T-pose: if anything ever re-imports this as Humanoid or
         // Generic, the Animator would stamp its own pose over everything we write here.
         foreach (Animator stray in model.GetComponentsInChildren<Animator>(true))
