@@ -124,6 +124,34 @@ public static class WeaponCheck
         Check(sb, bm != null && bm.color.r > 0.7f && bm.color.g > 0.6f && bm.color.b < 0.4f,
               "banana is yellow", bm == null ? "-" : bm.color.ToString());
 
+        // ---- feel components actually attach and do something ----
+        GameObject rig = new GameObject("~gunfeel");
+        MuzzleFlash mf2 = rig.AddComponent<MuzzleFlash>();
+        mf2.Build();
+        Light flashLight = rig.GetComponentInChildren<Light>(true);
+        Check(sb, flashLight != null, "muzzle flash light built",
+              flashLight == null ? "none" : $"{flashLight.type}, range {flashLight.range}");
+        Check(sb, flashLight != null && !flashLight.enabled, "flash starts off",
+              flashLight == null ? "-" : $"enabled={flashLight.enabled}");
+        if (flashLight != null)
+        {
+            mf2.Fire();
+            Check(sb, flashLight.enabled, "firing lights it", $"enabled={flashLight.enabled}");
+            Check(sb, flashLight.transform.localPosition.z > 0.1f, "flash sits at the muzzle",
+                  $"local z {flashLight.transform.localPosition.z:F2}");
+        }
+        Object.DestroyImmediate(rig);
+
+        // sway must only move the holder, never the aim
+        GameObject holder = new GameObject("~holder");
+        holder.transform.localPosition = new Vector3(0.2f, -0.15f, 0.4f);
+        Vector3 before = holder.transform.localPosition;
+        WeaponSway sway = holder.AddComponent<WeaponSway>();
+        sway.SendMessage("Start", SendMessageOptions.DontRequireReceiver);
+        Check(sb, holder.transform.localPosition == before, "sway rests where it started",
+              $"{holder.transform.localPosition} vs {before}");
+        Object.DestroyImmediate(holder);
+
         Finish(sb);
     }
 

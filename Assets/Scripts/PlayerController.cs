@@ -64,6 +64,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             LocalCamera = GetComponentInChildren<Camera>();
             gameObject.AddComponent<PlayerMovement>();
+
+            // Sway goes on the item holder rather than the camera, so it moves the weapon
+            // without moving where you're aiming.
+            foreach (Transform t in GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "ItemHolder")
+                {
+                    t.gameObject.AddComponent<WeaponSway>();
+                    break;
+                }
+            }
             EquipItem(0);
         }
         else

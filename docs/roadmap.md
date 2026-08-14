@@ -55,10 +55,13 @@ its weapon.
 
 Banana-shaped guns. Plural — the point is variety, not one gun.
 
-- [ ] Source or build CC0 banana / fruit models
+- [x] Banana models, generated in Blender (tools/banana_generator.py)
 - [x] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
 - [ ] At least four: something fast and weak, something slow and hard, a shotgun-ish spread, a
-      joke tier
+      joke tier. Two so far (pistol, rifle). Adding more needs weapons spawned at runtime rather
+      than sitting on the prefab, which is also what M3's random-3-weapons and gun-game ladder
+      need - so that refactor is the bridge between the two milestones.
+- [ ] Melee weapon (gun game's final rung depends on it)
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
       Wants weight and low end. The two in there now are trimmed .22 recordings, which is a
@@ -68,7 +71,7 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 - [x] **Maths-based recoil, not animation.** Each shot pushes the view up along a defined
       pattern, then recovers smoothly. Pattern is data, so each weapon can have its own - and a
       learnable pattern is the thing that makes a spray skilful rather than random.
-- [ ] Muzzle flash, weapon sway
+- [x] Muzzle flash, weapon sway
 - [x] **Ammo and reloading.** Neither exists at all right now — you have infinite bullets and no
       reload, so every gun is a hose. Fire rate is the only thing separating them until this
       lands, which undercuts the whole point of having several.
