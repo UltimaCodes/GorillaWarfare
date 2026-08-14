@@ -40,6 +40,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     PhotonView PV;
     MonkeyRig rig;
 
+    public PhotonView View => PV;
+
     void Awake()
     {
         PV = GetComponent<PhotonView>();
@@ -215,6 +217,32 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         if (rig != null)
             rig.LookPitch = verticalLookRotation;
+    }
+
+    /// Weapons report their shots through here so they don't each need a PhotonView of their
+    /// own. That's what lets a loadout be spawned at runtime - allocating view IDs for
+    /// dynamically created objects is a mess, and nothing about a gunshot actually needs its
+    /// own networked identity.
+    public void ReportShot(string weaponName, Vector3 hitPoint, Vector3 hitNormal)
+    {
+        PV.RPC(nameof(RPC_WeaponFired), RpcTarget.All, weaponName, hitPoint, hitNormal);
+    }
+
+    [PunRPC]
+    void RPC_WeaponFired(string weaponName, Vector3 hitPoint, Vector3 hitNormal)
+    {
+        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, 0.6f);
+        GameAudio.PlayAt(GameAudio.Impact, hitPoint, 0.5f);
+
+        // Flash and decal on the weapon that actually fired, so it's right for spectators too.
+        foreach (SingleShotGun gun in GetComponentsInChildren<SingleShotGun>(true))
+        {
+            if (gun.name == weaponName)
+            {
+                gun.PlayFireEffects(hitPoint, hitNormal);
+                break;
+            }
+        }
     }
 
     /// Called by a weapon on each shot. Kick is (pitch, yaw) in degrees.
