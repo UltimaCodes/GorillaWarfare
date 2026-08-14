@@ -57,11 +57,11 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 
 - [x] Banana models, generated in Blender (tools/banana_generator.py)
 - [x] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
-- [ ] At least four: something fast and weak, something slow and hard, a shotgun-ish spread, a
-      joke tier. Two so far (pistol, rifle). Adding more needs weapons spawned at runtime rather
-      than sitting on the prefab, which is also what M3's random-3-weapons and gun-game ladder
-      need - so that refactor is the bridge between the two milestones.
-- [ ] Melee weapon (gun game's final rung depends on it)
+- [x] Five weapons: pistol, shotgun, rifle, sniper, peel. Roles are asserted in WeaponCheck -
+      no two may overlap, and anything that can one-pull a full health player has to pay for it
+      in fire rate or range.
+- [x] Melee weapon (Peel) - gun game's final rung
+- [x] Runtime loadout, so a gamemode can hand out whatever it likes
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
       Wants weight and low end. The two in there now are trimmed .22 recordings, which is a

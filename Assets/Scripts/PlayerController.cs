@@ -10,6 +10,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 {
     [SerializeField] float mouseSensitivity = 3f;
     [SerializeField] GameObject cameraHolder;
+    // Populated at runtime by WeaponLoadout. Left serialized so the prefab's old entries are
+    // visible, but they're replaced on spawn.
     [SerializeField] Item[] items;
     [SerializeField] Image healthbarImage;
     [SerializeField] GameObject ui;
@@ -66,6 +68,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             LocalCamera = GetComponentInChildren<Camera>();
             gameObject.AddComponent<PlayerMovement>();
+            BuildLoadout();
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
             // without moving where you're aiming.
@@ -77,7 +80,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                     break;
                 }
             }
-            EquipItem(0);
         }
         else
         {
@@ -217,6 +219,34 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         if (rig != null)
             rig.LookPitch = verticalLookRotation;
+    }
+
+    // Which weapons this player carries. A gamemode can hand a different list in later; for
+    // now everyone gets everything.
+    void BuildLoadout()
+    {
+        Transform holder = null;
+        foreach (Transform t in GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == "ItemHolder") { holder = t; break; }
+        }
+
+        if (holder == null)
+        {
+            Debug.LogError("No ItemHolder on the player - cannot build a loadout.", this);
+            return;
+        }
+
+        WeaponLoadout loadout = gameObject.AddComponent<WeaponLoadout>();
+        List<SingleShotGun> guns = loadout.Build(holder, LocalCamera, WeaponLoadout.AllWeapons);
+
+        items = new Item[guns.Count];
+        for (int i = 0; i < guns.Count; i++)
+            items[i] = guns[i];
+
+        previousItemIndex = -1;
+        if (items.Length > 0)
+            EquipItem(0);
     }
 
     /// Weapons report their shots through here so they don't each need a PhotonView of their

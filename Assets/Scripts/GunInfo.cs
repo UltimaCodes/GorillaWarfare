@@ -17,6 +17,12 @@ public class GunInfo : ItemInfo
     [Tooltip("Cone of inaccuracy in degrees. 0 is laser accurate.")]
     public float spread;
 
+    [Tooltip("Rays per trigger pull. Above 1 makes it a shotgun - each pellet rolls its own spread.")]
+    public int pelletsPerShot = 1;
+
+    [Tooltip("Melee weapons swing instead of shooting: no ammo, very short range, no recoil.")]
+    public bool melee;
+
     [Header("Ammo")]
     public int magazineSize = 30;
     public float reloadTime = 1.8f;
