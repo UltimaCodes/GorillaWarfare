@@ -1,14 +1,21 @@
-using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
-using System.Linq;
-using System.IO;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 public class PlayerManager : MonoBehaviour
 {
+    // Forward slash, not Path.Combine: this string is a Resources key sent over the network,
+    // and Path.Combine produces a backslash on Windows.
+    const string playerControllerPrefab = "PhotonPrefabs/PlayerController";
+
+    // Find() previously scanned every object in the scene on each call, and it is called on
+    // every kill. Owners are stable for the lifetime of the object, so a registry answers in
+    // constant time; the scan is kept only as a fallback for the window before Owner resolves.
+    static readonly Dictionary<Player, PlayerManager> registry = new Dictionary<Player, PlayerManager>();
+
     PhotonView PV;
 
     GameObject controller;
@@ -23,15 +30,23 @@ public class PlayerManager : MonoBehaviour
 
     void Start()
     {
+        Register();
+
         if (PV.IsMine)
-        {
             CreateController();
-        }
     }
 
-    // Forward slash, not Path.Combine: this string is a Resources key sent over the network,
-    // and Path.Combine produces a backslash on Windows.
-    const string playerControllerPrefab = "PhotonPrefabs/PlayerController";
+    void Register()
+    {
+        if (PV != null && PV.Owner != null)
+            registry[PV.Owner] = this;
+    }
+
+    void OnDestroy()
+    {
+        if (PV != null && PV.Owner != null && registry.TryGetValue(PV.Owner, out PlayerManager existing) && existing == this)
+            registry.Remove(PV.Owner);
+    }
 
     void CreateController()
     {
@@ -53,13 +68,17 @@ public class PlayerManager : MonoBehaviour
 
     public void Die()
     {
-        PhotonNetwork.Destroy(controller);
+        // Guarded: dying without a controller -- which happens if CreateController bailed out --
+        // used to throw inside PhotonNetwork.Destroy and leave the player permanently dead.
+        if (controller != null)
+            PhotonNetwork.Destroy(controller);
+
+        controller = null;
         CreateController();
 
         deaths++;
 
-        Hashtable hash = new Hashtable();
-        hash.Add("deaths", deaths);
+        Hashtable hash = new Hashtable { { "deaths", deaths } };
         PhotonNetwork.LocalPlayer.SetCustomProperties(hash);
     }
 
@@ -73,17 +92,27 @@ public class PlayerManager : MonoBehaviour
     {
         kills++;
 
-        Hashtable hash = new Hashtable();
-        hash.Add("kills", kills);
+        Hashtable hash = new Hashtable { { "kills", kills } };
         PhotonNetwork.LocalPlayer.SetCustomProperties(hash);
     }
 
     public static PlayerManager Find(Player player)
     {
+        if (player == null)
+            return null;
+
+        if (registry.TryGetValue(player, out PlayerManager cached) && cached != null)
+            return cached;
+
         // FirstOrDefault, not SingleOrDefault: Single throws if a duplicate ever exists, which
         // would turn a cosmetic desync into an exception. FindObjectsByType replaces the
         // FindObjectsOfType deprecated in Unity 6.
-        return FindObjectsByType<PlayerManager>(FindObjectsSortMode.None)
+        PlayerManager found = FindObjectsByType<PlayerManager>(FindObjectsSortMode.None)
             .FirstOrDefault(x => x.PV != null && x.PV.Owner == player);
+
+        if (found != null)
+            registry[player] = found;
+
+        return found;
     }
 }

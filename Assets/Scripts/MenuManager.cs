@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class MenuManager : MonoBehaviour
@@ -10,38 +8,67 @@ public class MenuManager : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         Instance = this;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     public void OpenMenu(string menuName)
     {
-        for(int i = 0; i < menus.Length; i++)
+        bool found = false;
+
+        for (int i = 0; i < menus.Length; i++)
         {
+            if (menus[i] == null)
+                continue;
+
             if (menus[i].menuName == menuName)
             {
                 menus[i].Open();
+                found = true;
             }
             else if (menus[i].open)
             {
                 CloseMenu(menus[i]);
             }
         }
+
+        // A typo in a menu name used to close every menu and open nothing, leaving a blank
+        // screen with no indication of why.
+        if (!found)
+            Debug.LogError($"[MenuManager] no menu named '{menuName}'; every menu is now closed.", this);
     }
 
     public void OpenMenu(Menu menu)
     {
+        if (menu == null)
+        {
+            Debug.LogError("[MenuManager] OpenMenu called with a null menu.", this);
+            return;
+        }
+
         for (int i = 0; i < menus.Length; i++)
         {
-            if (menus[i].open)
-            {
+            if (menus[i] != null && menus[i].open)
                 CloseMenu(menus[i]);
-            }
         }
-        menu.Open(); 
+
+        menu.Open();
     }
 
     public void CloseMenu(Menu menu)
-    { 
-        menu.Close(); 
+    {
+        if (menu != null)
+            menu.Close();
     }
 }
