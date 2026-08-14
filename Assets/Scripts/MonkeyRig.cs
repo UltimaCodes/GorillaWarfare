@@ -14,9 +14,6 @@ public class MonkeyRig : MonoBehaviour
     [Header("Model")]
     [SerializeField] string modelResource = "Models/Gorilla/gorilla";
 
-    // The source is Z-up (Source engine SMD) and the fbx carries that through, so he imports
-    // lying on his back. Stand him up here rather than re-exporting.
-    [SerializeField] Vector3 modelRotation = new Vector3(-90f, 0f, 0f);
 
     // Bone names as data, not code - the last model used b_Spine02 style names, this one is
     // Rigify's DEF- convention. Swapping models shouldn't mean editing this file.
@@ -82,16 +79,7 @@ public class MonkeyRig : MonoBehaviour
 
         // Capsule pivot is at the middle, model pivot is at the feet.
         model.transform.localPosition = new Vector3(0f, -1f, 0f);
-        model.transform.localRotation = Quaternion.Euler(modelRotation);
-
-        // The fbx ships with no material, so bind ours here rather than relying on fbx
-        // material import lining up.
-        Material skinMat = Resources.Load<Material>("Models/Gorilla/GorillaMat");
-        if (skinMat != null)
-        {
-            foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
-                r.sharedMaterial = skinMat;
-        }
+        model.transform.localRotation = Quaternion.identity;
 
         // Belt and braces against the T-pose: if anything ever re-imports this as Humanoid or
         // Generic, the Animator would stamp its own pose over everything we write here.

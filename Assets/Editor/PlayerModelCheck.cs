@@ -39,6 +39,20 @@ public static class PlayerModelCheck
         SkinnedMeshRenderer skin = asset.GetComponentInChildren<SkinnedMeshRenderer>(true);
         Check(sb, skin != null, "skinned mesh", skin == null ? "none" : $"{skin.bones.Length} bones, {skin.sharedMesh.vertexCount} verts");
 
+        // The asset has to be correct on its own - drag it into a scene and it should look
+        // right. Anything fixed only at runtime means the editor lies to you.
+        if (skin != null)
+        {
+            Material am = skin.sharedMaterial;
+            bool assetTex = am != null && ((am.HasProperty("_MainTex") && am.GetTexture("_MainTex") != null)
+                                        || (am.HasProperty("_BaseMap") && am.GetTexture("_BaseMap") != null));
+            Check(sb, assetTex, "ASSET textured", am == null ? "no material" : $"{am.name}, textured={assetTex}");
+
+            Bounds mb = skin.sharedMesh.bounds;
+            Check(sb, mb.size.y > 1.5f && mb.size.y < 2.4f, "ASSET upright + scaled",
+                  $"mesh bounds = ({mb.size.x:F2}, {mb.size.y:F2}, {mb.size.z:F2}) - y must be the height");
+        }
+
 
         // --- runtime side: build the rig exactly like the game does
         GameObject host = new GameObject("~check");
@@ -51,8 +65,10 @@ public static class PlayerModelCheck
             Transform model = host.transform.childCount > 0 ? host.transform.GetChild(0) : null;
             if (model != null)
             {
+                // No runtime rotation any more - the fbx is baked upright, so this should be
+                // identity. If it isn't, something is compensating again.
                 Vector3 e = model.localEulerAngles;
-                Check(sb, Mathf.Abs(Mathf.DeltaAngle(e.x, -90f)) < 1f, "stood upright",
+                Check(sb, Mathf.Abs(Mathf.DeltaAngle(e.x, 0f)) < 1f, "no runtime rotation hack",
                       $"model localEuler = ({e.x:F0}, {e.y:F0}, {e.z:F0})");
             }
 

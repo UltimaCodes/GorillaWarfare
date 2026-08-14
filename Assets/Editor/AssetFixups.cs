@@ -30,8 +30,26 @@ public static class AssetFixups
 
         // useFileScale honours the fbx's own unit scale, which here is 0.01 - and the geometry
         // is already baked to metres by the converter, so it stacked and gave a 2cm gorilla.
-        importer.globalScale = 1f;
         importer.useFileScale = false;
+
+        // Measure and solve rather than hardcode. The exporter writes in fbx's centimetre
+        // convention, so the geometry arrives 100x, but measuring means this stays correct if
+        // the export ever changes. Height is on Y now that the axis conversion is baked in.
+        GameObject probe = AssetDatabase.LoadAssetAtPath<GameObject>(monkeyPath);
+        SkinnedMeshRenderer smr = probe != null ? probe.GetComponentInChildren<SkinnedMeshRenderer>(true) : null;
+        float measured = smr != null ? smr.sharedMesh.bounds.size.y : 0f;
+        float current = Mathf.Approximately(importer.globalScale, 0f) ? 1f : importer.globalScale;
+        float trueHeight = measured / current;
+
+        if (trueHeight <= 0.001f)
+        {
+            Debug.LogError($"[fixups] cannot measure the mesh (height {trueHeight}). Not guessing.");
+            return;
+        }
+
+        const float target = 1.9f;
+        importer.globalScale = target / trueHeight;
+        Debug.Log($"[fixups] height {trueHeight:F2} (measured {measured:F2} at {current:F4}) -> globalScale {importer.globalScale:F5}");
 
         // Generic. Not Humanoid, not None - both wrong here for different reasons:
         //   Humanoid solves the pose in muscle space and direct bone writes aren't supported,
