@@ -57,12 +57,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 Destroy(ownCamera.gameObject);
 
             // Remote copies are driven by PhotonTransformView, so nothing local should be
-            // moving them.
+            // moving them. Killing PlayerMovement is enough - a CharacterController you never
+            // call Move() on does nothing on its own.
+            //
+            // Do NOT disable the CharacterController here. It derives from Collider, and a
+            // disabled collider is skipped by every physics query, so remote players had no
+            // hitbox at all and every shot went straight through them.
             if (TryGetComponent(out PlayerMovement movement))
                 Destroy(movement);
-
-            if (TryGetComponent(out CharacterController cc))
-                cc.enabled = false;
 
             if (ui != null)
                 Destroy(ui);
