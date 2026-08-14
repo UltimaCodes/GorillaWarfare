@@ -9,17 +9,28 @@ using Photon.Realtime;
 /// Installs itself at runtime, so it needs no scene or prefab changes -- which also means
 /// nothing here can be clobbered by the Unity Editor re-serializing an asset.
 ///
-/// The question it answers: when a late joiner is invisible to the player who created the room,
-/// does that player's client have a PlayerController for them AT ALL? "No entry" and
-/// "entry in the wrong place" and "entry that isn't drawing" are three different bugs.
+/// Evidence so far says a client stops receiving Photon events once it has loaded the game
+/// scene: the room creator never sees later joiners, never gets them on the scoreboard (which
+/// is driven by OnPlayerEnteredRoom, a pure callback with no instantiation involved), yet can
+/// still move and be seen by others. Everything a late joiner knows could have come from its
+/// join-time snapshot -- buffered instantiates plus PlayerList -- with no live traffic at all.
+///
+/// So this reports the inbound path directly: the message-queue flag, live callback counters,
+/// and how long since anything arrived.
 ///
 /// Toggle with F3. Remove this file once the bug is fixed.
 /// </summary>
-public class NetworkDebugOverlay : MonoBehaviour
+public class NetworkDebugOverlay : MonoBehaviourPunCallbacks
 {
     const float refreshInterval = 0.5f;
 
     static NetworkDebugOverlay instance;
+
+    int enteredCount;
+    int leftCount;
+    int propsCount;
+    float lastInboundTime = -1f;
+    string lastInbound = "<nothing yet>";
 
     bool visible = true;
     float nextRefresh;
@@ -37,6 +48,30 @@ public class NetworkDebugOverlay : MonoBehaviour
         DontDestroyOnLoad(host);
     }
 
+    void Note(string what)
+    {
+        lastInbound = what;
+        lastInboundTime = Time.unscaledTime;
+    }
+
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        enteredCount++;
+        Note($"PlayerEntered actor={newPlayer.ActorNumber}");
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        leftCount++;
+        Note($"PlayerLeft actor={otherPlayer.ActorNumber}");
+    }
+
+    public override void OnPlayerPropertiesUpdate(Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+    {
+        propsCount++;
+        Note($"PropsUpdate actor={targetPlayer.ActorNumber}");
+    }
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.F3))
@@ -49,12 +84,16 @@ public class NetworkDebugOverlay : MonoBehaviour
         cached = Gather();
     }
 
-    static string Gather()
+    string Gather()
     {
         StringBuilder sb = new StringBuilder(1024);
 
         sb.AppendLine("=== NETWORK DEBUG (F3 to hide) ===");
-        sb.AppendLine($"state={PhotonNetwork.NetworkClientState} region={PhotonNetwork.CloudRegion ?? "?"}");
+
+        // The decisive line. PhotonHandler gates sending, serializing AND dispatching on this
+        // single flag, so if it is False the client is deaf and mute even though the game runs.
+        sb.AppendLine($"MESSAGE QUEUE RUNNING: {PhotonNetwork.IsMessageQueueRunning}   <<< must be True");
+        sb.AppendLine($"state={PhotonNetwork.NetworkClientState} region={PhotonNetwork.CloudRegion ?? "?"} ping={PhotonNetwork.GetPing()}ms");
 
         if (!PhotonNetwork.InRoom)
         {
@@ -63,26 +102,21 @@ public class NetworkDebugOverlay : MonoBehaviour
         }
 
         Player me = PhotonNetwork.LocalPlayer;
-        sb.AppendLine($"me: actor={me.ActorNumber} nick='{me.NickName}' master={PhotonNetwork.IsMasterClient}");
-        sb.AppendLine($"room='{PhotonNetwork.CurrentRoom.Name}' players={PhotonNetwork.CurrentRoom.PlayerCount}");
+        sb.AppendLine($"me: actor={me.ActorNumber} master={PhotonNetwork.IsMasterClient}");
+        sb.AppendLine($"room='{PhotonNetwork.CurrentRoom.Name}' PlayerCount={PhotonNetwork.CurrentRoom.PlayerCount} PlayerList={PhotonNetwork.PlayerList.Length}");
 
-        sb.Append("actors in room:");
+        sb.Append("actors:");
         foreach (Player p in PhotonNetwork.PlayerList)
             sb.Append($" {p.ActorNumber}{(p.IsMasterClient ? "*" : "")}");
         sb.AppendLine();
 
-        PlayerManager[] managers = FindObjectsByType<PlayerManager>(FindObjectsSortMode.None);
-        sb.AppendLine($"--- PlayerManagers: {managers.Length} (expect one per player)");
-        foreach (PlayerManager pm in managers)
-        {
-            PhotonView pv = pm.GetComponent<PhotonView>();
-            sb.AppendLine(pv == null
-                ? "  [PM] <no PhotonView>"
-                : $"  [PM] view={pv.ViewID} owner={Describe(pv.Owner)} mine={pv.IsMine}");
-        }
+        // If these stay at 0 while other players are joining, inbound events are not arriving.
+        string since = lastInboundTime < 0f ? "never" : $"{Time.unscaledTime - lastInboundTime:F1}s ago";
+        sb.AppendLine($"callbacks: entered={enteredCount} left={leftCount} props={propsCount}");
+        sb.AppendLine($"last inbound: {lastInbound} ({since})");
 
         PlayerController[] controllers = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
-        sb.AppendLine($"--- PlayerControllers: {controllers.Length} (expect one per player)");
+        sb.AppendLine($"--- PlayerControllers: {controllers.Length} (expect {PhotonNetwork.CurrentRoom.PlayerCount})");
         foreach (PlayerController pc in controllers)
         {
             PhotonView pv = pc.GetComponent<PhotonView>();
@@ -97,19 +131,14 @@ public class NetworkDebugOverlay : MonoBehaviour
             Vector3 p = pc.transform.position;
             sb.AppendLine(pv == null
                 ? "  [PC] <no PhotonView>"
-                : $"  [PC] view={pv.ViewID} owner={Describe(pv.Owner)} mine={pv.IsMine} " +
-                  $"pos=({p.x:F1},{p.y:F1},{p.z:F1}) draw={drawing}/{rends.Length}");
+                : $"  [PC] view={pv.ViewID} owner={(pv.Owner == null ? "<none>" : pv.Owner.ActorNumber.ToString())} " +
+                  $"mine={pv.IsMine} pos=({p.x:F1},{p.y:F1},{p.z:F1}) draw={drawing}/{rends.Length}");
         }
 
         if (controllers.Length < PhotonNetwork.CurrentRoom.PlayerCount)
-            sb.AppendLine(">>> MISSING a PlayerController: their spawn event never arrived here.");
+            sb.AppendLine(">>> MISSING a PlayerController: their spawn never arrived here.");
 
         return sb.ToString();
-    }
-
-    static string Describe(Player p)
-    {
-        return p == null ? "<none>" : $"{p.ActorNumber}('{p.NickName}')";
     }
 
     void OnGUI()
@@ -125,9 +154,9 @@ public class NetworkDebugOverlay : MonoBehaviour
             style.normal.textColor = Color.white;
         }
 
-        const float w = 560f;
-        const float h = 380f;
-        GUI.color = new Color(0f, 0f, 0f, 0.7f);
+        const float w = 600f;
+        const float h = 420f;
+        GUI.color = new Color(0f, 0f, 0f, 0.75f);
         GUI.DrawTexture(new Rect(8, 8, w, h), Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.Label(new Rect(16, 12, w - 16, h - 8), cached, style);
