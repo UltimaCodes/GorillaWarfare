@@ -30,6 +30,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
 
     PhotonView PV;
+    MonkeyRig rig;
 
     void Awake()
     {
@@ -38,11 +39,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void Start()
     {
-        LogSpawn("start");
-
         // Added here rather than on the prefab so there's nothing to wire up. Runs on remote
         // players too, since their transforms are replicated - so you hear their steps.
         gameObject.AddComponent<FootstepPlayer>();
+
+        // Hidden from its owner - you shouldn't see your own body from inside its head - but it
+        // still casts a shadow.
+        rig = gameObject.AddComponent<MonkeyRig>();
+        if (!rig.Build(PV.IsMine))
+        {
+            Destroy(rig);
+            rig = null;
+        }
 
         if (PV.IsMine)
         {
@@ -69,9 +77,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             if (ui != null)
                 Destroy(ui);
 
-            // Check again once replication has had a moment, so we can tell "never spawned"
-            // from "spawned somewhere silly".
-            StartCoroutine(LogSpawnAfterSettle());
         }
     }
 
@@ -82,40 +87,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             LocalCamera = null;
     }
 
-    IEnumerator LogSpawnAfterSettle()
-    {
-        yield return new WaitForSeconds(2f);
-        LogSpawn("settled");
-    }
 
-    // TODO: rip this out once the late-join visibility bug is closed.
-    void LogSpawn(string phase)
-    {
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        int drawing = 0;
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            if (renderers[i].enabled && renderers[i].gameObject.activeInHierarchy)
-                drawing++;
-        }
-
-        Debug.Log(
-            $"[Spawn:{phase}] view={PV.ViewID} mine={PV.IsMine} owner={PV.Owner?.NickName ?? "<none>"} " +
-            $"pos={transform.position} active={gameObject.activeInHierarchy} " +
-            $"renderers={drawing}/{renderers.Length} " +
-            $"players={PhotonNetwork.CurrentRoom?.PlayerCount} master={PhotonNetwork.IsMasterClient}", this);
-    }
 
     void Update()
     {
         if (!PV.IsMine)
         {
             ApplyRemoteLook();
+            FeedRig();
             return;
         }
 
         Look();
         UpdateCursorLock();
+        FeedRig();
 
         for (int i = 0; i < items.Length; i++)
         {
@@ -195,6 +180,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
+
+    // verticalLookRotation is maintained on both sides - Look() sets it locally, ApplyRemoteLook
+    // lerps it toward the replicated value - so the rig reads the same field either way.
+    void FeedRig()
+    {
+        if (rig != null)
+            rig.LookPitch = verticalLookRotation;
+    }
 
     void Look()
     {

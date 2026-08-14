@@ -27,9 +27,14 @@ public class MonkeyRig : MonoBehaviour
     [SerializeField] float armDown = 55f;          // shoulder rotation into a holding pose
     [SerializeField] float elbowBend = 65f;
 
+    // Only input from outside. Everything else is measured here, because remote copies have
+    // no PlayerMovement - it gets destroyed on them - but their transforms are replicated, so
+    // position deltas tell us everything we need.
     public float LookPitch { get; set; }
-    public float PlanarSpeed { get; set; }
-    public bool Grounded { get; set; } = true;
+
+    float planarSpeed;
+    bool grounded = true;
+    Vector3 lastPosition;
 
     GameObject model;
     Transform spine, head;
@@ -61,6 +66,8 @@ public class MonkeyRig : MonoBehaviour
 
         if (!CacheBones())
             return false;
+
+        lastPosition = transform.position;
 
         if (hideFromOwner)
         {
@@ -128,22 +135,39 @@ public class MonkeyRig : MonoBehaviour
         if (model == null)
             return;
 
+        Measure();
         DriveLegs();
         DriveAim();
         DriveArms();
     }
 
+    void Measure()
+    {
+        Vector3 position = transform.position;
+        Vector3 delta = position - lastPosition;
+        delta.y = 0f;
+        lastPosition = position;
+
+        float dt = Time.deltaTime;
+        planarSpeed = dt > 0f ? delta.magnitude / dt : 0f;
+
+        // Same probe FootstepPlayer uses: capsule is 2 tall on a centred pivot, so the feet sit
+        // 1 below, plus slack for slopes and steps.
+        grounded = Physics.Raycast(position + Vector3.up * 0.1f, Vector3.down, 1.45f,
+                                   ~0, QueryTriggerInteraction.Ignore);
+    }
+
     void DriveLegs()
     {
-        float speed01 = Mathf.Clamp01(PlanarSpeed / referenceSpeed);
+        float speed01 = Mathf.Clamp01(planarSpeed / referenceSpeed);
 
         // Phase advances with distance covered, not with time, so the legs stay in step with
         // the ground however fast you're going.
-        gaitPhase += PlanarSpeed * strideRate * Time.deltaTime;
+        gaitPhase += planarSpeed * strideRate * Time.deltaTime;
 
         // Airborne: hold a tucked pose instead of pedalling through the sky.
-        float swing = Grounded ? Mathf.Sin(gaitPhase) * maxLegSwing * speed01 : -18f;
-        float otherSwing = Grounded ? -swing : -18f;
+        float swing = grounded ? Mathf.Sin(gaitPhase) * maxLegSwing * speed01 : -18f;
+        float otherSwing = grounded ? -swing : -18f;
 
         leftThigh.localRotation = leftThighRest * Quaternion.Euler(swing, 0f, 0f);
         rightThigh.localRotation = rightThighRest * Quaternion.Euler(otherSwing, 0f, 0f);
