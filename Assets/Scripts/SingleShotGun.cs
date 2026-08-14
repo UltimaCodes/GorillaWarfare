@@ -34,6 +34,34 @@ public class SingleShotGun : Gun
 
         if (Info != null)
             Ammo = Info.magazineSize;
+
+        BuildVisual();
+    }
+
+    // Swaps the old AK/M1911 meshes for a banana. Done at runtime, keyed off the weapon's own
+    // name, so there's no prefab surgery and adding a weapon means dropping a Banana<Name>.fbx
+    // into Resources/Models/Weapons.
+    void BuildVisual()
+    {
+        GameObject prefab = Resources.Load<GameObject>($"Models/Weapons/Banana{gameObject.name}");
+        if (prefab == null)
+            return;
+
+        // Hide rather than destroy - the old meshes carry the muzzle transforms and general
+        // shape the camera was framed around, and something may still reference them.
+        foreach (MeshRenderer old in GetComponentsInChildren<MeshRenderer>(true))
+            old.enabled = false;
+
+        GameObject visual = Instantiate(prefab, transform);
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.identity;
+
+        Material mat = Resources.Load<Material>("Models/Weapons/BananaMat");
+        if (mat != null)
+        {
+            foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))
+                r.sharedMaterial = mat;
+        }
     }
 
     void Update()

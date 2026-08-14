@@ -11,6 +11,7 @@ public static class AssetFixups
     public static void All()
     {
         ScaleMonkey();
+        BuildBananaMaterial();
         FixAudioImports();
         AssetDatabase.SaveAssets();
     }
@@ -102,6 +103,25 @@ public static class AssetFixups
         EditorUtility.SetDirty(mat);
         AssetDatabase.SaveAssets();
         Debug.Log($"[fixups] material: diffuse={(diffuse != null)} normal={(normal != null)}");
+    }
+
+    // Bananas come out of a generator script, not a modelling package, so they arrive with no
+    // usable material. One shared yellow for all of them.
+    public static void BuildBananaMaterial()
+    {
+        const string path = "Assets/Resources/Models/Weapons/BananaMat.mat";
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat == null)
+        {
+            mat = new Material(Shader.Find("Standard"));
+            AssetDatabase.CreateAsset(mat, path);
+        }
+
+        mat.color = new Color(0.94f, 0.79f, 0.16f);
+        mat.SetFloat("_Glossiness", 0.35f);
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[fixups] banana material built");
     }
 
     // The gunshots are 96kHz stereo, which is studio-master quality for a sound that plays for

@@ -97,6 +97,33 @@ public static class WeaponCheck
             }
         }
 
+        // ---- banana models actually replace the old guns ----
+        foreach (string weapon in new[] { "Pistol", "Rifle" })
+        {
+            GameObject banana = Resources.Load<GameObject>($"Models/Weapons/Banana{weapon}");
+            Check(sb, banana != null, $"banana{weapon} model", banana == null ? "missing" : "loaded");
+
+            if (banana != null)
+            {
+                MeshFilter mf = banana.GetComponentInChildren<MeshFilter>(true);
+                Bounds b = mf != null ? mf.sharedMesh.bounds : new Bounds();
+
+                // Measure the longest axis rather than assuming which one, then separately
+                // assert it's the forward one. Assuming the axis is how the last check
+                // reported a correctly sized banana as too small.
+                float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+                Check(sb, longest > 0.15f && longest < 0.9f, $"banana{weapon} is weapon sized",
+                      $"longest axis {longest:F2}m");
+                Check(sb, b.size.z >= longest - 0.001f, $"banana{weapon} points forward",
+                      $"z {b.size.z:F2} should be the longest of ({b.size.x:F2}, {b.size.y:F2}, {b.size.z:F2})");
+            }
+        }
+
+        Material bm = Resources.Load<Material>("Models/Weapons/BananaMat");
+        Check(sb, bm != null, "banana material", bm == null ? "missing" : $"{bm.name} {bm.color}");
+        Check(sb, bm != null && bm.color.r > 0.7f && bm.color.g > 0.6f && bm.color.b < 0.4f,
+              "banana is yellow", bm == null ? "-" : bm.color.ToString());
+
         Finish(sb);
     }
 
