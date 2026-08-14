@@ -1,37 +1,68 @@
 using System.Collections;
 using UnityEngine;
 using Photon.Pun;
+using Photon.Realtime;
 using UnityEngine.SceneManagement;
+using Hashtable = ExitGames.Client.Photon.Hashtable;
 
+// Spawning and player stats. Keeping the RoomManager name so the object already sitting in the
+// menu scene keeps working, even though it does a fair bit more than manage the room now.
+//
+// Rewritten to match how Photon's own OnJoinedInstantiate does it (see
+// Photon/PhotonUnityNetworking/UtilityScripts/Prototyping/OnJoinedInstantiate.cs):
+// spawn straight from OnJoinedRoom, one flat Instantiate, no intermediate networked object.
+//
+// The old setup went RoomManager -> spawn a PlayerManager over the network -> PlayerManager
+// spawns the PlayerController, passing its own ViewID through InstantiationData so the
+// controller could find it again with PhotonView.Find. That's three things that have to line up
+// across every client in the right order, and PlayerManager existed only to hold two ints that
+// were already being replicated as custom properties anyway. Gone.
 public class RoomManager : MonoBehaviourPunCallbacks
 {
-    public static RoomManager instance;
+    public static RoomManager Instance;
 
-    // Not Path.Combine - that gives a backslash on Windows, and this string goes over
-    // the network as a Resources key.
-    const string playerManagerPrefab = "PhotonPrefabs/PlayerManager";
+    const string playerPrefab = "PhotonPrefabs/PlayerController";
+    const int gameSceneIndex = 1;
 
-    bool spawnPending;
+    public const string KillsKey = "kills";
+    public const string DeathsKey = "deaths";
 
-    private void Awake()
+    GameObject localController;
+    Coroutine spawnRoutine;
+
+    // Fallback in case someone opens the game scene directly without going via the menu.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void EnsureExists()
     {
-        if (instance != null && instance != this)
+        if (Instance != null)
+            return;
+
+        if (FindFirstObjectByType<RoomManager>() != null)
+            return;
+
+        GameObject host = new GameObject("RoomManager");
+        host.AddComponent<RoomManager>();
+    }
+
+    void Awake()
+    {
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
 
         DontDestroyOnLoad(gameObject);
-        instance = this;
+        Instance = this;
     }
 
     public override void OnEnable()
     {
         base.OnEnable();
 
-        // Destroy is deferred, so the duplicate we just killed in Awake still runs OnEnable
-        // and subscribes. That meant two PlayerManagers each after going back to the menu.
-        if (instance != this)
+        // Destroy is deferred, so a duplicate killed in Awake still runs OnEnable. Without this
+        // it subscribes too and you end up spawning twice.
+        if (Instance != this)
             return;
 
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -43,24 +74,131 @@ public class RoomManager : MonoBehaviourPunCallbacks
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
-    void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
+    void OnDestroy()
     {
-        if (scene.buildIndex != 1 || spawnPending)
-            return;
-
-        spawnPending = true;
-        StartCoroutine(SpawnPlayerManagerWhenReady());
+        if (Instance == this)
+            Instance = null;
     }
 
-    IEnumerator SpawnPlayerManagerWhenReady()
+    // Two entry points because the order differs depending on how you got here. The host joins
+    // the room and loads the scene afterwards; a late joiner has the scene pushed at them by
+    // AutomaticallySyncScene and may already be in the room. Whichever fires last does the work,
+    // and TrySpawn is idempotent.
+    public override void OnJoinedRoom()
     {
-        // LoadLevel turns the message queue off, and PUN only turns it back on from its own
-        // sceneLoaded handler - which is registered after ours, so it hasn't run yet. Spawning
-        // here meant raising the event while we weren't sending or dispatching anything.
-        while (!PhotonNetwork.InRoom || !PhotonNetwork.IsMessageQueueRunning)
-            yield return null;
+        TrySpawn();
+    }
 
-        spawnPending = false;
-        PhotonNetwork.Instantiate(playerManagerPrefab, Vector3.zero, Quaternion.identity);
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.buildIndex == gameSceneIndex)
+            TrySpawn();
+    }
+
+    public override void OnLeftRoom()
+    {
+        localController = null;
+    }
+
+    void TrySpawn()
+    {
+        if (spawnRoutine == null && localController == null)
+            spawnRoutine = StartCoroutine(SpawnWhenReady());
+    }
+
+    IEnumerator SpawnWhenReady()
+    {
+        // LoadLevel sets IsMessageQueueRunning false and PUN turns it back on from its own
+        // sceneLoaded handler, which is registered after ours - so raising a spawn straight
+        // out of OnSceneLoaded happened while we weren't sending anything.
+        while (PhotonNetwork.InRoom == false
+               || PhotonNetwork.IsMessageQueueRunning == false
+               || SceneManager.GetActiveScene().buildIndex != gameSceneIndex
+               || SpawnManager.Instance == null)
+        {
+            yield return null;
+        }
+
+        spawnRoutine = null;
+
+        if (localController != null)
+            yield break;
+
+        Transform point = SpawnManager.Instance.GetSpawnpoint();
+        Vector3 position = point != null ? point.position : Vector3.zero;
+        Quaternion rotation = point != null ? point.rotation : Quaternion.identity;
+
+        localController = PhotonNetwork.Instantiate(playerPrefab, position, rotation, 0);
+    }
+
+    public void RespawnLocalPlayer()
+    {
+        if (localController != null)
+            PhotonNetwork.Destroy(localController);
+
+        localController = null;
+        TrySpawn();
+    }
+
+    // Stats live entirely in custom properties, which Photon replicates and the scoreboard
+    // already reads. PUN lets you set another player's properties, so the victim credits the
+    // killer directly - no RPC and no hunting for the killer's objects.
+    //
+    // Two people finishing the same player off in the same instant could lose a kill. For a
+    // game this size that's fine.
+    public static void CreditKill(Player killer)
+    {
+        if (killer == null)
+            return;
+
+        killer.SetCustomProperties(new Hashtable { { KillsKey, GetStat(killer, KillsKey) + 1 } });
+    }
+
+    public static void CreditDeath(Player victim)
+    {
+        if (victim == null)
+            return;
+
+        victim.SetCustomProperties(new Hashtable { { DeathsKey, GetStat(victim, DeathsKey) + 1 } });
+    }
+
+    public static int GetStat(Player player, string key)
+    {
+        if (player != null && player.CustomProperties.TryGetValue(key, out object value) && value is int i)
+            return i;
+
+        return 0;
+    }
+
+    // Belt and braces. Everything PUN does - sending, serializing, dispatching - is gated on this
+    // one flag, so if it ever gets stuck off the client goes silently deaf while the game carries
+    // on running normally. Which is exactly what the late-join bug looked like.
+    //
+    // Grace period rather than an instant flip, because LoadLevel turns it off legitimately for
+    // a moment. Can't use LevelLoadingProgress to detect that - it sticks at 1 forever once any
+    // scene has loaded, so it can't tell you whether a load is in progress.
+    const float queueStuckGrace = 2f;
+    float queueOffSince = -1f;
+
+    void Update()
+    {
+        if (!PhotonNetwork.InRoom || PhotonNetwork.IsMessageQueueRunning)
+        {
+            queueOffSince = -1f;
+            return;
+        }
+
+        if (queueOffSince < 0f)
+        {
+            queueOffSince = Time.unscaledTime;
+            return;
+        }
+
+        if (Time.unscaledTime - queueOffSince < queueStuckGrace)
+            return;
+
+        Debug.LogWarning($"Message queue stuck off for {queueStuckGrace}s while in a room. Turning it back on.");
+        PhotonNetwork.IsMessageQueueRunning = true;
+        queueOffSince = -1f;
     }
 }
