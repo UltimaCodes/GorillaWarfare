@@ -8,16 +8,13 @@ using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObservable
 {
-    [SerializeField] float mouseSensitivity, sprintSpeed, walkSpeed, jumpForce, smoothTime;
+    [SerializeField] float mouseSensitivity = 3f;
     [SerializeField] GameObject cameraHolder;
     [SerializeField] Item[] items;
     [SerializeField] Image healthbarImage;
     [SerializeField] GameObject ui;
     int itemIndex;
     int previousItemIndex = -1;
-    bool grounded;
-    Vector3 moveAmount;
-    Vector3 smoothMoveVelocity;
     float verticalLookRotation;
     float horizontalLookRotation;
     bool cursorLocked = true;
@@ -32,12 +29,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     public static Camera LocalCamera { get; private set; }
 
 
-    Rigidbody rb;
     PhotonView PV;
 
     void Awake()
     {
-        rb = GetComponent<Rigidbody>();
         PV = GetComponent<PhotonView>();
     }
 
@@ -52,6 +47,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (PV.IsMine)
         {
             LocalCamera = GetComponentInChildren<Camera>();
+            gameObject.AddComponent<PlayerMovement>();
             EquipItem(0);
         }
         else
@@ -60,8 +56,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             if (ownCamera != null)
                 Destroy(ownCamera.gameObject);
 
-            if (rb != null)
-                Destroy(rb);
+            // Remote copies are driven by PhotonTransformView, so nothing local should be
+            // moving them.
+            if (TryGetComponent(out PlayerMovement movement))
+                Destroy(movement);
+
+            if (TryGetComponent(out CharacterController cc))
+                cc.enabled = false;
 
             if (ui != null)
                 Destroy(ui);
@@ -112,8 +113,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
 
         Look();
-        Move();
-        Jump();
         UpdateCursorLock();
 
         for (int i = 0; i < items.Length; i++)
@@ -159,13 +158,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
-    void Jump()
-    {
-        if (Input.GetKeyDown(KeyCode.Space) && grounded)
-        {
-            rb.AddForce(transform.up * jumpForce);
-        }
-    }
 
     void EquipItem(int _index)
     {
@@ -201,12 +193,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
-    void Move()
-    {
-        Vector3 moveDir = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")).normalized;
-
-        moveAmount = Vector3.SmoothDamp(moveAmount, moveDir * (Input.GetKey(KeyCode.LeftShift) ? sprintSpeed : walkSpeed), ref smoothMoveVelocity, smoothTime);
-    }
 
     void Look()
     {
@@ -242,17 +228,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
-    public void SetGroundedState(bool _grounded)
-    {
-        grounded = _grounded;
-    }
 
-    void FixedUpdate()
-    {
-        if (!PV.IsMine)
-            return;
-        rb.MovePosition(rb.position + transform.TransformDirection(moveAmount) * Time.fixedDeltaTime);
-    }
 
     void UpdateCursorLock()
     {
