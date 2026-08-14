@@ -54,6 +54,10 @@ public class SingleShotGun : Gun
     [PunRPC]
     void RPC_Shoot(Vector3 hitPosition, Vector3 hitNormal)
     {
+        // This RPC already goes to everyone, so the audio is networked for free.
+        GameAudio.PlayAt(GameAudio.Shoot, transform.position, 0.6f);
+        GameAudio.PlayAt(GameAudio.Impact, hitPosition, 0.5f);
+
         if (bulletImpactPrefab == null)
             return;
 
