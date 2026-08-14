@@ -25,6 +25,13 @@ public class Launcher : MonoBehaviourPunCallbacks
     private void Awake()
     {
         Instance = this;
+
+        // PUN defaults to serializing 10x/second (serializationFrequency = 100ms) while sending
+        // 30x/second. At 10Hz every remote player's position and aim arrives ten times a second
+        // and is interpolated between, which reads as choppy. SerializationRate must stay <= SendRate,
+        // since serialized updates are queued and flushed on the next send.
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 20;
     }
 
     void Start()
