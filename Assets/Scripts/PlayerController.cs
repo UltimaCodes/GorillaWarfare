@@ -74,6 +74,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         LogSpawn("start");
 
+        // Added here rather than on the prefab so there's nothing to wire up. Runs on remote
+        // players too, since their transforms are replicated - so you hear their steps.
+        gameObject.AddComponent<FootstepPlayer>();
+
         if (PV.IsMine)
         {
             LocalCamera = GetComponentInChildren<Camera>();
@@ -314,6 +318,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         healthbarImage.fillAmount = currentHealth / maxHealth;
 
+        // 2D - this happened to you, not near you.
+        GameAudio.Play2D(GameAudio.Hurt, 0.7f, 0.1f);
+
         if (currentHealth <= 0)
         {
             Die();
@@ -329,6 +336,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void Die()
     {
+        GameAudio.PlayAt(GameAudio.Death, transform.position, 0.8f);
+
         // If Awake lost the race the view is surely up by now. Dying with a null manager
         // would leave you stuck dead.
         if (!ResolvePlayerManager())
