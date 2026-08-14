@@ -24,12 +24,12 @@ something to check work against rather than a vibe:
 
 Regressions and broken basics. Nothing else matters while the game can't be played.
 
-- [ ] **You can't damage anyone.** Diagnosed: the player's only collider is now the
+- [x] **You can't damage anyone.** Fixed: the player's only collider is now the
       `CharacterController`, and remote copies disable it — a disabled CharacterController has no
       collider, so the raycast passes straight through everyone. Keep it enabled and only strip
       `PlayerMovement`; a CharacterController you never call `Move()` on does nothing.
-- [ ] **Gun audio is bursts, not single shots.** The OpenGameArt clips are full-auto recordings.
-      Need one-shot samples, or trim these to the first transient.
+- [x] **Gun audio is bursts, not single shots.** Measured: pistol had 5 shots, magnum 3. Cut a
+      single shot out of each and re-measured to confirm one onset apiece.
 - [ ] Verify shooting end to end with two clients before calling M0 done.
 
 **Done when:** two players can shoot, damage and kill each other, and each shot is one bang.
@@ -38,15 +38,13 @@ Regressions and broken basics. Nothing else matters while the game can't be play
 
 ## M1 — The monkey
 
-The model is imported and scaled but nothing renders it — `CHIMP_L` is still what you see, which
-is why it looks unchanged (and terrifying).
-
-- [ ] `PlayerController` calls `MonkeyRig.Build()` and feeds it `LookPitch`, `PlanarSpeed`, `Grounded`
-- [ ] Remove `CHIMP_L` and its stray light from the prefab
+- [x] `PlayerController` builds `MonkeyRig`, which spawns the model and drives the bones
+- [x] `CHIMP_L` and its subtree removed from the prefab — 15 objects, no dangling fileIDs
+- [x] Hide own body from own camera, keep the shadow (`ShadowsOnly`)
 - [ ] Reparent weapons to `b_Right_Hand` on remote copies — they currently sit on `CameraHolder`,
       which is first-person only, so others see a gun floating at head height
 - [ ] Tune the gait numbers against the real model; current values are guesses
-- [ ] Hide own body from own camera, keep the shadow
+- [ ] Nobody has seen it render yet — unverified
 
 **Done when:** other players look like a monkey that walks, aims where it's looking, and holds
 its weapon.
@@ -167,13 +165,15 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 Separate from M0 because it needs a person playing it, not a fix.
 
-- [ ] Tune `maxGroundSpeed 7 / groundAccel 14 / friction 6 / airAccel 100 / airSpeedCap 0.9 /
-      jump 7 / gravity 20`. All guesses — nobody has played it yet.
+- [x] Numbers replaced with converted Quake 3 / Source defaults rather than guesses — 1 unit is
+      1 inch in both, so units/s * 0.0254 = m/s. `maxGroundSpeed 8.13 / groundAccel 10 /
+      friction 6 / stopSpeed 2.54 / airAccel 100 / airSpeedCap 0.762 / jump 6.86 / gravity 20.32`.
+- [ ] Play it and see whether the sourced values actually feel right here. They're right for
+      Quake; this has a different scale and a different character.
 - [ ] **Shift is now walk, not sprint.** Source-style: you run by default and shift slows you
       down. That's inverted from the old build and you haven't tried it yet, so it may just feel
       wrong.
-- [ ] Decide whether auto-bhop stays on. It's on by default, which makes speed trivially easy to
-      keep. Off is more demanding and more satisfying to learn.
+- [x] Auto-bhop off. Holding space to keep speed for free was most of the skill gone.
 
 ## Known limitations
 
