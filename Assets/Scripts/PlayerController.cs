@@ -15,6 +15,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     [SerializeField] Item[] items;
     [SerializeField] Image healthbarImage;
     [SerializeField] GameObject ui;
+
+    [Header("Third person weapon placement")]
+    [SerializeField] Vector3 weaponHandOffset = new Vector3(0.02f, 0f, 0.06f);
+    [SerializeField] Vector3 weaponHandRotation = new Vector3(0f, 0f, 0f);
     int itemIndex;
     int previousItemIndex = -1;
     float verticalLookRotation;
@@ -64,6 +68,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             rig = null;
         }
 
+        // The movement capsule goes on Player, which weapons don't trace against. Otherwise the
+        // capsule is a single volume around the whole body and every part of a player is worth
+        // the same - there'd be nowhere to aim.
+        int playerLayer = LayerMask.NameToLayer(Hitbox.PlayerLayerName);
+        if (playerLayer >= 0)
+            gameObject.layer = playerLayer;
+
+        if (rig != null)
+        {
+            int boxes = Hitbox.BuildFor(transform, this);
+            if (boxes == 0)
+                Debug.LogError("No hitboxes built - this player cannot be shot.", this);
+        }
+
         if (PV.IsMine)
         {
             LocalCamera = GetComponentInChildren<Camera>();
@@ -99,6 +117,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
             if (ui != null)
                 Destroy(ui);
+
+            // Weapons hang off CameraHolder, which is a first person position - to everyone else
+            // that's floating in the middle of the body. Move them onto the hand.
+            AttachWeaponsToHand();
 
         }
     }
@@ -219,6 +241,25 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         if (rig != null)
             rig.LookPitch = verticalLookRotation;
+    }
+
+    // Only for remote copies. The owner keeps their weapon on the camera, because that's what
+    // makes a first person gun feel attached to the view rather than to a character.
+    void AttachWeaponsToHand()
+    {
+        if (rig == null || rig.RightHand == null)
+            return;
+
+        foreach (Transform t in GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name != "ItemHolder")
+                continue;
+
+            t.SetParent(rig.RightHand, false);
+            t.localPosition = weaponHandOffset;
+            t.localRotation = Quaternion.Euler(weaponHandRotation);
+            break;
+        }
     }
 
     // Which weapons this player carries. A gamemode can hand a different list in later; for

@@ -201,6 +201,75 @@ public static class WeaponCheck
         Check(sb, WeaponLoadout.GunGameLadder[WeaponLoadout.GunGameLadder.Length - 1] == "Peel",
               "gun game ends on melee", WeaponLoadout.GunGameLadder[WeaponLoadout.GunGameLadder.Length - 1]);
 
+        // ---- hitboxes and headshots ----
+        sb.AppendLine("[gun] ---------- hitboxes ----------");
+        int hitLayer = LayerMask.NameToLayer(Hitbox.LayerName);
+        int playerLayer = LayerMask.NameToLayer(Hitbox.PlayerLayerName);
+        Check(sb, hitLayer >= 0, "Hitbox layer exists", hitLayer >= 0 ? $"layer {hitLayer}" : "missing");
+        Check(sb, playerLayer >= 0, "Player layer exists", playerLayer >= 0 ? $"layer {playerLayer}" : "missing");
+
+        GameObject dummy = new GameObject("~hitboxes");
+        MonkeyRig dummyRig = dummy.AddComponent<MonkeyRig>();
+        if (dummyRig.Build(false))
+        {
+            int built = Hitbox.BuildFor(dummy.transform, null);
+            Check(sb, built >= 10, "hitboxes built on the rig", $"{built} volumes");
+
+            Hitbox[] boxes = dummy.GetComponentsInChildren<Hitbox>(true);
+            Hitbox head = System.Array.Find(boxes, b => b.partName == "head");
+            Hitbox chest = System.Array.Find(boxes, b => b.partName == "chest");
+            Hitbox leg = System.Array.Find(boxes, b => b.partName == "leg");
+
+            Check(sb, head != null && head.multiplier > 1.5f, "headshots hurt more",
+                  head == null ? "no head box" : $"x{head.multiplier}");
+            Check(sb, chest != null && Mathf.Approximately(chest.multiplier, 1f), "chest is the baseline",
+                  chest == null ? "-" : $"x{chest.multiplier}");
+            Check(sb, leg != null && leg.multiplier < 1f, "legs hurt less",
+                  leg == null ? "-" : $"x{leg.multiplier}");
+
+            bool layered = true;
+            foreach (Hitbox b in boxes)
+                if (b.gameObject.layer != hitLayer) layered = false;
+            Check(sb, layered, "all hitboxes on the Hitbox layer", $"{boxes.Length} checked");
+
+            // A pistol headshot should be a two tap, not an instant kill
+            GunInfo p2 = Resources.Load<GunInfo>("Guns/Pistol");
+            if (p2 != null && head != null)
+            {
+                float hs = p2.damage * head.multiplier;
+                Check(sb, hs < 100f && hs > 50f, "pistol headshot is a two tap",
+                      $"{hs:F0} damage - {Mathf.CeilToInt(100f / hs)} to kill");
+            }
+        }
+        Object.DestroyImmediate(dummy);
+
+        // ---- damage falloff separates the roles ----
+        sb.AppendLine("[gun] ---------- falloff ----------");
+        GunInfo sg = Resources.Load<GunInfo>("Guns/Shotgun");
+        GunInfo sn = Resources.Load<GunInfo>("Guns/Sniper");
+        if (sg != null && sn != null && rifle != null)
+        {
+            float sgClose = sg.DamageAtRange(3f) * sg.pelletsPerShot;
+            float sgFar = sg.DamageAtRange(20f) * sg.pelletsPerShot;
+            Check(sb, sgClose > 100f, "shotgun kills point blank", $"{sgClose:F0} at 3m");
+            Check(sb, sgFar < sgClose * 0.5f, "shotgun falls off hard",
+                  $"{sgFar:F0} at 20m vs {sgClose:F0} at 3m");
+
+            Check(sb, Mathf.Approximately(sn.DamageAtRange(300f), sn.damage), "sniper has no falloff",
+                  $"{sn.DamageAtRange(300f):F0} at 300m");
+
+            float rClose = rifle.DamageAtRange(10f), rFar = rifle.DamageAtRange(150f);
+            Check(sb, rFar < rClose && rFar > rClose * 0.5f, "rifle falls off gently",
+                  $"{rClose:F0} at 10m -> {rFar:F0} at 150m");
+        }
+
+        // ---- every weapon has its own voice ----
+        foreach (string name in WeaponLoadout.GunGameLadder)
+        {
+            AudioClip[] clips = Resources.LoadAll<AudioClip>($"Audio/Shoot/{name}");
+            Check(sb, clips.Length > 0, $"{name} has its own sound", $"{clips.Length} clip(s)");
+        }
+
         Finish(sb);
     }
 

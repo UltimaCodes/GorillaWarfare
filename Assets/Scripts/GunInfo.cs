@@ -7,6 +7,12 @@ public class GunInfo : ItemInfo
     public float damage = 20f;
     public float maxRange = 200f;
 
+    [Tooltip("Distance at which damage starts dropping. Beyond it, damage falls to falloffFloor by maxRange.")]
+    public float falloffStart = 25f;
+
+    [Tooltip("Fraction of damage remaining at maxRange. 1 means no falloff at all.")]
+    [Range(0.1f, 1f)] public float falloffFloor = 1f;
+
     [Header("Fire")]
     [Tooltip("Rounds per second.")]
     public float fireRate = 8f;
@@ -42,6 +48,20 @@ public class GunInfo : ItemInfo
 
     [Tooltip("How fast recovery happens, in units per second.")]
     public float recoverySpeed = 6f;
+
+    /// <summary>
+    /// Damage after distance falloff. This is what stops a shotgun being a sniper - the pellets
+    /// still reach, they just stop being worth anything. Smooth rather than a cliff, so there's
+    /// no exact metre where a gun suddenly stops working.
+    /// </summary>
+    public float DamageAtRange(float distance)
+    {
+        if (falloffFloor >= 1f || distance <= falloffStart)
+            return damage;
+
+        float t = Mathf.InverseLerp(falloffStart, maxRange, distance);
+        return damage * Mathf.Lerp(1f, falloffFloor, t * t);   // squared so it holds up then drops
+    }
 
     public float SecondsBetweenShots => fireRate > 0f ? 1f / fireRate : 0.1f;
 
