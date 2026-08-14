@@ -29,10 +29,26 @@ public class PlayerManager : MonoBehaviour
         }
     }
 
+    // Forward slash, not Path.Combine: this string is a Resources key sent over the network,
+    // and Path.Combine produces a backslash on Windows.
+    const string playerControllerPrefab = "PhotonPrefabs/PlayerController";
+
     void CreateController()
     {
+        if (SpawnManager.Instance == null)
+        {
+            Debug.LogError("[Spawn] no SpawnManager in scene; cannot create controller.", this);
+            return;
+        }
+
         Transform spawnpoint = SpawnManager.Instance.GetSpawnpoint();
-        controller = PhotonNetwork.Instantiate(Path.Combine("PhotonPrefabs", "PlayerController"), spawnpoint.position, spawnpoint.rotation, 0, new object[] { PV.ViewID });
+        if (spawnpoint == null)
+        {
+            Debug.LogError("[Spawn] SpawnManager returned no spawnpoint; cannot create controller.", this);
+            return;
+        }
+
+        controller = PhotonNetwork.Instantiate(playerControllerPrefab, spawnpoint.position, spawnpoint.rotation, 0, new object[] { PV.ViewID });
     }
 
     public void Die()
