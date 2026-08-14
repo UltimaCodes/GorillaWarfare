@@ -17,6 +17,8 @@ public static class AssetFixups
 
     // The mesh comes in about 5 units tall against a 2 unit CharacterController, so the monkey
     // was roughly two and a half times the size of his own collider.
+    // Scale is baked into the fbx by the smd converter now, so this only sets the rig type and
+    // builds the material. Applying an import scale on top is what left the model 100x oversized.
     public static void ScaleMonkey()
     {
         ModelImporter importer = AssetImporter.GetAtPath(monkeyPath) as ModelImporter;
@@ -26,46 +28,62 @@ public static class AssetFixups
             return;
         }
 
-        GameObject before = AssetDatabase.LoadAssetAtPath<GameObject>(monkeyPath);
-        SkinnedMeshRenderer skin = before != null ? before.GetComponentInChildren<SkinnedMeshRenderer>(true) : null;
-        // SMD is Z-up and the fbx export didn't convert, so the model's height is along Z, not Y.
-        // MonkeyRig rotates it upright at runtime; here we just need to measure the right axis.
-        float rawHeight = skin != null ? skin.sharedMesh.bounds.size.z : 0f;
+        // useFileScale honours the fbx's own unit scale, which here is 0.01 - and the geometry
+        // is already baked to metres by the converter, so it stacked and gave a 2cm gorilla.
+        importer.globalScale = 1f;
+        importer.useFileScale = false;
 
-        // bounds already have the current import scale baked in, so divide it back out to get
-        // the true height. Without this, running twice measures the scaled mesh and resets the
-        // factor to 1, which puts the model back to full size.
-        float currentScale = Mathf.Approximately(importer.globalScale, 0f) ? 1f : importer.globalScale;
-        float trueHeight = rawHeight / currentScale;
-
-        // Aim for a hair under the 2 unit capsule so the feet aren't buried in the floor.
-        const float targetHeight = 1.9f;
-        float scale = targetHeight / trueHeight;
-        if (trueHeight <= 0.01f)
-        {
-            Debug.LogError($"[fixups] could not measure the mesh (height {trueHeight:F4}). " +
-                           "Leaving scale alone rather than guessing.");
-            return;
-        }
-
-        importer.globalScale = scale;
-
-        // Generic. Not Humanoid, not None - both are wrong here for different reasons:
-        //
-        //   Humanoid solves the pose from muscle space every frame, and direct bone writes
-        //   aren't supported on it. Avatar assigned + no controller = the avatar's default
-        //   pose, i.e. a T-pose. That was the bug.
-        //
-        //   None strips the rig altogether. Verified: it imported with SkinnedMeshRenderers: 0,
-        //   so there was no skeleton left to drive at all.
-        //
-        // Generic keeps the skin and the bones and does no solving, so writing bone transforms
-        // just works. MonkeyRig destroys the Animator it comes with anyway.
+        // Generic. Not Humanoid, not None - both wrong here for different reasons:
+        //   Humanoid solves the pose in muscle space and direct bone writes aren't supported,
+        //   so with an avatar and no controller you get the avatar's default pose. A T-pose.
+        //   None strips the rig entirely - verified, it imported SkinnedMeshRenderers: 0.
+        // Generic keeps skin and bones and does no solving, so writing transforms just works.
         importer.animationType = ModelImporterAnimationType.Generic;
         importer.importAnimation = false;
         importer.SaveAndReimport();
 
-        Debug.Log($"[fixups] monkey true height {trueHeight:F2} (measured {rawHeight:F2} at scale {currentScale:F4}) -> scale {scale:F4}");
+        BuildGorillaMaterial();
+        Debug.Log("[fixups] gorilla: rig Generic, file scale, material built");
+    }
+
+    // The smd converter rebuilds geometry and weights from scratch and creates no materials, so
+    // the model imported with Unity's Default-Material and no texture. Build one here and let
+    // MonkeyRig assign it at runtime - more reliable than hoping fbx material remapping lines up.
+    public static void BuildGorillaMaterial()
+    {
+        const string dir = "Assets/Resources/Models/Gorilla";
+        const string matPath = dir + "/GorillaMat.mat";
+
+        Texture2D diffuse = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "/TGorilla_Diffuse.png");
+        Texture2D normal = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "/TGorilla_Normal.png");
+
+        // Unity has to be told a normal map is a normal map or it treats it as colour.
+        TextureImporter ni = AssetImporter.GetAtPath(dir + "/TGorilla_Normal.png") as TextureImporter;
+        if (ni != null && ni.textureType != TextureImporterType.NormalMap)
+        {
+            ni.textureType = TextureImporterType.NormalMap;
+            ni.SaveAndReimport();
+            normal = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "/TGorilla_Normal.png");
+        }
+
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+        if (mat == null)
+        {
+            mat = new Material(Shader.Find("Standard"));
+            AssetDatabase.CreateAsset(mat, matPath);
+        }
+
+        if (diffuse != null) mat.SetTexture("_MainTex", diffuse);
+        if (normal != null)
+        {
+            mat.SetTexture("_BumpMap", normal);
+            mat.EnableKeyword("_NORMALMAP");
+        }
+        mat.SetFloat("_Glossiness", 0.1f);   // fur isn't shiny
+
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[fixups] material: diffuse={(diffuse != null)} normal={(normal != null)}");
     }
 
     // The gunshots are 96kHz stereo, which is studio-master quality for a sound that plays for

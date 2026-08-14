@@ -39,22 +39,6 @@ public static class PlayerModelCheck
         SkinnedMeshRenderer skin = asset.GetComponentInChildren<SkinnedMeshRenderer>(true);
         Check(sb, skin != null, "skinned mesh", skin == null ? "none" : $"{skin.bones.Length} bones, {skin.sharedMesh.vertexCount} verts");
 
-        // materials + textures - the thing that was never checked
-        if (skin != null)
-        {
-            Material[] mats = skin.sharedMaterials;
-            int withTex = 0;
-            string names = "";
-            foreach (Material m in mats)
-            {
-                if (m == null) continue;
-                names += m.name + " ";
-                if (m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null) withTex++;
-                else if (m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null) withTex++;
-            }
-            Check(sb, mats.Length > 0, "material slots", $"{mats.Length} [{names.Trim()}]");
-            Check(sb, withTex > 0, "diffuse texture bound", $"{withTex}/{mats.Length} materials have one");
-        }
 
         // --- runtime side: build the rig exactly like the game does
         GameObject host = new GameObject("~check");
@@ -72,14 +56,34 @@ public static class PlayerModelCheck
                       $"model localEuler = ({e.x:F0}, {e.y:F0}, {e.z:F0})");
             }
 
+            // Material as the player actually sees it - bound at runtime, not on the asset.
             Renderer r = host.GetComponentInChildren<Renderer>(true);
             if (r != null)
             {
-                Bounds b = r.bounds;
-                bool tall = b.size.y > 1.5f && b.size.y < 2.4f;
-                Check(sb, tall, "world height ~1.9", $"bounds size = ({b.size.x:F2}, {b.size.y:F2}, {b.size.z:F2})");
-                bool notWider = b.size.x < b.size.y * 2f;
-                Check(sb, notWider, "not absurdly wide", $"x/y ratio = {b.size.x / Mathf.Max(b.size.y, 0.01f):F2}");
+                Material m = r.sharedMaterial;
+                bool hasDiffuse = m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null;
+                bool hasNormal = m != null && m.HasProperty("_BumpMap") && m.GetTexture("_BumpMap") != null;
+                Check(sb, hasDiffuse, "diffuse bound", m == null ? "no material" : $"{m.name}, diffuse={hasDiffuse}");
+                Check(sb, hasNormal, "normal map bound", $"normal={hasNormal}");
+
+                // A SkinnedMeshRenderer's geometry follows its bones, not its own transform, so
+                // r.transform tells us nothing - it measured local space, where height is still
+                // on Z. Renderer.bounds would be right but is stale in edit mode. Push the mesh
+                // corners through the model root, which is what carries the upright rotation.
+                SkinnedMeshRenderer smr = r as SkinnedMeshRenderer;
+                Bounds local = smr != null ? smr.sharedMesh.bounds : r.localBounds;
+                Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 c = local.center + Vector3.Scale(local.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 w = (model != null ? model : r.transform).localToWorldMatrix.MultiplyPoint3x4(c);
+                    min = Vector3.Min(min, w); max = Vector3.Max(max, w);
+                }
+                Vector3 size = max - min;
+                bool tall = size.y > 1.5f && size.y < 2.4f;
+                Check(sb, tall, "world height ~1.9", $"size = ({size.x:F2}, {size.y:F2}, {size.z:F2})");
+                Check(sb, size.x < size.y * 2f, "sane proportions", $"span/height = {size.x / Mathf.Max(size.y, 0.01f):F2}");
             }
 
             // does driving it actually move a bone?
