@@ -26,6 +26,13 @@ public static class GameAudio
         if (!banks.TryGetValue(bank, out AudioClip[] clips))
         {
             clips = Resources.LoadAll<AudioClip>($"Audio/{bank}");
+
+            // Fall back to the parent folder, so a weapon asking for "Shoot/Blowgun" with no
+            // clips of its own still makes a noise.
+            int slash = bank.LastIndexOf('/');
+            if (clips.Length == 0 && slash > 0)
+                clips = Resources.LoadAll<AudioClip>($"Audio/{bank.Substring(0, slash)}");
+
             banks[bank] = clips;
 
             if (clips.Length == 0)
