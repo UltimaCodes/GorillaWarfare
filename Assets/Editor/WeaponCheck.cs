@@ -24,8 +24,8 @@ public static class WeaponCheck
         StringBuilder sb = new StringBuilder();
         failures = 0;
 
-        GunInfo pistol = AssetDatabase.LoadAssetAtPath<GunInfo>("Assets/Items/Guns/Pistol.asset");
-        GunInfo rifle = AssetDatabase.LoadAssetAtPath<GunInfo>("Assets/Items/Guns/Rifle.asset");
+        GunInfo pistol = AssetDatabase.LoadAssetAtPath<GunInfo>("Assets/Resources/Guns/Pistol.asset");
+        GunInfo rifle = AssetDatabase.LoadAssetAtPath<GunInfo>("Assets/Resources/Guns/Rifle.asset");
 
         Check(sb, pistol != null, "pistol asset", pistol == null ? "missing" : pistol.name);
         Check(sb, rifle != null, "rifle asset", rifle == null ? "missing" : rifle.name);
@@ -151,6 +151,55 @@ public static class WeaponCheck
         Check(sb, holder.transform.localPosition == before, "sway rests where it started",
               $"{holder.transform.localPosition} vs {before}");
         Object.DestroyImmediate(holder);
+
+        // ---- the whole roster ----
+        sb.AppendLine("[gun] ---------- roster ----------");
+        foreach (string name in WeaponLoadout.GunGameLadder)
+        {
+            GunInfo g = Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + name);
+            Check(sb, g != null, $"{name} asset loads", g == null ? "missing" : "ok");
+            if (g == null) continue;
+
+            float burst = g.damage * Mathf.Max(1, g.pelletsPerShot);
+            sb.AppendLine($"[gun]       {name,-9} {burst,5:F0} per pull, {g.fireRate,4:F1}/s, " +
+                          $"range {g.maxRange,5:F0}, {(g.melee ? "melee" : g.automatic ? "auto " : "semi ")}");
+
+            Check(sb, Resources.Load<GameObject>($"Models/Weapons/Banana{name}") != null,
+                  $"{name} has a banana", "model present");
+
+            // Nothing should one-pull a full-health player except the sniper, which pays for it
+            // in fire rate, and the shotgun at point blank, which pays for it in range.
+            bool onePull = burst >= 100f;
+            Check(sb, !onePull || g.fireRate <= 1.5f, $"{name} one-shot is paid for",
+                  $"{burst:F0} damage at {g.fireRate:F1}/s");
+        }
+
+        // Every weapon needs a reason to exist: no two may share a role.
+        GunInfo sniper = Resources.Load<GunInfo>("Guns/Sniper");
+        GunInfo shotgun = Resources.Load<GunInfo>("Guns/Shotgun");
+        GunInfo peel = Resources.Load<GunInfo>("Guns/Peel");
+        if (sniper != null && shotgun != null && rifle != null && peel != null)
+        {
+            Check(sb, sniper.maxRange > rifle.maxRange * 1.5f, "sniper owns long range",
+                  $"{sniper.maxRange} vs rifle {rifle.maxRange}");
+            Check(sb, shotgun.maxRange < rifle.maxRange * 0.3f, "shotgun is close quarters",
+                  $"{shotgun.maxRange} vs rifle {rifle.maxRange}");
+            Check(sb, shotgun.pelletsPerShot > 1, "shotgun fires pellets", $"{shotgun.pelletsPerShot}");
+            Check(sb, peel.melee && peel.maxRange < 3f, "peel is melee", $"range {peel.maxRange}");
+            Check(sb, sniper.damage >= 100f / 2f, "sniper is a two tap", $"{sniper.damage} damage");
+        }
+
+        // Loadout roll must never hand out the same gun twice
+        bool dupes = false;
+        for (int trial = 0; trial < 40; trial++)
+        {
+            string[] roll = WeaponLoadout.RandomSelection(3);
+            if (roll.Length != 3 || roll[0] == roll[1] || roll[1] == roll[2] || roll[0] == roll[2])
+                dupes = true;
+        }
+        Check(sb, !dupes, "random loadout has no duplicates", "40 rolls of 3");
+        Check(sb, WeaponLoadout.GunGameLadder[WeaponLoadout.GunGameLadder.Length - 1] == "Peel",
+              "gun game ends on melee", WeaponLoadout.GunGameLadder[WeaponLoadout.GunGameLadder.Length - 1]);
 
         Finish(sb);
     }

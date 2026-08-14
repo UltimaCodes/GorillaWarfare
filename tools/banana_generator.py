@@ -65,9 +65,14 @@ def banana_material(name, base, tip):
     return mat
 
 specs = [
-    # name,      length, curve, thickness  - pistol is a stubby banana, rifle a long one
-    ("BananaPistol", 0.26, 55, 0.035),
-    ("BananaRifle",  0.62, 38, 0.040),
+    # name,        length, curve, thickness
+    # Silhouette is the whole read at a glance, so each one is a different shape rather than the
+    # same banana at different scales: stubby, long, fat and bent, or very long and straight.
+    ("BananaPistol",  0.26, 55, 0.035),
+    ("BananaRifle",   0.62, 38, 0.040),
+    ("BananaShotgun", 0.44, 70, 0.058),
+    ("BananaSniper",  0.95, 18, 0.034),
+    ("BananaPeel",    0.20, 95, 0.028),
 ]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)

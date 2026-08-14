@@ -27,9 +27,22 @@ public class SingleShotGun : Gun
 
     GunInfo Info => itemInfo as GunInfo;
 
+    /// Set up a weapon built at runtime by WeaponLoadout. Safe to call before Awake.
+    public void Configure(GunInfo info, Camera camera, GameObject impactPrefab)
+    {
+        itemInfo = info;
+        cam = camera;
+        bulletImpactPrefab = impactPrefab;
+        itemGameObject = gameObject;
+        Ammo = info != null ? info.magazineSize : 0;
+    }
+
     private void Awake()
     {
         owner = GetComponentInParent<PlayerController>();
+
+        if (cam == null && owner != null)
+            cam = owner.GetComponentInChildren<Camera>();
 
         if (Info != null)
             Ammo = Info.magazineSize;
@@ -108,7 +121,8 @@ public class SingleShotGun : Gun
         if (Time.time < nextShotTime)
             return;
 
-        if (Ammo == 0)
+        // Melee has no magazine to run dry.
+        if (!Info.melee && Ammo == 0)
         {
             Reload();
             return;
@@ -117,20 +131,33 @@ public class SingleShotGun : Gun
         nextShotTime = Time.time + Info.SecondsBetweenShots;
         lastShotTime = Time.time;
 
-        if (Ammo > 0)
+        if (!Info.melee && Ammo > 0)
             Ammo--;
 
         Shoot();
 
         // Recoil after the shot is traced, so the first round of a spray goes exactly where the
-        // crosshair was rather than where the kick has already moved it.
-        if (owner != null)
+        // crosshair was rather than where the kick has already moved it. Melee doesn't kick.
+        if (owner != null && !Info.melee)
             owner.AddRecoil(Info.RecoilForShot(shotsInBurst), Info.recoilRecovery, Info.recoverySpeed);
 
         shotsInBurst++;
     }
 
     void Shoot()
+    {
+        // One trace per pellet. A shotgun is just this number going up - each pellet rolls its
+        // own spread, so the group is different every shot without any extra machinery.
+        int pellets = Mathf.Max(1, Info.pelletsPerShot);
+        bool reported = false;
+
+        for (int i = 0; i < pellets; i++)
+            reported |= FirePellet(reported);
+    }
+
+    /// Returns true if this pellet hit something. Only the first hit reports to the network -
+    /// eight decals and eight bangs for one trigger pull would be silly.
+    bool FirePellet(bool alreadyReported)
     {
         Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f));
         ray.origin = cam.transform.position;
@@ -147,7 +174,7 @@ public class SingleShotGun : Gun
 
         // Triggers ignored so the shot isn't eaten by volumes attached to the player.
         if (!Physics.Raycast(ray, out RaycastHit hit, Info.maxRange, ~0, QueryTriggerInteraction.Ignore))
-            return;
+            return false;
 
         // InParent because colliders sit on child objects, not the root.
         IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
@@ -155,7 +182,10 @@ public class SingleShotGun : Gun
         if (damageable != null && !IsOwnedByShooter(hit.collider))
             damageable.TakeDamage(Info.damage);
 
-        owner.ReportShot(gameObject.name, hit.point, hit.normal);
+        if (!alreadyReported)
+            owner.ReportShot(gameObject.name, hit.point, hit.normal);
+
+        return true;
     }
 
     bool IsOwnedByShooter(Collider other)
