@@ -1181,7 +1181,7 @@ Light:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2802625941564565912}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 11
   m_Type: 2
   m_Color: {r: 0.8962264, g: 0.5707102, b: 0.5707102, a: 1}
@@ -1739,6 +1739,7 @@ MonoBehaviour:
   OwnershipTransfer: 0
   observableSearch: 2
   ObservedComponents:
+  - {fileID: 4159105937794224332}
   - {fileID: 7754786868663888966}
   sceneViewId: 0
   InstantiationId: 0
