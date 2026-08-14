@@ -6,7 +6,7 @@ using UnityEngine;
 // Run: Unity -batchmode -quit -executeMethod AssetFixups.All
 public static class AssetFixups
 {
-    const string monkeyPath = "Assets/Resources/Models/Monkey/monkey.fbx";
+    const string monkeyPath = "Assets/Resources/Models/Gorilla/gorilla.fbx";
 
     public static void All()
     {
@@ -38,16 +38,28 @@ public static class AssetFixups
 
         // Aim for a hair under the 2 unit capsule so the feet aren't buried in the floor.
         const float targetHeight = 1.9f;
-        float scale = trueHeight > 0.01f ? targetHeight / trueHeight : 0.4f;
+        float scale = targetHeight / trueHeight;
+        if (trueHeight <= 0.01f)
+        {
+            Debug.LogError($"[fixups] could not measure the mesh (height {trueHeight:F4}). " +
+                           "Leaving scale alone rather than guessing.");
+            return;
+        }
 
         importer.globalScale = scale;
 
-        // Rig None, not Humanoid. Humanoid solves the pose from muscle space every frame and
-        // writing bone transforms directly is unsupported on it - the only way in is
-        // SetBoneLocalRotation inside OnAnimatorIK. With an avatar and no controller you get the
-        // avatar's default pose, which is a T-pose. That's exactly what was on screen.
-        // We drive bones by hand, so we want nothing owning the skeleton.
-        importer.animationType = ModelImporterAnimationType.None;
+        // Generic. Not Humanoid, not None - both are wrong here for different reasons:
+        //
+        //   Humanoid solves the pose from muscle space every frame, and direct bone writes
+        //   aren't supported on it. Avatar assigned + no controller = the avatar's default
+        //   pose, i.e. a T-pose. That was the bug.
+        //
+        //   None strips the rig altogether. Verified: it imported with SkinnedMeshRenderers: 0,
+        //   so there was no skeleton left to drive at all.
+        //
+        // Generic keeps the skin and the bones and does no solving, so writing bone transforms
+        // just works. MonkeyRig destroys the Animator it comes with anyway.
+        importer.animationType = ModelImporterAnimationType.Generic;
         importer.importAnimation = false;
         importer.SaveAndReimport();
 

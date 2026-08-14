@@ -7,7 +7,7 @@ using UnityEngine;
 // Run: Unity -batchmode -quit -executeMethod ModelProbe.Probe
 public static class ModelProbe
 {
-    const string path = "Assets/Resources/Models/Monkey/monkey.fbx";
+    const string path = "Assets/Resources/Models/Gorilla/gorilla.fbx";
 
     public static void Probe()
     {
@@ -83,7 +83,7 @@ public static class ModelProbe
     // Why is it T-posing? Instantiate what the game actually loads and look at it.
     public static void ProbeRuntimeModel()
     {
-        GameObject prefab = Resources.Load<GameObject>("Models/Monkey/monkey");
+        GameObject prefab = Resources.Load<GameObject>("Models/Gorilla/gorilla");
         if (prefab == null) { Debug.Log("[rt] prefab NOT FOUND at Resources/Models/Monkey/monkey"); return; }
 
         GameObject inst = Object.Instantiate(prefab);
