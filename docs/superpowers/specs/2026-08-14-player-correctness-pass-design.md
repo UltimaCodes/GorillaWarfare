@@ -48,9 +48,15 @@ Established by reading the project files, not assumed:
   on the `cameraHolder` child. The prefab has three `PhotonView`s; only the root observes a
   `PhotonTransformView`. `CameraHolder` has **no components at all**, so vertical aim is never
   transmitted. This is the reported "model doesn't move with the camera".
-- **All three `PhotonView`s use `Synchronization: 3` (ReliableDeltaCompressed).** That is
-  reliable-ordered delivery for a continuously-changing player transform, which adds latency and
-  head-of-line blocking under packet loss.
+- **Sync mode is already correct — an earlier claim in this spec was wrong.** All three
+  `PhotonView`s use `Synchronization: 3`. `Enums.cs:69` defines
+  `enum ViewSynchronization { Off, ReliableDeltaCompressed, Unreliable, UnreliableOnChange }`,
+  so index 3 is **UnreliableOnChange**, which is the right mode for a player transform. The
+  original claim that this was ReliableDeltaCompressed (index 1) was an off-by-position error.
+  **No change required.** Noted because the wrong version was briefly acted on.
+  One real consequence does follow: under `UnreliableOnChange` a **stationary player transmits
+  nothing at all**, which matters when reasoning about what a late joiner does and does not
+  receive.
 - **The region is hard-pinned:** `FixedRegion: uae` in `PhotonServerSettings`. Every player is
   forced to the UAE cluster regardless of where they are.
 - **The player mesh cannot be animated.** `CHIMP_L.3DS` is a `.3DS` file — a format with no
@@ -98,12 +104,16 @@ that swap a one-line change.
 No fix is designed for an unconfirmed cause. Surviving hypotheses, ranked (the four listed under
 "Ruled out" above were eliminated by inspection and are not restated here):
 
-- **H1 (leading) — the character is mislocated, not unrendered.** `PhotonTransformView`
-  interpolates a remote object toward its last received network position. Before the first
-  serialisation packet arrives that value may be uninitialised, leaving the object at or lerping
-  from world origin. The late joiner sees their own body correctly (local transform, no
-  interpolation) while everyone else is looking at an empty spawn point, with the character parked
-  inside the floor at (0,0,0). Fits the symptom exactly.
+- **H1 — the character is mislocated, not unrendered. DOWNGRADED after reading the source.**
+  The original theory was that `PhotonTransformView` lerps a remote object toward an
+  uninitialised network position, parking it at world origin. Reading
+  `PhotonTransformView.cs` shows the component is well-behaved: `Awake` sets
+  `m_NetworkPosition = Vector3.zero` **but** `m_Distance` defaults to `0`, so the `MoveTowards`
+  in `Update` is a no-op before the first packet, and on first receipt the `m_firstTake` branch
+  **snaps** `transform.position` to the received value and only then starts interpolating. The
+  object therefore holds its instantiate position until real data arrives. This hypothesis is
+  not supported by the code and is retained only because the diagnostic logging tests it for
+  free.
 - **H2 — unguarded network lookup.** `PlayerController.Awake` calls
   `PhotonView.Find((int)PV.InstantiationData[0]).GetComponent<PlayerManager>()` with no null
   check. If that view is not yet registered on a given client it throws, `Awake` aborts partway,
