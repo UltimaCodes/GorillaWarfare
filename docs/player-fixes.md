@@ -105,18 +105,30 @@ Ruled out so far:
   `MoveTowards` is a no-op before the first packet, and `m_firstTake` snaps to the received position.
   It's well behaved.
 
-Fixed one real ordering problem that might be it: `RoomManager` subscribes to `sceneLoaded` from
-`OnEnable` in the menu scene, but `PhotonHandler` subscribes in `Start()`, which only happens once
-`Launcher.Start()` calls `ConnectUsingSettings()`. Unity fires handlers in subscription order, so
-ours ran first and raised the spawn *before* PUN could undo the `IsMessageQueueRunning = false` that
-`LoadLevel` set. Now deferred until the queue is actually running.
+### What I did about it
 
-Not convinced that's the whole story though — the `IsMessageQueueRunning` setter is a plain field
-assignment with no side effects, so a queued event should still flush. Needs a live test.
+Stopped chasing it and rebuilt the spawn path instead, copying what Photon's own
+`OnJoinedInstantiate` does (it ships in the SDK under `UtilityScripts/Prototyping/`). Their pattern
+is one flat `PhotonNetwork.Instantiate` out of `OnJoinedRoom` via `AddCallbackTarget` — no
+intermediate networked object, nothing threaded through `InstantiationData`.
 
-`NetworkDebugOverlay` (F3) puts the message queue flag and live callback counters on screen. If
-`MESSAGE QUEUE RUNNING` is False on the room creator, that's it. If it's True but `entered=0`, it's
-callback registration instead, which is a different fix.
+The old chain was `RoomManager` → spawn a networked `PlayerManager` → that spawns the
+`PlayerController`, passing its own ViewID through `InstantiationData` so the controller could find
+it again with `PhotonView.Find`. Three objects that all have to land on every client in the right
+order. And `PlayerManager` only held kills and deaths, which were *already* custom properties — a
+networked object duplicating state that was already networked. Deleted it.
+
+Kills now go straight onto the killer's custom properties (PUN lets you set another player's), so
+nothing looks up anyone else's objects any more.
+
+Also added a watchdog: if `IsMessageQueueRunning` is false for more than 2s while in a room, turn it
+back on and log. Everything PUN does is gated on that one flag, so a client with it stuck off goes
+deaf while the game keeps running — exactly the symptom. Note you can't use `LevelLoadingProgress`
+to detect a legitimate load, it sticks at 1 forever once any scene has loaded.
+
+Whether that actually fixes it is still unverified. `NetworkDebugOverlay` (F3) shows the flag and
+live callback counters, so if it recurs the readout says which half is wrong: queue stuck off, or
+callbacks not firing despite the queue being fine.
 
 ## Risks
 
