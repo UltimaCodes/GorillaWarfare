@@ -6,7 +6,7 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 using Photon.Realtime;
 using UnityEngine.UI;
 
-public class PlayerController : MonoBehaviourPunCallbacks, IDamageable
+public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObservable
 {
     [SerializeField] float mouseSensitivity, sprintSpeed, walkSpeed, jumpForce, smoothTime;
     [SerializeField] GameObject cameraHolder;
@@ -24,6 +24,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable
     const float maxHealth = 100f;
     float currentHealth = maxHealth;
 
+    // Pitch is applied to cameraHolder, which is not covered by any PhotonTransformView.
+    // We send it ourselves as a single float so remote players can see where we're aiming.
+    float remoteVerticalLook;
+    const float pitchLerpSpeed = 15f;
+
     PlayerManager playerManager;
 
     Rigidbody rb;
@@ -34,27 +39,95 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable
         rb = GetComponent<Rigidbody>();
         PV = GetComponent<PhotonView>();
 
-        playerManager = PhotonView.Find((int)PV.InstantiationData[0]).GetComponent<PlayerManager>();
+        ResolvePlayerManager();
+    }
+
+    // Runs on every client, including ones that may not have registered the owner's
+    // PlayerManager view yet. Previously this chained straight off PhotonView.Find and threw
+    // a NullReferenceException on a late join, aborting the rest of Awake.
+    bool ResolvePlayerManager()
+    {
+        if (playerManager != null)
+            return true;
+
+        object[] data = PV.InstantiationData;
+        if (data == null || data.Length == 0)
+        {
+            Debug.LogError($"[Spawn] view={PV.ViewID} has no InstantiationData; cannot resolve PlayerManager.", this);
+            return false;
+        }
+
+        int managerViewID = (int)data[0];
+        PhotonView managerView = PhotonView.Find(managerViewID);
+        if (managerView == null)
+        {
+            Debug.LogWarning($"[Spawn] view={PV.ViewID} could not find PlayerManager view {managerViewID}. Will retry on demand.", this);
+            return false;
+        }
+
+        playerManager = managerView.GetComponent<PlayerManager>();
+        return playerManager != null;
     }
 
     void Start()
     {
+        LogSpawn("start");
+
         if (PV.IsMine)
         {
             EquipItem(0);
         }
         else
         {
-            Destroy(GetComponentInChildren<Camera>().gameObject);
-            Destroy(rb);
-            Destroy(ui);
+            Camera ownCamera = GetComponentInChildren<Camera>();
+            if (ownCamera != null)
+                Destroy(ownCamera.gameObject);
+
+            if (rb != null)
+                Destroy(rb);
+
+            if (ui != null)
+                Destroy(ui);
+
+            // The invisibility report is "others can't see me". Re-check a remote player a
+            // couple of seconds in, once replication has had time to deliver something, so we
+            // can tell "never spawned" from "spawned in the wrong place" from "spawned fine".
+            StartCoroutine(LogSpawnAfterSettle());
         }
+    }
+
+    IEnumerator LogSpawnAfterSettle()
+    {
+        yield return new WaitForSeconds(2f);
+        LogSpawn("settled");
+    }
+
+    // Diagnostic for the late-join visibility bug. Reports where the object actually is and
+    // whether anything is drawing, rather than assuming the failure is a rendering one.
+    void LogSpawn(string phase)
+    {
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        int drawing = 0;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i].enabled && renderers[i].gameObject.activeInHierarchy)
+                drawing++;
+        }
+
+        Debug.Log(
+            $"[Spawn:{phase}] view={PV.ViewID} mine={PV.IsMine} owner={PV.Owner?.NickName ?? "<none>"} " +
+            $"pos={transform.position} active={gameObject.activeInHierarchy} " +
+            $"renderers={drawing}/{renderers.Length} manager={(playerManager == null ? "NULL" : "ok")} " +
+            $"players={PhotonNetwork.CurrentRoom?.PlayerCount} master={PhotonNetwork.IsMasterClient}", this);
     }
 
     void Update()
     {
         if (!PV.IsMine)
+        {
+            ApplyRemoteLook();
             return;
+        }
 
         Look();
         Move();
@@ -163,6 +236,32 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable
         cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation, 0f, 0f);
     }
 
+    // Remote players: drive cameraHolder from the replicated pitch. Lerped rather than snapped
+    // because serialization only fires 10-30x/second, so raw values would visibly step.
+    // cameraHolder survives on remote clients -- Start() destroys the Camera child, not its parent.
+    void ApplyRemoteLook()
+    {
+        if (cameraHolder == null)
+            return;
+
+        verticalLookRotation = Mathf.LerpAngle(verticalLookRotation, remoteVerticalLook, Time.deltaTime * pitchLerpSpeed);
+        cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation, 0f, 0f);
+    }
+
+    // Observed by the root PhotonView alongside PhotonTransformView. Sends one float rather
+    // than adding a fourth PhotonView to cameraHolder purely to carry vertical aim.
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(verticalLookRotation);
+        }
+        else
+        {
+            remoteVerticalLook = (float)stream.ReceiveNext();
+        }
+    }
+
     public void SetGroundedState(bool _grounded)
     {
         grounded = _grounded;
@@ -213,12 +312,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable
         if (currentHealth <= 0)
         {
             Die();
-            PlayerManager.Find(info.Sender).GetKill();
+
+            // Another unguarded cross-client lookup: the killer's PlayerManager may not be
+            // resolvable here, and losing a kill credit shouldn't take the death with it.
+            PlayerManager killer = PlayerManager.Find(info.Sender);
+            if (killer != null)
+                killer.GetKill();
+            else
+                Debug.LogWarning($"[Kill] no PlayerManager for sender {info.Sender?.NickName ?? "<none>"}; kill not credited.", this);
         }
     }
 
     void Die()
     {
+        // Retry the lookup here: if Awake lost the race, the view is almost certainly
+        // registered by now, and dying with a null manager would strand the player dead.
+        if (!ResolvePlayerManager())
+        {
+            Debug.LogError($"[Spawn] view={PV.ViewID} died with no PlayerManager; cannot respawn.", this);
+            return;
+        }
+
         playerManager.Die();
     }
 }

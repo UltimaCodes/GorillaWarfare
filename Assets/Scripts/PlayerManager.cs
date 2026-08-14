@@ -64,6 +64,10 @@ public class PlayerManager : MonoBehaviour
 
     public static PlayerManager Find(Player player)
     {
-        return FindObjectsOfType<PlayerManager>().SingleOrDefault(x => x.PV.Owner == player);
+        // FirstOrDefault, not SingleOrDefault: Single throws if a duplicate ever exists, which
+        // would turn a cosmetic desync into an exception. FindObjectsByType replaces the
+        // FindObjectsOfType deprecated in Unity 6.
+        return FindObjectsByType<PlayerManager>(FindObjectsSortMode.None)
+            .FirstOrDefault(x => x.PV != null && x.PV.Owner == player);
     }
 }
