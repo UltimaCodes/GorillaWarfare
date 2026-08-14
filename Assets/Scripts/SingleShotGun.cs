@@ -11,7 +11,6 @@ public class SingleShotGun : Gun
 {
     [SerializeField] Camera cam;
 
-    PhotonView PV;
     PlayerController owner;
     MuzzleFlash muzzle;
 
@@ -30,7 +29,6 @@ public class SingleShotGun : Gun
 
     private void Awake()
     {
-        PV = GetComponent<PhotonView>();
         owner = GetComponentInParent<PlayerController>();
 
         if (Info != null)
@@ -104,7 +102,7 @@ public class SingleShotGun : Gun
 
     void TryShoot()
     {
-        if (cam == null || PV == null || Info == null || reloading)
+        if (cam == null || owner == null || Info == null || reloading)
             return;
 
         if (Time.time < nextShotTime)
@@ -157,26 +155,21 @@ public class SingleShotGun : Gun
         if (damageable != null && !IsOwnedByShooter(hit.collider))
             damageable.TakeDamage(Info.damage);
 
-        PV.RPC(nameof(RPC_Shoot), RpcTarget.All, hit.point, hit.normal);
+        owner.ReportShot(gameObject.name, hit.point, hit.normal);
     }
 
     bool IsOwnedByShooter(Collider other)
     {
         PhotonView hitView = other.GetComponentInParent<PhotonView>();
-        return hitView != null && hitView.Owner == PV.Owner;
+        return hitView != null && owner.View != null && hitView.Owner == owner.View.Owner;
     }
 
-    [PunRPC]
-    void RPC_Shoot(Vector3 hitPosition, Vector3 hitNormal)
+    /// Visual side of a shot. Driven from PlayerController's RPC so every client runs it, not
+    /// just the shooter. Audio is played there too, since it needs the weapon's name.
+    public void PlayFireEffects(Vector3 hitPosition, Vector3 hitNormal)
     {
-        // This RPC already goes to everyone, so the audio is networked for free. Bank comes from
-        // the weapon's own name, falling back to Shoot/ if it has nothing of its own.
-        GameAudio.PlayAt($"{GameAudio.Shoot}/{gameObject.name}", transform.position, 0.6f);
-
-        // In the RPC so everyone sees the flash, not just the shooter.
         if (muzzle != null)
             muzzle.Fire();
-        GameAudio.PlayAt(GameAudio.Impact, hitPosition, 0.5f);
 
         if (bulletImpactPrefab == null)
             return;
