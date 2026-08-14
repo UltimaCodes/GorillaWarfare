@@ -13,4 +13,15 @@ MonoBehaviour:
   m_Name: Rifle
   m_EditorClassIdentifier: 
   itemName: Rifle
-  damage: 25
+  damage: 21
+  maxRange: 200
+  fireRate: 10
+  automatic: 1
+  spread: 0.5
+  magazineSize: 30
+  reloadTime: 2.2
+  verticalKick: 1.5
+  horizontalKick: 0.7
+  patternLength: 9
+  recoilRecovery: 0.7
+  recoverySpeed: 6

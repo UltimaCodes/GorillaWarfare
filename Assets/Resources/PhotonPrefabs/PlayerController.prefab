@@ -1398,8 +1398,8 @@ MonoBehaviour:
   mouseSensitivity: 3
   cameraHolder: {fileID: 2293998585120115180}
   items:
-  - {fileID: 4834874955677074324}
   - {fileID: 6947861452571846707}
+  - {fileID: 4834874955677074324}
   healthbarImage: {fileID: 4055823294845712000}
   ui: {fileID: 2101884168501079312}
 --- !u!114 &7754786868663888966

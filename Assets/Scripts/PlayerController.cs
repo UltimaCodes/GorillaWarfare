@@ -17,6 +17,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     int previousItemIndex = -1;
     float verticalLookRotation;
     float horizontalLookRotation;
+
+    // Recoil is kept separate from the look angles and added on top, so recovery can pull it
+    // back without fighting the mouse. Pull down while firing and you're cancelling this, which
+    // is exactly the skill the pattern is there to teach.
+    Vector2 recoilOffset;
+    Vector2 recoilTarget;
+    float recoilRecovery = 0.75f;
+    float recoilSpeed = 6f;
     bool cursorLocked = true;
     const float maxHealth = 100f;
     float currentHealth = maxHealth;
@@ -138,6 +146,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             items[itemIndex].Use();
         }
+        else if (Input.GetMouseButton(0) && items[itemIndex] is SingleShotGun heldGun)
+        {
+            heldGun.UseHeld();
+        }
+
+        if (Input.GetKeyDown(KeyCode.R) && items[itemIndex] is SingleShotGun reloadGun)
+        {
+            reloadGun.Reload();
+        }
 
         if(transform.position.y < -10f)
         {
@@ -189,14 +206,35 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             rig.LookPitch = verticalLookRotation;
     }
 
+    /// Called by a weapon on each shot. Kick is (pitch, yaw) in degrees.
+    public void AddRecoil(Vector2 kick, float recovery, float speed)
+    {
+        recoilTarget += kick;
+        recoilRecovery = recovery;
+        recoilSpeed = speed;
+    }
+
     void Look()
     {
         horizontalLookRotation += Input.GetAxisRaw("Mouse X") * mouseSensitivity;
-        transform.localEulerAngles = new Vector3(0f, horizontalLookRotation, 0f);
-
         verticalLookRotation -= Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
         verticalLookRotation = Mathf.Clamp(verticalLookRotation, -90f, 90f);
-        cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation, 0f, 0f);
+
+        UpdateRecoil();
+
+        // Recoil rides on top of the look angles rather than being folded into them, so
+        // recovering doesn't undo where you actually pointed the mouse.
+        transform.localEulerAngles = new Vector3(0f, horizontalLookRotation + recoilOffset.y, 0f);
+        cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation - recoilOffset.x, 0f, 0f);
+    }
+
+    void UpdateRecoil()
+    {
+        // Decay the target so the kick doesn't stack forever, then chase it. Two stages is what
+        // makes it feel like a spring instead of a teleport - the shot snaps the view and it
+        // settles back smoothly.
+        recoilTarget = Vector2.Lerp(recoilTarget, Vector2.zero, recoilRecovery * recoilSpeed * Time.deltaTime);
+        recoilOffset = Vector2.Lerp(recoilOffset, recoilTarget, 1f - Mathf.Exp(-recoilSpeed * 2f * Time.deltaTime));
     }
 
     // Lerped, not snapped - serialization only fires 20x/sec so raw values visibly step.
