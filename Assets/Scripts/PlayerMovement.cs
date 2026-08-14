@@ -25,28 +25,38 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
 {
-    [Header("Ground")]
-    [SerializeField] float maxGroundSpeed = 7f;
-    [SerializeField] float groundAccel = 14f;
-    [SerializeField] float friction = 6f;
+    // Numbers converted from Quake 3 / Source defaults rather than made up. Both engines work
+    // in units of 1 inch, so units/s * 0.0254 = m/s.
+    //
+    //   g_speed 320        -> 8.13 m/s
+    //   pm_accelerate 10   -> 10 (unitless)
+    //   pm_friction 6      -> 6  (unitless)
+    //   pm_stopspeed 100   -> 2.54 m/s
+    //   g_gravity 800      -> 20.32 m/s^2
+    //   jump velocity 270  -> 6.86 m/s
+    //   sv_airaccelerate   -> 100 (CS:S value; Q3 uses 1, which is far stiffer)
+    //   sv_maxairspeed 30  -> 0.762 m/s
 
-    // Below this, friction uses a floor value so you come to a clean stop instead of creeping.
-    [SerializeField] float stopSpeed = 2f;
+    [Header("Ground")]
+    [SerializeField] float maxGroundSpeed = 8.13f;
+    [SerializeField] float groundAccel = 10f;
+    [SerializeField] float friction = 6f;
+    [SerializeField] float stopSpeed = 2.54f;
 
     [Header("Walk")]
-    [SerializeField] float walkSpeed = 3f;
+    [SerializeField] float walkSpeed = 3.4f;
 
     [Header("Air")]
     [SerializeField] float airAccel = 100f;
-
-    // The strafe-jump knob. Bigger = easier to gain speed, and floatier. Source uses the
-    // equivalent of about 0.7-1.0 in these units.
-    [SerializeField] float airSpeedCap = 0.9f;
+    [SerializeField] float airSpeedCap = 0.762f;
 
     [Header("Jump")]
-    [SerializeField] float jumpSpeed = 7f;
-    [SerializeField] float gravity = 20f;
-    [SerializeField] bool autoBhop = true;
+    [SerializeField] float jumpSpeed = 6.86f;
+    [SerializeField] float gravity = 20.32f;
+
+    // Off: you have to time each jump. On, holding space keeps your speed for free, which is
+    // most of the skill gone.
+    [SerializeField] bool autoBhop = false;
 
     // Keeps a jump you pressed slightly too early, so landing and immediately jumping again
     // is forgiving instead of frame-perfect.

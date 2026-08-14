@@ -62,7 +62,15 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 - [ ] At least four: something fast and weak, something slow and hard, a shotgun-ish spread, a
       joke tier
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
-- [ ] Muzzle flash, recoil kick, weapon sway
+- [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
+      Wants weight and low end. The two in there now are trimmed .22 recordings, which is a
+      small calibre and sounds like it. Needs bigger source material.
+- [ ] **Pistol is the default weapon** (currently index 0 is whatever the prefab ordered)
+- [ ] **Rifle is automatic** - fires while held, at a fixed rate
+- [ ] **Maths-based recoil, not animation.** Each shot pushes the view up along a defined
+      pattern, then recovers smoothly. Pattern is data, so each weapon can have its own - and a
+      learnable pattern is the thing that makes a spray skilful rather than random.
+- [ ] Muzzle flash, weapon sway
 - [ ] **Ammo and reloading.** Neither exists at all right now — you have infinite bullets and no
       reload, so every gun is a hose. Fire rate is the only thing separating them until this
       lands, which undercuts the whole point of having several.
@@ -75,17 +83,28 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 
 ## M3 — Game loop
 
-Timed free-for-all deathmatch. One mode, done properly; more later.
+Two modes.
 
+**Shared plumbing**
 - [ ] Match state machine: warmup → live → over → next map
 - [ ] Round timer, replicated, visible
-- [ ] Score limit as an alternative end condition
 - [ ] End-of-match scoreboard with a winner
 - [ ] Respawn delay instead of instant
 - [ ] Master client owns match state; must survive host migration
+- [ ] Mode picked in the lobby
 
-**Done when:** a match starts, runs, ends, declares a winner, and starts again without anyone
-touching anything.
+**Deathmatch (timed)**
+- [ ] Each match rolls a random set of 3 weapons; you spawn holding one of them
+- [ ] Most kills when the clock runs out wins
+
+**Gun game**
+- [ ] Fixed weapon ladder, 2 kills to advance
+- [ ] Everyone works down the same order
+- [ ] Final rung is melee — killing with it wins the match
+- [ ] Needs a melee weapon, which M2 doesn't currently plan for
+
+**Done when:** both modes can be picked, played start to finish, and declare a winner without
+anyone touching anything.
 
 ---
 
@@ -106,7 +125,10 @@ The big aesthetic one. See the philosophy section above.
 - [ ] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction
 - [ ] Lobby and room browser restyled to match
 - [ ] In-game HUD: health, ammo, timer, scores
-- [ ] Hitmarkers, damage numbers, kill feed
+- [ ] Hitmarkers, damage numbers
+- [ ] **Kill feed** — who killed who with what, top corner, fading entries
+- [ ] **Join / leave messages** — "X joined", "X left". Photon already fires
+      OnPlayerEnteredRoom and OnPlayerLeftRoom, so the data is there and unused.
 - [ ] **Settings**, with:
   - [ ] Crosshair — shape, size, thickness, gap, colour, dot, outline
   - [ ] Graphics — resolution, fullscreen, quality, FOV, and room for shaders later
@@ -122,7 +144,10 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 ## M6 — Maps
 
-- [ ] One real map to replace the seven cubes and four planes
+- [ ] **Osama bin Laden's compound** as the first real map. Walled compound, inner courtyard,
+      multi-storey building — that layout is genuinely good deathmatch geometry: clear sightlines
+      across the yard, tight interior fights, roof access.
+- [ ] Replace the seven cubes and four planes
 - [ ] Map selection in the lobby
 - [ ] Spawn system that doesn't drop people on each other
 - [ ] Second map
@@ -177,10 +202,10 @@ Recorded so it doesn't get quietly relitigated.
 
 ## Ongoing
 
-- [ ] Player / GroundCheck layers — `TODO` sitting in `SingleShotGun`, currently worked around
-      with ownership checks
-- [ ] Delete `NetworkDebugOverlay` and the `LogSpawn` calls — the late-join bug they were built
-      for is fixed
+- [ ] Player layer — **downgraded.** The original reason was the GroundCheck trigger eating
+      shots, and GroundCheck no longer exists; the ownership check covers self-hits. Only real
+      remaining use is camera culling masks for shaders later, so it can wait for M7.
+- [x] ~~Delete `NetworkDebugOverlay` and the `LogSpawn` calls~~ — done, the bug they were for is fixed
 - [ ] `Game.unity` will do a Unity 6 format migration on first open
 
 ## Recently closed
