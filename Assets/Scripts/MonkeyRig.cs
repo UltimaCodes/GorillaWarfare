@@ -11,7 +11,23 @@ using UnityEngine;
 // correctly without a single extra byte on the wire.
 public class MonkeyRig : MonoBehaviour
 {
-    const string modelResource = "Models/Monkey/monkey";
+    [Header("Model")]
+    [SerializeField] string modelResource = "Models/Gorilla/gorilla";
+
+    // Bone names as data, not code - the last model used b_Spine02 style names, this one is
+    // Rigify's DEF- convention. Swapping models shouldn't mean editing this file.
+    [Header("Bones")]
+    [SerializeField] string spineBone = "DEF-chest";
+    [SerializeField] string headBone = "DEF-head";
+    [SerializeField] string leftThighBone = "DEF-thigh.01.L";
+    [SerializeField] string leftShinBone = "DEF-shin.01.L";
+    [SerializeField] string rightThighBone = "DEF-thigh.01.R";
+    [SerializeField] string rightShinBone = "DEF-shin.01.R";
+    [SerializeField] string leftUpperArmBone = "DEF-upper_arm.01.L";
+    [SerializeField] string leftForeArmBone = "DEF-forearm.01.L";
+    [SerializeField] string rightUpperArmBone = "DEF-upper_arm.01.R";
+    [SerializeField] string rightForeArmBone = "DEF-forearm.01.R";
+    [SerializeField] string rightHandBone = "DEF-hand.R";
 
     [Header("Gait")]
     [SerializeField] float strideRate = 2.6f;      // swings per metre travelled
@@ -87,24 +103,24 @@ public class MonkeyRig : MonoBehaviour
 
     bool CacheBones()
     {
-        spine = Find("b_Spine02");
-        head = Find("b_Head");
+        spine = Find(spineBone);
+        head = Find(headBone);
 
-        leftThigh = Find("b_Left_Leg01");
-        leftShin = Find("b_Left_Leg02");
-        rightThigh = Find("b_Right_Leg01");
-        rightShin = Find("b_Right_Leg02");
+        leftThigh = Find(leftThighBone);
+        leftShin = Find(leftShinBone);
+        rightThigh = Find(rightThighBone);
+        rightShin = Find(rightShinBone);
 
-        leftUpperArm = Find("b_Left_UpperArm");
-        leftForeArm = Find("b_Left_ForeArm");
-        rightUpperArm = Find("b_Right_UpperArm");
-        rightForeArm = Find("b_Right_ForeArm");
+        leftUpperArm = Find(leftUpperArmBone);
+        leftForeArm = Find(leftForeArmBone);
+        rightUpperArm = Find(rightUpperArmBone);
+        rightForeArm = Find(rightForeArmBone);
 
-        RightHand = Find("b_Right_Hand");
+        RightHand = Find(rightHandBone);
 
         if (spine == null || head == null || leftThigh == null || rightThigh == null)
         {
-            Debug.LogError("Monkey rig is missing expected bones - did the model change?", this);
+            Debug.LogError($"Rig is missing bones. Looked for {spineBone}, {headBone}, {leftThighBone}, {rightThighBone}.", this);
             return false;
         }
 
