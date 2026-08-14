@@ -29,6 +29,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     float remoteVerticalLook;
     const float pitchLerpSpeed = 15f;
 
+    // The player camera is Untagged, so Camera.main returns null and anything needing the local
+    // view (nameplate billboards) had to guess with FindObjectOfType -- which can return another
+    // player's camera in the window before Start destroys it. Publishing it here is unambiguous.
+    public static Camera LocalCamera { get; private set; }
+
     PlayerManager playerManager;
 
     Rigidbody rb;
@@ -75,6 +80,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (PV.IsMine)
         {
+            LocalCamera = GetComponentInChildren<Camera>();
             EquipItem(0);
         }
         else
@@ -94,6 +100,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // can tell "never spawned" from "spawned in the wrong place" from "spawned fine".
             StartCoroutine(LogSpawnAfterSettle());
         }
+    }
+
+    void OnDestroy()
+    {
+        // Respawning destroys and recreates the controller, so a stale static would otherwise
+        // point at a destroyed camera until the replacement's Start runs.
+        if (LocalCamera != null && PV != null && PV.IsMine)
+            LocalCamera = null;
     }
 
     IEnumerator LogSpawnAfterSettle()
