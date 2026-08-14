@@ -7,7 +7,7 @@ using UnityEngine;
 // Run: Unity -batchmode -quit -executeMethod ModelProbe.Probe
 public static class ModelProbe
 {
-    const string path = "Assets/3DModels/Monkey/monkey.fbx";
+    const string path = "Assets/Resources/Models/Monkey/monkey.fbx";
 
     public static void Probe()
     {
@@ -78,5 +78,37 @@ public static class ModelProbe
             importer.SaveAndReimport();
             Debug.Log("--- reverted to " + before);
         }
+    }
+
+    // Why is it T-posing? Instantiate what the game actually loads and look at it.
+    public static void ProbeRuntimeModel()
+    {
+        GameObject prefab = Resources.Load<GameObject>("Models/Monkey/monkey");
+        if (prefab == null) { Debug.Log("[rt] prefab NOT FOUND at Resources/Models/Monkey/monkey"); return; }
+
+        GameObject inst = Object.Instantiate(prefab);
+        Animator anim = inst.GetComponentInChildren<Animator>();
+
+        string[] wanted = { "b_Spine02", "b_Head", "b_Left_Leg01", "b_Left_Leg02",
+                            "b_Right_Leg01", "b_Left_UpperArm", "b_Right_Hand" };
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.AppendLine("[rt] --- runtime model probe");
+        sb.AppendLine($"[rt] Animator present: {anim != null}");
+        if (anim != null)
+        {
+            sb.AppendLine($"[rt]   avatar={(anim.avatar == null ? "none" : anim.avatar.name)} " +
+                          $"isHuman={(anim.avatar != null && anim.avatar.isHuman)} " +
+                          $"controller={(anim.runtimeAnimatorController == null ? "NONE" : anim.runtimeAnimatorController.name)}");
+            sb.AppendLine($"[rt]   cullingMode={anim.cullingMode} applyRootMotion={anim.applyRootMotion}");
+        }
+        foreach (string w in wanted)
+        {
+            bool found = false;
+            foreach (Transform t in inst.GetComponentsInChildren<Transform>(true))
+                if (t.name == w) { found = true; break; }
+            sb.AppendLine($"[rt]   bone {w,-18} {(found ? "found" : "MISSING")}");
+        }
+        Debug.Log(sb.ToString());
+        Object.DestroyImmediate(inst);
     }
 }
