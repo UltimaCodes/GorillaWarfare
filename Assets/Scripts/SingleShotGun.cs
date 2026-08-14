@@ -13,6 +13,7 @@ public class SingleShotGun : Gun
 
     PhotonView PV;
     PlayerController owner;
+    MuzzleFlash muzzle;
 
     float nextShotTime;
     int shotsInBurst;          // where we are in the recoil pattern
@@ -36,6 +37,7 @@ public class SingleShotGun : Gun
             Ammo = Info.magazineSize;
 
         BuildVisual();
+        muzzle = gameObject.AddComponent<MuzzleFlash>();
     }
 
     // Swaps the old AK/M1911 meshes for a banana. Done at runtime, keyed off the weapon's own
@@ -170,6 +172,10 @@ public class SingleShotGun : Gun
         // This RPC already goes to everyone, so the audio is networked for free. Bank comes from
         // the weapon's own name, falling back to Shoot/ if it has nothing of its own.
         GameAudio.PlayAt($"{GameAudio.Shoot}/{gameObject.name}", transform.position, 0.6f);
+
+        // In the RPC so everyone sees the flash, not just the shooter.
+        if (muzzle != null)
+            muzzle.Fire();
         GameAudio.PlayAt(GameAudio.Impact, hitPosition, 0.5f);
 
         if (bulletImpactPrefab == null)
