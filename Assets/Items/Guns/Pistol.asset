@@ -13,4 +13,15 @@ MonoBehaviour:
   m_Name: Pistol
   m_EditorClassIdentifier: 
   itemName: Pistol
-  damage: 50
+  damage: 34
+  maxRange: 120
+  fireRate: 5
+  automatic: 0
+  spread: 0.15
+  magazineSize: 12
+  reloadTime: 1.4
+  verticalKick: 1.9
+  horizontalKick: 0.25
+  patternLength: 4
+  recoilRecovery: 0.9
+  recoverySpeed: 9

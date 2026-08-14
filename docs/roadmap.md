@@ -56,24 +56,31 @@ its weapon.
 Banana-shaped guns. Plural — the point is variety, not one gun.
 
 - [ ] Source or build CC0 banana / fruit models
-- [ ] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
+- [x] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
 - [ ] At least four: something fast and weak, something slow and hard, a shotgun-ish spread, a
       joke tier
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
       Wants weight and low end. The two in there now are trimmed .22 recordings, which is a
       small calibre and sounds like it. Needs bigger source material.
-- [ ] **Pistol is the default weapon** (currently index 0 is whatever the prefab ordered)
-- [ ] **Rifle is automatic** - fires while held, at a fixed rate
-- [ ] **Maths-based recoil, not animation.** Each shot pushes the view up along a defined
+- [x] **Pistol is the default weapon** (currently index 0 is whatever the prefab ordered)
+- [x] **Rifle is automatic** - fires while held, at a fixed rate
+- [x] **Maths-based recoil, not animation.** Each shot pushes the view up along a defined
       pattern, then recovers smoothly. Pattern is data, so each weapon can have its own - and a
       learnable pattern is the thing that makes a spray skilful rather than random.
 - [ ] Muzzle flash, weapon sway
-- [ ] **Ammo and reloading.** Neither exists at all right now — you have infinite bullets and no
+- [x] **Ammo and reloading.** Neither exists at all right now — you have infinite bullets and no
       reload, so every gun is a hose. Fire rate is the only thing separating them until this
       lands, which undercuts the whole point of having several.
-- [ ] Fire rate limiting — `SingleShotGun` fires once per click with no cooldown, so an auto
+- [x] Fire rate limiting — `SingleShotGun` fires once per click with no cooldown, so an auto
       weapon has nothing to hold it back
+
+Balance is asserted in `Assets/Editor/WeaponCheck.cs` rather than eyeballed - the rifle has to
+win on sustained dps or the semi-auto is strictly better and nobody picks it. That check caught
+exactly that: pistol was doing 221 dps against the rifle's 210.
+
+Current: pistol 34 damage at 5/s semi (3 shots to kill, accurate, 12 round mag), rifle 21 at 10/s
+auto (5 shots to kill, sprays, 30 round mag).
 
 **Done when:** you can carry several distinct banana weapons that feel different to fire.
 
