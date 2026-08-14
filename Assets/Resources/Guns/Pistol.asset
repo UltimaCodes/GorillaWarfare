@@ -25,3 +25,5 @@ MonoBehaviour:
   patternLength: 4
   recoilRecovery: 0.9
   recoverySpeed: 9
+  falloffStart: 18
+  falloffFloor: 0.55

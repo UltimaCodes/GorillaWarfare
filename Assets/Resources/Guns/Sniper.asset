@@ -27,3 +27,5 @@ MonoBehaviour:
   recoverySpeed: 4
   pelletsPerShot: 1
   melee: 0
+  falloffStart: 400
+  falloffFloor: 1.0

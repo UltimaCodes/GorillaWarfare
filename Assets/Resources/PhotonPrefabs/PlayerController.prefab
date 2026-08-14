@@ -802,7 +802,6 @@ MonoBehaviour:
   itemGameObject: {fileID: 7469587920476812241}
   bulletImpactPrefab: {fileID: 5603946944956736325, guid: 91d094bb016349b4dabd1c23ffeeab70, type: 3}
   cam: {fileID: 5138162806306082652}
-  maxRange: 200
 --- !u!114 &3322703479626840163
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1768,7 +1767,6 @@ MonoBehaviour:
   itemGameObject: {fileID: 5390093927026016350}
   bulletImpactPrefab: {fileID: 5603946944956736325, guid: 91d094bb016349b4dabd1c23ffeeab70, type: 3}
   cam: {fileID: 5138162806306082652}
-  maxRange: 200
 --- !u!114 &488289180517855900
 MonoBehaviour:
   m_ObjectHideFlags: 0

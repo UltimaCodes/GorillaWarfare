@@ -172,15 +172,23 @@ public class SingleShotGun : Gun
             ray.direction = dir;
         }
 
-        // Triggers ignored so the shot isn't eaten by volumes attached to the player.
-        if (!Physics.Raycast(ray, out RaycastHit hit, Info.maxRange, ~0, QueryTriggerInteraction.Ignore))
+        // Everything except the Player layer: shots pass through movement capsules and land on
+        // the hitboxes instead, which is what makes aiming at a head mean anything.
+        int mask = ~(1 << LayerMask.NameToLayer(Hitbox.PlayerLayerName));
+
+        if (!Physics.Raycast(ray, out RaycastHit hit, Info.maxRange, mask, QueryTriggerInteraction.Ignore))
             return false;
 
-        // InParent because colliders sit on child objects, not the root.
-        IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
+        if (!IsOwnedByShooter(hit.collider))
+        {
+            float damage = Info.DamageAtRange(hit.distance);
 
-        if (damageable != null && !IsOwnedByShooter(hit.collider))
-            damageable.TakeDamage(Info.damage);
+            Hitbox box = hit.collider.GetComponent<Hitbox>();
+            if (box != null)
+                box.Apply(damage);
+            else
+                hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
+        }
 
         if (!alreadyReported)
             owner.ReportShot(gameObject.name, hit.point, hit.normal);
