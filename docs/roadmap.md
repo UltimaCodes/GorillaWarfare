@@ -63,6 +63,11 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
       joke tier
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] Muzzle flash, recoil kick, weapon sway
+- [ ] **Ammo and reloading.** Neither exists at all right now — you have infinite bullets and no
+      reload, so every gun is a hose. Fire rate is the only thing separating them until this
+      lands, which undercuts the whole point of having several.
+- [ ] Fire rate limiting — `SingleShotGun` fires once per click with no cooldown, so an auto
+      weapon has nothing to hold it back
 
 **Done when:** you can carry several distinct banana weapons that feel different to fire.
 
@@ -132,6 +137,43 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [ ] Screenshake and hitstop
 
 ---
+
+## Movement tuning
+
+Separate from M0 because it needs a person playing it, not a fix.
+
+- [ ] Tune `maxGroundSpeed 7 / groundAccel 14 / friction 6 / airAccel 100 / airSpeedCap 0.9 /
+      jump 7 / gravity 20`. All guesses — nobody has played it yet.
+- [ ] **Shift is now walk, not sprint.** Source-style: you run by default and shift slows you
+      down. That's inverted from the old build and you haven't tried it yet, so it may just feel
+      wrong.
+- [ ] Decide whether auto-bhop stays on. It's on by default, which makes speed trivially easy to
+      keep. Off is more demanding and more satisfying to learn.
+
+## Known limitations
+
+Not tasks, but things that are true and worth knowing before they bite.
+
+- **Hit registration is client-authoritative.** The shooter raycasts locally and tells the
+  victim they were hit. Fine among friends, trivially cheatable if this ever goes wider.
+- **PUN 2 is end-of-life.** No more updates from Exit Games. It works and we deliberately chose
+  to stay (see below), but it won't get fixes.
+- **The Photon App ID is committed** in `PhotonServerSettings.asset`, and the repo is public.
+  It's a client-side ID so it was always going to ship inside builds, but anyone reading the repo
+  can now burn your free-tier quota. Worth regenerating if the game gets any attention.
+- **No anti-cheat, no server authority** of any kind. Correct call at this scale; just don't be
+  surprised later.
+
+## Decided against
+
+Recorded so it doesn't get quietly relitigated.
+
+- **P2P instead of Photon.** Considered properly and rejected. PUN is already peer-hosted — the
+  master client owns game state and Photon supplies matchmaking and relay, not a game server.
+  Real P2P still needs NAT punchthrough from Steam, EOS or a relay, so the migration bought very
+  little for a lot of work. Revisit only if PUN's limits actually start hurting.
+- **A clip-based animation library.** Superseded by driving the bones directly, which is what
+  M1 does.
 
 ## Ongoing
 
