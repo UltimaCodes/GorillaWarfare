@@ -28,23 +28,19 @@ courtesy. The author's own wording, which has to travel with anything the game s
 
 ## Music
 
-**Nothing in yet.** The first attempt was wrong for the game and has been taken out.
+Five slots, all original, all still to be written. Drop them into
+`Assets/Resources/Audio/Music/` and MusicPlayer picks them up by filename:
 
-What fits this thing is darksynth and industrial - the Cruelty Squad and ULTRAKILL register.
-**Karl Casey / White Bat Audio** is the obvious source: it's that exact sound, and it's cleared
-for use in games as long as the credit line is present.
+| file | when it plays | length |
+|---|---|---|
+| `menu.ogg` | title screen, room browser | 2-3 min, loops |
+| `lobby.ogg` | in a room, waiting for the host to start | 2-3 min, loops |
+| `warmup.ogg` | the 8 seconds before a match goes live | 8s, no build-up wasted |
+| `combat.ogg` | the match | 2-3 min, loops |
+| `over.ogg` | scoreboard | ~20s, loops |
 
-> Music by Karl Casey @ White Bat Audio
-
-His terms: use it in a game, credit him, don't sell the soundtrack separately from the game and
-don't re-release it under another name. None of which is a problem here.
-
-- Bandcamp: https://karlcasey.bandcamp.com
-- YouTube: White Bat Audio
-
-Drop two tracks into `Assets/Resources/Audio/Music/` as `menu.ogg` and `combat.ogg` and
-MusicPlayer picks them up. It disables itself while they're missing, so the game runs fine
-without them.
+Every slot falls back rather than going silent, so a partial set works: no lobby track and the
+menu one carries on, no warmup and combat starts early.
 
 ## Movement
 
