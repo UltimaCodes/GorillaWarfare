@@ -775,7 +775,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (dead)
             return;
 
-        currentHealth -= damage;
+        currentHealth = Absorb(currentHealth, damage);
 
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume, 0.1f);
@@ -810,6 +810,40 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     }
 
     /// Anything above the normal maximum, for the HUD to draw differently.
+    /// <summary>
+    /// How much damage a point of overshield soaks up. Two, so shield points are worth double
+    /// ordinary health.
+    ///
+    /// Without this the overshield was decorative against the one weapon it most needed to
+    /// matter against. The shotgun does 108 a pull: at 140 health that kills in two, and at a
+    /// full 200 it still kills in two, so sixty points of reward for a killstreak bought
+    /// exactly nothing. Now the same sixty points absorb a hundred and twenty damage, which
+    /// turns that into three - and three is the difference between being ambushed and getting
+    /// to shoot back.
+    /// </summary>
+    public const float ShieldToughness = 2f;
+
+    /// <summary>
+    /// Damage against a pool that may have overshield sitting on top of it.
+    ///
+    /// Static and pure so it can be checked without a player, a room or a game running - this
+    /// is a rule about how the game plays rather than plumbing, and it's the sort of thing that
+    /// is easy to get subtly wrong and never notice.
+    /// </summary>
+    public static float Absorb(float health, float damage, float max = maxHealth)
+    {
+        float shield = Mathf.Max(0f, health - max);
+
+        if (shield <= 0f || damage <= 0f)
+            return health - damage;
+
+        // The shield can eat twice its own value before it's gone, and whatever is left over
+        // carries on into ordinary health at full strength.
+        float eaten = Mathf.Min(shield * ShieldToughness, damage);
+
+        return health - eaten / ShieldToughness - (damage - eaten);
+    }
+
     public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);
     public float MaxHealth => maxHealth;
 

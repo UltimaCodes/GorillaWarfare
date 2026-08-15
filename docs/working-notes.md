@@ -161,7 +161,22 @@ assert the method count is unchanged.
 
 - Nothing has been played with two people. This is the biggest risk in the project.
 - Match timings are guesses: warmup 8s, deathmatch 5min, gun game 10min, respawn 3s.
-- `warmup.mp3` is 20s against an 8s phase.
-- The shotgun ignores overshield — 108 twice clears 200 as easily as 140.
-- Third-person banana sits at hip height rather than in the hand.
-- `AppVersion` is empty, so mismatched builds can still see each other's rooms.
+- `warmup.mp3` is 20s against an 8s phase, so only its opening is ever heard. The crossfade
+  handles it cleanly; whether the first eight seconds are the good eight seconds needs an ear.
+
+Closed since, and worth recording why:
+
+- **The shotgun ignoring overshield** was real. Fixed by making a shield point absorb two damage
+  (`PlayerController.Absorb`), which turns a 108 damage pull from a two-shot into a three-shot
+  at full shield. `WeaponCheck` plays the roster through the rule rather than dividing.
+- **No `Music/over` track** was never a bug. `MusicPlayer` picks `over ?? lobby ?? menu`, and the
+  lobby track is a holding pen, which is exactly what a results screen is.
+- **`AppVersion` empty** is fixed — it's `0.5` now, so mismatched builds can't see each other's
+  rooms. Bump it whenever the RPC list or a replicated property changes.
+- **"Third-person banana sits at hip height"** was never true, or stopped being true when the
+  two-handed poses landed. It measures at 73–77% of body height, which is chest level. Worth
+  knowing how that was nearly "fixed": the first measurement used the stand-in's transform as
+  the floor, which is an arbitrary point partway up the body, and reported the gorilla as 0.87m
+  tall — in a probe where another check measures it at 1.95m two lines earlier. Two numbers for
+  the same body in the same log, and the wrong one happened to agree with the note. The check
+  stays, now measuring both ends off the mesh bounds.
