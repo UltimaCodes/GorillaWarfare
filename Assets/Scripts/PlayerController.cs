@@ -23,7 +23,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // degrees down, which is the bottom edge of a 60 degree FOV. That's why the hands were
     // invisible: they were rendering just off the bottom of the screen.
     // This sits the weapon ~17 degrees below and ~12 right of centre, well inside the frame.
-    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.29f, 0.26f, 0.8f);
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.4f, 0.26f, 0.8f);
     // Angled across the view rather than pointing straight down the camera axis. Aimed
     // straight ahead you see a long thin banana end-on, which reads as a tube - you need the
     // yaw to show its curve and silhouette, which is how CS frames a rifle.
@@ -780,6 +780,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);
     public float MaxHealth => maxHealth;
 
+    /// The top of the bar, so the HUD can scale to it rather than guessing.
+    public float OvershieldCeiling => overshieldCeiling;
+
     /// Called on the killer's own client when one of their shots finishes someone off.
     void RewardKill()
     {
@@ -823,14 +826,21 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // it has to tell everyone else. Before this nobody but you knew you had died, which
         // left the kill feed and the match itself with nothing to listen to.
         int killerActor = killer != null ? killer.ActorNumber : -1;
-        PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot);
+
+        // Which kill feed line everyone reads, rolled once by the person it happened to and
+        // sent with the death. Rolling it on arrival instead would give every client a
+        // different sentence for the same kill, which people notice immediately when they're
+        // all shouting about it.
+        byte flavour = (byte)Random.Range(0, 256);
+
+        PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot, flavour);
 
         if (RoomManager.Instance != null)
             RoomManager.Instance.HandleLocalDeath(transform.position, transform.forward);
     }
 
     [PunRPC]
-    void RPC_Died(int killerActor, string weapon, bool headshot)
+    void RPC_Died(int killerActor, string weapon, bool headshot, byte flavour)
     {
         GameAudio.PlayAt(GameAudio.Death, transform.position, GameAudio.DeathVolume);
 
@@ -854,6 +864,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             Juice.Hit(1f);
         }
 
-        MatchState.ReportKill(killer, PV.Owner, weapon, headshot);
+        MatchState.ReportKill(killer, PV.Owner, weapon, headshot, flavour);
     }
 }
