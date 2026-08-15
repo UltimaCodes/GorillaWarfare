@@ -21,10 +21,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // That's why nobody could see their own gun. This puts it down and to the right of the eye,
     // which is where a first person weapon lives.
     [Header("First person weapon placement")]
-    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.26f, 0.26f, 1.05f);
-    [SerializeField] Vector3 weaponViewRotation = new Vector3(0f, 0f, 0f);
-    [SerializeField] Vector3 viewArmsOffset = new Vector3(-0.06f, -0.10f, -0.30f);
-    [SerializeField] Vector3 viewArmsRotation = new Vector3(0f, 0f, 0f);
+    // Worked out from the camera, not guessed. The camera sits at y=0.5 inside CameraHolder,
+    // so a holder at y=0.26 put everything ~0.44 below the eye at 0.75 forward - about 30
+    // degrees down, which is the bottom edge of a 60 degree FOV. That's why the hands were
+    // invisible: they were rendering just off the bottom of the screen.
+    // This sits the weapon ~17 degrees below and ~12 right of centre, well inside the frame.
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.18f, 0.24f, 0.85f);
+    // Angled across the view rather than pointing straight down the camera axis. Aimed
+    // straight ahead you see a long thin banana end-on, which reads as a tube - you need the
+    // yaw to show its curve and silhouette, which is how CS frames a rifle.
+    [SerializeField] Vector3 weaponViewRotation = new Vector3(-4f, -14f, 7f);
+    // Arms are built running back from the weapon, so they sit behind the holder and slightly
+    // in from it - the hands meet the banana, the elbows disappear off the bottom.
+    [SerializeField] Vector3 viewArmsOffset = new Vector3(-0.02f, 0.02f, -0.24f);
+    [SerializeField] Vector3 viewArmsRotation = new Vector3(4f, 12f, -7f);
 
     [Header("Third person weapon placement")]
     [SerializeField] Vector3 weaponHandOffset = new Vector3(0.02f, 0f, 0.06f);
