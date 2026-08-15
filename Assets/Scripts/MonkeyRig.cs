@@ -45,6 +45,10 @@ public class MonkeyRig : MonoBehaviour
     [SerializeField] float armDown = 55f;          // shoulder rotation into a holding pose
     [SerializeField] float elbowBend = 65f;
 
+    // -1 because this rig mirrors its left side. Serialized so a different model can say
+    // otherwise without anyone editing this file.
+    [SerializeField] float leftArmSign = -1f;
+
     // Only input from outside. Everything else is measured here, because remote copies have
     // no PlayerMovement - it gets destroyed on them - but their transforms are replicated, so
     // position deltas tell us everything we need.
@@ -234,14 +238,17 @@ public class MonkeyRig : MonoBehaviour
     {
         // Static hold rather than IK. The weapon is parented to the hand, so the hands are on
         // it by construction - they just need to be up and forward rather than hanging.
+        // The left arm's bone axes are mirrored, so the same local rotation that swings the
+        // right arm down into a hold swings the left one up into the air. Signed per side
+        // rather than assumed, because which way round it is depends on the rig, not on us.
         if (leftUpperArm != null)
-            leftUpperArm.localRotation = leftUpperRest * Quaternion.Euler(-armDown, 0f, 0f);
+            leftUpperArm.localRotation = leftUpperRest * Quaternion.Euler(-armDown * leftArmSign, 0f, 0f);
 
         if (rightUpperArm != null)
             rightUpperArm.localRotation = rightUpperRest * Quaternion.Euler(-armDown, 0f, 0f);
 
         if (leftForeArm != null)
-            leftForeArm.localRotation = leftForeRest * Quaternion.Euler(-elbowBend, 0f, 0f);
+            leftForeArm.localRotation = leftForeRest * Quaternion.Euler(-elbowBend * leftArmSign, 0f, 0f);
 
         if (rightForeArm != null)
             rightForeArm.localRotation = rightForeRest * Quaternion.Euler(-elbowBend, 0f, 0f);
