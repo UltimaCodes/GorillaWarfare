@@ -648,10 +648,32 @@ public class ProbeRunner : MonoBehaviour
 
             Bounds b = r.bounds;
             Vector3 centre = cam.WorldToViewportPoint(b.center);
-            float nearest = cam.WorldToViewportPoint(b.center - cam.transform.forward * b.extents.magnitude).z;
 
-            log.AppendLine($"  ..    {weapon,-9} '{child.name,-16}' centre {centre.x:F2},{centre.y:F2} depth {centre.z:F2} nearest {nearest:F2} len {b.size.magnitude:F2}");
+            log.AppendLine($"  ..    {weapon,-9} '{child.name,-16}' centre {centre.x:F2},{centre.y:F2} depth {centre.z:F2} nearest {NearestDepth(cam, b):F2} len {b.size.magnitude:F2}");
         }
+    }
+
+    /// How close the nearest corner of a bounding box gets to the camera.
+    ///
+    /// This used to push the centre back by the bounds' radius, which treats a long thin banana
+    /// held at an angle as a sphere - so it reported the sniper poking through the near clip
+    /// when it wasn't, and would have had me shoving the whole viewmodel forward to fix a
+    /// problem that didn't exist. Eight corners is barely more work and is the actual answer.
+    static float NearestDepth(Camera cam, Bounds b)
+    {
+        float nearest = float.MaxValue;
+
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 corner = new Vector3(
+                (i & 1) == 0 ? b.min.x : b.max.x,
+                (i & 2) == 0 ? b.min.y : b.max.y,
+                (i & 4) == 0 ? b.min.z : b.max.z);
+
+            nearest = Mathf.Min(nearest, cam.WorldToViewportPoint(corner).z);
+        }
+
+        return nearest;
     }
 
     // Renders whatever the player is looking at to a PNG next to the log.

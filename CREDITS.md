@@ -15,13 +15,16 @@ Rigged monkey from [OpenGameArt](https://opengameart.org/content/monkey-3d-model
 CC0. 34 bones, skinned, and it maps to Unity's Humanoid rig so humanoid animations can be
 retargeted onto it.
 
-**Banana low poly 9.4k 7mb 2k** by **3dUVpro**, from
-[Sketchfab](https://sketchfab.com/3d-models/banana-low-poly-94k-7mb-2k-783b4703c8214cca99a9e2c7ba1eddfa)
-— **CC BY 4.0**. 9,357 faces, 2K textures. Every weapon in the game is this model at a different
-size; `tools/banana_variants.py` derives the five of them from it.
+Every weapon in the game is one banana at a different size. `tools/banana_variants.py` derives
+all five from it — 9,356 triangles, one 2K texture shared between them.
 
-Note this one is CC BY, not CC0 — attribution is a condition of the licence rather than a
-courtesy, so this entry has to stay here and in anything the game ever ships with.
+It is **CC BY 4.0**, not CC0, so attribution is a condition of the licence rather than a
+courtesy. The author's own wording, which has to travel with anything the game ships in:
+
+> This work is based on "Banana low poly 9.4k 7mb 2k"
+> (https://sketchfab.com/3d-models/banana-low-poly-94k-7mb-2k-783b4703c8214cca99a9e2c7ba1eddfa)
+> by 3dUVpro (https://sketchfab.com/3dUVpro) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
 
 ## Movement
 
