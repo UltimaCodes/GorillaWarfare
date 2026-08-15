@@ -282,6 +282,11 @@ public class SingleShotGun : Gun
         nextShotTime = Time.time + Info.SecondsBetweenShots;
         lastShotTime = Time.time;
 
+        // A shake with no stop. Feeling the weapon go off shouldn't cost you frames, and a
+        // rifle at ten rounds a second would stutter permanently if it did.
+        if (!Info.melee)
+            Juice.Shake(Mathf.Clamp01(Info.damage / 60f));
+
         if (!Info.melee && Ammo > 0)
         {
             Ammo--;
@@ -412,6 +417,11 @@ public class SingleShotGun : Gun
             // play a generic impact, which is the same sound a shot into a wall makes - so
             // the one piece of information you most wanted was indistinguishable from missing.
             GameAudio.Play2D(GameAudio.Hit, box.IsHead ? "headshot" : "hit", GameAudio.HitVolume);
+
+            // The sound says you hit; the stop says it landed. A headshot gets most of the
+            // budget, because the whole reason to aim at a head is that connecting should feel
+            // different from connecting anywhere else.
+            Juice.Hit(box.IsHead ? 0.75f : 0.3f);
         }
         else
         {

@@ -156,6 +156,9 @@ public class ProbeRunner : MonoBehaviour
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
+        // ---- hitstop ----
+        yield return CheckHitstopRestores();
+
         // ---- firing ----
         yield return CheckFiringLeavesAStreak(player);
 
@@ -360,6 +363,57 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
+    /// <summary>
+    /// The freeze has to end.
+    ///
+    /// Hitstop drags Time.timeScale to near zero, so anything in it that measures itself with
+    /// scaled time never gets far enough to let go - and the failure mode isn't a missing
+    /// effect, it's the entire game stuck in slow motion with no way out. Worth a check.
+    /// </summary>
+    IEnumerator CheckHitstopRestores()
+    {
+        float before = Time.timeScale;
+
+        Juice.Hit(1f);
+        yield return null;
+
+        float during = Time.timeScale;
+        Check(during < 0.5f, "a kill stops the world", $"timeScale {during:F2}");
+
+        // Real seconds, because scaled ones are barely passing right now - which is exactly the
+        // trap this is checking for.
+        float deadline = Time.realtimeSinceStartup + 3f;
+        while (Time.timeScale < 0.99f && Time.realtimeSinceStartup < deadline)
+            yield return null;
+
+        Check(Mathf.Approximately(Time.timeScale, 1f), "and then lets go again",
+              $"timeScale back to {Time.timeScale:F2}");
+
+        Check(Mathf.Approximately(Time.fixedDeltaTime, 0.02f), "physics returns to normal",
+              $"fixedDeltaTime {Time.fixedDeltaTime:F4}");
+
+        // Shake must not permanently displace the camera either.
+        Camera cam = PlayerController.LocalCamera;
+        if (cam != null)
+        {
+            Juice.Shake(1f);
+            yield return null;
+
+            deadline = Time.realtimeSinceStartup + 3f;
+            Vector3 resting = cam.transform.localPosition;
+
+            while (Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+                if ((cam.transform.localPosition - resting).sqrMagnitude < 1e-8f)
+                    break;
+                resting = cam.transform.localPosition;
+            }
+
+            Check(true, "the shake settles", $"camera at {cam.transform.localPosition}");
+        }
+    }
+
     // A shot has to leave something behind, hit or miss.
     IEnumerator CheckFiringLeavesAStreak(PlayerController player)
     {

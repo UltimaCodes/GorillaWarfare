@@ -48,6 +48,7 @@ public class CombatHud : MonoBehaviour
 
     static readonly Color healColour = new Color(0.4f, 1f, 0.5f, 1f);
     static readonly Color streakColour = new Color(1f, 0.55f, 0.1f, 1f);
+    static readonly Color shieldColour = new Color(0.3f, 0.85f, 1f, 1f);
 
     Texture2D scopeMask;
     int scopeSize;
@@ -163,12 +164,28 @@ public class CombatHud : MonoBehaviour
         // you did without reading a number.
         if (hitMarker > 0f)
         {
-            float size = (lastHitWasHead ? 14f : 9f) * hitMarker;
-            GUI.color = new Color(hitColour.r, hitColour.g, hitColour.b, hitMarker);
-            Rect(cx - size, cy - size, size, thickness);
-            Rect(cx + size - size, cy - size, thickness, size);
-            Rect(cx, cy + size - thickness, size, thickness);
-            Rect(cx + size - thickness, cy, thickness, size);
+            // Snaps out large and shrinks in, rather than simply fading. A marker that only
+            // fades reads as a light going off; one that moves reads as something happening.
+            float pop = 1f + (1f - hitMarker) * 0.9f;
+            float size = (lastHitWasHead ? 20f : 12f) * hitMarker * pop;
+            float weight = lastHitWasHead ? thickness * 2f : thickness;
+
+            GUI.color = lastHitWasHead
+                ? new Color(1f, 0.95f, 0.3f, hitMarker)
+                : new Color(hitColour.r, hitColour.g, hitColour.b, hitMarker);
+
+            // Four corners of a box round the centre.
+            Rect(cx - size, cy - size, size * 0.6f, weight);
+            Rect(cx - size, cy - size, weight, size * 0.6f);
+
+            Rect(cx + size - size * 0.6f, cy - size, size * 0.6f, weight);
+            Rect(cx + size - weight, cy - size, weight, size * 0.6f);
+
+            Rect(cx - size, cy + size - weight, size * 0.6f, weight);
+            Rect(cx - size, cy + size - size * 0.6f, weight, size * 0.6f);
+
+            Rect(cx + size - size * 0.6f, cy + size - weight, size * 0.6f, weight);
+            Rect(cx + size - weight, cy + size - size * 0.6f, weight, size * 0.6f);
         }
 
         DrawHealth();
@@ -225,6 +242,17 @@ public class CombatHud : MonoBehaviour
         {
             GUI.color = i < lit ? colour : emptyColour;
             Rect(left + i * (blockWidth + gapWidth), bottom - blockHeight, blockWidth, blockHeight);
+        }
+
+        // Overshield sits as a thin bar above the blocks in its own colour, so it never gets
+        // confused for ordinary health - it's a bonus and it's the first thing to go.
+        if (player.Overshield > 0f)
+        {
+            float over = player.Overshield / Mathf.Max(1f, player.MaxHealth * 0.2f);
+            float width = Mathf.Clamp01(over) * (blocks * (blockWidth + gapWidth) - gapWidth);
+
+            GUI.color = shieldColour;
+            Rect(left, bottom - blockHeight - 7f, width, 4f);
         }
 
         // Flashes green as it comes back, so a heal reads as an event.

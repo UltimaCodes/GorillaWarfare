@@ -83,6 +83,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     const float healPerStreak = 12f;
     const float maxStreakHeal = 36f;
 
+    /// <summary>
+    /// The ceiling a killstreak can push you past your own maximum.
+    ///
+    /// Healing does nothing for someone already at full health, which is exactly the person a
+    /// streak is supposed to reward - so anything left over becomes overshield instead. It sits
+    /// on top of normal health and comes off first.
+    ///
+    /// Worth knowing: base health is 140, so this is +10. If you meant the +50 that "100 up to
+    /// 150" implies, this is the one number to change.
+    /// </summary>
+    const float overshieldCeiling = 150f;
+
     /// Consecutive kills without dying. Read by the HUD.
     public int Killstreak { get; private set; }
 
@@ -691,6 +703,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume, 0.1f);
 
+        // Shake without a stop. Being shot shouldn't freeze your game - that's the one moment
+        // you most need control, and stealing it turns a fight into a slideshow.
+        Juice.Shake(Mathf.Clamp01(damage / 50f));
+
         if (currentHealth <= 0f)
             Die(info.Sender, weapon, headshot);
     }
@@ -705,11 +721,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
 
         float before = currentHealth;
-        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+
+        // Past the normal maximum it becomes overshield, up to the ceiling. Without this a
+        // heal is worth nothing to the one person who earned it - whoever is on a streak is
+        // usually the person already at full health.
+        float ceiling = Killstreak > 0 ? overshieldCeiling : maxHealth;
+        currentHealth = Mathf.Min(ceiling, currentHealth + amount);
 
         if (currentHealth > before && Hud != null)
             Hud.ShowHeal(currentHealth - before);
     }
+
+    /// Anything above the normal maximum, for the HUD to draw differently.
+    public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);
+    public float MaxHealth => maxHealth;
 
     /// Called on the killer's own client when one of their shots finishes someone off.
     void RewardKill()
@@ -760,6 +785,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // rather than a scored one - nobody else needs to know your health went up.
             if (Local != null)
                 Local.RewardKill();
+
+            // The biggest stop in the game. Killing someone is the thing every other piece of
+            // feedback has been building toward, so it gets the whole budget.
+            Juice.Hit(1f);
         }
 
         MatchState.ReportKill(killer, PV.Owner, weapon, headshot);
