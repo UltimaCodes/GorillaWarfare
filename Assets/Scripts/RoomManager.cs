@@ -3,7 +3,6 @@ using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
 using UnityEngine.SceneManagement;
-using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 // Spawning and player stats. Keeping the RoomManager name so the object already sitting in the
 // menu scene keeps working, even though it does a fair bit more than manage the room now.
@@ -114,6 +113,14 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
+        // Leaving while dead used to leave the respawn coroutine running, so it would come back
+        // a few seconds later and try to spawn a player into a room we were no longer in.
+        if (deathRoutine != null)
+        {
+            StopCoroutine(deathRoutine);
+            deathRoutine = null;
+        }
+
         ClearDeathState();
         localController = null;
     }
@@ -220,29 +227,10 @@ public class RoomManager : MonoBehaviourPunCallbacks
         TrySpawn();
     }
 
-    // Stats live entirely in custom properties, which Photon replicates and the scoreboard
-    // already reads.
-    //
-    // Only the master writes them. Custom properties do not update the local cache until the
-    // server echoes them back, so a client incrementing its own copy loses a kill any time two
-    // land inside one round trip - MatchState keeps the running tally instead and these just
-    // publish it.
-    public static void CreditKill(Player killer)
-    {
-        if (killer == null)
-            return;
-
-        killer.SetCustomProperties(new Hashtable { { KillsKey, GetStat(killer, KillsKey) + 1 } });
-    }
-
-    public static void CreditDeath(Player victim)
-    {
-        if (victim == null)
-            return;
-
-        victim.SetCustomProperties(new Hashtable { { DeathsKey, GetStat(victim, DeathsKey) + 1 } });
-    }
-
+    // Stats live in custom properties, which Photon replicates and the scoreboard already
+    // reads. MatchState owns writing them - it keeps the running tally, because a property does
+    // not update the local cache until the server echoes it, so read-increment-write loses a
+    // kill any time two land inside one round trip.
     public static int GetStat(Player player, string key)
     {
         if (player != null && player.CustomProperties.TryGetValue(key, out object value) && value is int i)

@@ -26,6 +26,8 @@ public class MatchHud : MonoBehaviour
     GUIStyle huge;
     GUIStyle label;
     GUIStyle small;
+    GUIStyle row;
+    GUIStyle corner;
     Texture2D pixel;
 
     void EnsureStyles()
@@ -60,6 +62,11 @@ public class MatchHud : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.UpperRight,
         };
+
+        // Built once. OnGUI runs at least twice a frame - layout then repaint - so a style
+        // constructed inside a draw call is two allocations per frame that never stop.
+        row = new GUIStyle(label) { alignment = TextAnchor.UpperCenter, fontSize = 20 };
+        corner = new GUIStyle(label) { alignment = TextAnchor.LowerLeft, fontSize = 18 };
     }
 
     bool ShouldDraw =>
@@ -179,7 +186,6 @@ public class MatchHud : MonoBehaviour
 
         // Full standings, since the round is over and there's nothing else to look at.
         float y = centre - 40f;
-        GUIStyle row = new GUIStyle(label) { alignment = TextAnchor.UpperCenter, fontSize = 20 };
 
         foreach (Player player in PhotonNetwork.PlayerList)
         {
@@ -207,11 +213,9 @@ public class MatchHud : MonoBehaviour
         int needed = MatchState.KillsToAdvance;
         int total = WeaponLoadout.GunGameLadder.Length;
 
-        GUIStyle left = new GUIStyle(label) { alignment = TextAnchor.LowerLeft, fontSize = 18 };
-
         GUI.color = Dim;
         GUI.Label(new Rect(24f, Screen.height - 96f, 400f, 30f),
-                  $"RUNG {rung + 1} / {total}", left);
+                  $"RUNG {rung + 1} / {total}", corner);
 
         // Pips rather than a number, so it reads at a glance mid-fight.
         for (int i = 0; i < needed; i++)

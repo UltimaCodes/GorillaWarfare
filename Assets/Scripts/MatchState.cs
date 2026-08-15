@@ -37,6 +37,12 @@ public class MatchState : MonoBehaviourPunCallbacks
     public const string EndsAtKey = "endsAt";
     public const string WinnerKey = "winner";
 
+    /// The weapons this deathmatch rolled. A room property rather than a field, because a
+    /// field belongs to whoever is master right now - and if they leave, the next master would
+    /// roll a fresh set and hand it to the next person who joined, while everyone already in
+    /// the match carried the old one.
+    public const string RolledWeaponsKey = "rolled";
+
     /// Gun game position, per player.
     public const string RungKey = "rung";
     public const string RungKillsKey = "rungKills";
@@ -109,6 +115,24 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// True while players should be able to move and shoot.
     public static bool InPlay => Phase == MatchPhase.Live;
 
+    /// What this deathmatch rolled. Readable by anyone, so the warmup screen can show it and a
+    /// new master can keep handing out the same set.
+    public static string[] RolledWeapons
+    {
+        get
+        {
+            if (PhotonNetwork.InRoom
+                && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(RolledWeaponsKey, out object value)
+                && value is string packed
+                && !string.IsNullOrEmpty(packed))
+            {
+                return Rules.Deserialise(packed);
+            }
+
+            return WeaponLoadout.AllWeapons;
+        }
+    }
+
     void Awake()
     {
         if (Instance != null && Instance != this)
@@ -156,6 +180,9 @@ public class MatchState : MonoBehaviourPunCallbacks
         rungKills.Clear();
         rungs.Clear();
 
+        // Whatever the old master had asked for either landed or died with them.
+        awaitingEcho = false;
+
         foreach (Player player in PhotonNetwork.PlayerList)
         {
             kills[player.ActorNumber] = RoomManager.GetStat(player, RoomManager.KillsKey);
@@ -175,10 +202,25 @@ public class MatchState : MonoBehaviourPunCallbacks
             GiveLoadout(newPlayer);
     }
 
+    // The phase we last asked the server for. Room properties do not update locally until the
+    // server echoes them, so for the round trip after a transition Phase and TimeLeft both
+    // still read the old values - without this, Update fires the same transition every frame
+    // until the echo lands, and every one of those is a property write.
+    MatchPhase requested = MatchPhase.Warmup;
+    bool awaitingEcho;
+
     void Update()
     {
         if (!PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom)
             return;
+
+        if (awaitingEcho)
+        {
+            if (Phase != requested)
+                return;
+
+            awaitingEcho = false;
+        }
 
         if (TimeLeft > 0f)
             return;
@@ -197,6 +239,12 @@ public class MatchState : MonoBehaviourPunCallbacks
                 BeginWarmup();
                 break;
         }
+    }
+
+    void Requested(MatchPhase phase)
+    {
+        requested = phase;
+        awaitingEcho = true;
     }
 
     // ---- phase transitions, master only ----
@@ -222,6 +270,7 @@ public class MatchState : MonoBehaviourPunCallbacks
             });
         }
 
+        Requested(MatchPhase.Warmup);
         SetRoom(new Hashtable
         {
             { PhaseKey, (int)MatchPhase.Warmup },
@@ -231,7 +280,12 @@ public class MatchState : MonoBehaviourPunCallbacks
 
         // Rolled once for the whole match so everyone fights with the same three.
         if (Mode == MatchMode.Deathmatch)
-            rolledWeapons = WeaponLoadout.RandomSelection(deathmatchWeaponCount);
+        {
+            SetRoom(new Hashtable
+            {
+                { RolledWeaponsKey, Rules.Serialise(WeaponLoadout.RandomSelection(deathmatchWeaponCount)) },
+            });
+        }
 
         foreach (Player player in PhotonNetwork.PlayerList)
             GiveLoadout(player);
@@ -241,6 +295,7 @@ public class MatchState : MonoBehaviourPunCallbacks
     {
         float length = Mode == MatchMode.GunGame ? gunGameSeconds : deathmatchSeconds;
 
+        Requested(MatchPhase.Live);
         SetRoom(new Hashtable
         {
             { PhaseKey, (int)MatchPhase.Live },
@@ -250,6 +305,7 @@ public class MatchState : MonoBehaviourPunCallbacks
 
     void FinishMatch(Player winner)
     {
+        Requested(MatchPhase.Over);
         SetRoom(new Hashtable
         {
             { PhaseKey, (int)MatchPhase.Over },
@@ -258,14 +314,12 @@ public class MatchState : MonoBehaviourPunCallbacks
         });
     }
 
-    string[] rolledWeapons;
-
     /// What a player should be carrying right now, under the current mode.
     void GiveLoadout(Player player)
     {
         string[] weapons = Mode == MatchMode.GunGame
             ? Rules.LoadoutForRung(RungOf(player), WeaponLoadout.GunGameLadder)
-            : rolledWeapons ?? WeaponLoadout.RandomSelection(deathmatchWeaponCount);
+            : RolledWeapons;
 
         player.SetCustomProperties(
             new Hashtable { { PlayerController.LoadoutKey, Rules.Serialise(weapons) } });

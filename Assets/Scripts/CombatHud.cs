@@ -28,6 +28,41 @@ public class CombatHud : MonoBehaviour
     float hitMarker;      // 1 right after a hit, decays
     bool lastHitWasHead;
 
+    static readonly Color reloadingColour = new Color(1f, 0.55f, 0.25f, 1f);
+    static readonly Color dryColour = new Color(1f, 0.3f, 0.25f, 1f);
+    static readonly Color spareColour = new Color(1f, 1f, 1f, 0.55f);
+    static readonly Color nameColour = new Color(1f, 1f, 1f, 0.4f);
+
+    string ammoText = string.Empty;
+    string spareText = string.Empty;
+    string weaponText = string.Empty;
+    int shownAmmo = int.MinValue;
+    int shownSpares = int.MinValue;
+    string shownWeapon;
+    bool shownReloading;
+
+    void CacheAmmoText(SingleShotGun gun)
+    {
+        if (gun.Ammo != shownAmmo || gun.Reloading != shownReloading)
+        {
+            shownAmmo = gun.Ammo;
+            shownReloading = gun.Reloading;
+            ammoText = shownReloading ? "--" : shownAmmo.ToString();
+        }
+
+        if (gun.SpareMagazines != shownSpares)
+        {
+            shownSpares = gun.SpareMagazines;
+            spareText = $"x{shownSpares}";
+        }
+
+        if (!ReferenceEquals(gun.name, shownWeapon))
+        {
+            shownWeapon = gun.name;
+            weaponText = shownWeapon.ToUpper();
+        }
+    }
+
     public void Bind(PlayerController owner)
     {
         player = owner;
@@ -106,23 +141,25 @@ public class CombatHud : MonoBehaviour
             float right = Screen.width - 40f;
             float bottom = Screen.height - 30f;
 
+            // Every one of these was a fresh string on every OnGUI pass, and OnGUI runs at
+            // least twice a frame. They only change when you fire, reload or switch, so they
+            // are rebuilt when they change and reused the rest of the time.
+            CacheAmmoText(gun);
+
             ammoStyle.fontSize = 52;
-            bool dry = gun.Ammo == 0;
-            GUI.color = gun.Reloading ? new Color(1f, 0.55f, 0.25f, 1f)
-                      : dry ? new Color(1f, 0.3f, 0.25f, 1f)
+            GUI.color = gun.Reloading ? reloadingColour
+                      : gun.Ammo == 0 ? dryColour
                       : ammoColour;
-            GUI.Label(new Rect(0f, 0f, right, bottom), gun.Reloading ? "--" : gun.Ammo.ToString(), ammoStyle);
+            GUI.Label(new Rect(0f, 0f, right, bottom), ammoText, ammoStyle);
 
             // Spare bananas, smaller and dimmer, below and right of the main number.
             spareStyle.fontSize = 22;
-            GUI.color = gun.SpareMagazines > 0
-                ? new Color(1f, 1f, 1f, 0.55f)
-                : new Color(1f, 0.3f, 0.25f, 0.9f);
-            GUI.Label(new Rect(0f, 0f, right, bottom + 26f), $"x{gun.SpareMagazines}", spareStyle);
+            GUI.color = gun.SpareMagazines > 0 ? spareColour : dryColour;
+            GUI.Label(new Rect(0f, 0f, right, bottom + 26f), spareText, spareStyle);
 
             spareStyle.fontSize = 16;
-            GUI.color = new Color(1f, 1f, 1f, 0.4f);
-            GUI.Label(new Rect(0f, 0f, right, bottom - 52f), gun.name.ToUpper(), spareStyle);
+            GUI.color = nameColour;
+            GUI.Label(new Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
         }
 
         GUI.color = Color.white;
