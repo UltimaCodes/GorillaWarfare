@@ -29,3 +29,4 @@ MonoBehaviour:
   melee: 1
   falloffStart: 2.4
   falloffFloor: 1.0
+  spareMagazines: 0

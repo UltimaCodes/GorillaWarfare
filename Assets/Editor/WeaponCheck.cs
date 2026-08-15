@@ -335,10 +335,72 @@ public static class WeaponCheck
         if (rf != null)
         {
             float climb = 0f;
-            for (int i = 0; i < 10; i++) climb += rf.RecoilForShot(i).x;
-            Check(sb, climb > 18f, "ten rounds climb meaningfully", $"{climb:F0} degrees");
+            for (int i = 0; i < 30; i++) climb += rf.RecoilForShot(i).x;
+            Check(sb, climb > 20f, "a full spray climbs a long way", $"{climb:F0} degrees over 30 rounds");
+
+            // and it has to hold that climb while you fire, not decay back on its own
+            string pcSrc = System.IO.File.ReadAllText("Assets/Scripts/PlayerController.cs");
+            Check(sb, pcSrc.Contains("Time.time - lastRecoilAt > recoilHoldTime"),
+                  "recoil holds while firing", "recovery waits for you to release");
             Check(sb, rf.recoilRecovery < 0.6f, "recoil is not handed back for free",
                   $"recovery {rf.recoilRecovery}");
+        }
+
+        // ---- crosshair must not double count recoil ----
+        string hudSrc = System.IO.File.ReadAllText("Assets/Scripts/CombatHud.cs");
+        Check(sb, !hudSrc.Contains("cy -= recoil.x"), "crosshair stays at screen centre",
+              "recoil already rotates the camera, so shots leave from centre");
+
+        // ---- ripeness ----
+        sb.AppendLine("[gun] ---------- ripeness ----------");
+        GunInfo rifleInfo = Resources.Load<GunInfo>("Guns/Rifle");
+        if (rifleInfo != null)
+        {
+            Color full = rifleInfo.RipenessFor(rifleInfo.magazineSize);
+            Color half = rifleInfo.RipenessFor(rifleInfo.magazineSize / 2);
+            Color empty = rifleInfo.RipenessFor(0);
+
+            Check(sb, full.g > full.r, "full magazine is green", ColorToStr(full));
+            Check(sb, half.r > half.b && half.g > half.b, "half spent is yellow", ColorToStr(half));
+            Check(sb, empty.r < 0.5f && empty.g < 0.4f, "empty is brown", ColorToStr(empty));
+
+            // it has to actually move, not just be three constants
+            Check(sb, Vector4.Distance(full, half) > 0.15f && Vector4.Distance(half, empty) > 0.2f,
+                  "ripeness changes visibly", "each stage differs");
+        }
+
+        // ---- spare magazines ----
+        foreach (string name in new[] { "Pistol", "Rifle", "Shotgun", "Sniper" })
+        {
+            GunInfo g2 = Resources.Load<GunInfo>("Guns/" + name);
+            if (g2 == null) continue;
+            Check(sb, g2.spareMagazines > 0, $"{name} carries spares",
+                  $"{g2.spareMagazines} bananas = {g2.spareMagazines * g2.magazineSize} rounds in reserve");
+        }
+
+        // ---- shapes match the brief ----
+        sb.AppendLine("[gun] ---------- shapes ----------");
+        var lengths = new System.Collections.Generic.Dictionary<string, float>();
+        foreach (string name in WeaponLoadout.GunGameLadder)
+        {
+            GameObject m = Resources.Load<GameObject>($"Models/Weapons/Banana{name}");
+            MeshFilter mf3 = m != null ? m.GetComponentInChildren<MeshFilter>(true) : null;
+            if (mf3 == null) continue;
+            Bounds b3 = mf3.sharedMesh.bounds;
+            lengths[name] = b3.size.z;
+            sb.AppendLine($"[gun]       {name,-9} {b3.size.z:F2}m long, {mf3.sharedMesh.vertexCount} verts");
+        }
+        if (lengths.Count == 5)
+        {
+            Check(sb, lengths["Sniper"] > lengths["Rifle"] * 1.8f, "sniper is obnoxiously long",
+                  $"{lengths["Sniper"]:F2}m vs rifle {lengths["Rifle"]:F2}m");
+            Check(sb, lengths["Rifle"] > lengths["Pistol"] * 1.8f, "rifle is a longer banana",
+                  $"{lengths["Rifle"]:F2}m vs pistol {lengths["Pistol"]:F2}m");
+
+            GameObject sgm = Resources.Load<GameObject>("Models/Weapons/BananaShotgun");
+            MeshFilter sgf = sgm.GetComponentInChildren<MeshFilter>(true);
+            Check(sb, sgf.sharedMesh.bounds.size.x > 0.15f, "shotgun is two bananas wide",
+                  $"{sgf.sharedMesh.bounds.size.x:F2}m across");
         }
 
         Finish(sb);

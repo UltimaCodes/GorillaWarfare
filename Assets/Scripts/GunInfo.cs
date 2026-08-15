@@ -30,8 +30,38 @@ public class GunInfo : ItemInfo
     public bool melee;
 
     [Header("Ammo")]
+    [Tooltip("Shots per banana.")]
     public int magazineSize = 30;
+
+    [Tooltip("Spare bananas. Run out and the weapon is dead until you find more.")]
+    public int spareMagazines = 5;
+
     public float reloadTime = 1.8f;
+
+    [Header("Ripeness")]
+    [Tooltip("Green when full, yellow as you fire, brown when nearly out.")]
+    public Color unripe = new Color(0.55f, 0.78f, 0.22f);
+    public Color ripe = new Color(0.96f, 0.82f, 0.16f);
+    public Color overripe = new Color(0.36f, 0.24f, 0.12f);
+
+    /// <summary>
+    /// The banana's colour for a given magazine state. Fresh is green, half spent is yellow,
+    /// nearly empty is brown - so the weapon in your hands is the ammo counter and you can read
+    /// it without looking at any UI.
+    /// </summary>
+    public Color RipenessFor(int ammo)
+    {
+        if (magazineSize <= 0)
+            return ripe;
+
+        float spent = 1f - Mathf.Clamp01(ammo / (float)magazineSize);
+
+        // Two stages rather than one lerp, because green straight to brown passes through a
+        // muddy olive and never looks like a ripe banana at any point.
+        return spent < 0.5f
+            ? Color.Lerp(unripe, ripe, spent * 2f)
+            : Color.Lerp(ripe, overripe, (spent - 0.5f) * 2f);
+    }
 
     [Header("Recoil")]
     [Tooltip("Degrees of upward kick per shot at the start of a spray.")]

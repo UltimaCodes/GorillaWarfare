@@ -180,6 +180,12 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 ---
 
+## Later polish
+
+- [ ] Bananas could bruise and spot rather than just tint, and the eat-and-swap on reload wants
+      an actual animation instead of the model simply changing colour
+- [ ] Ammo pickups, now that magazines are finite and a weapon can genuinely run dry
+
 ## M7 — Art and shaders
 
 - [ ] Replace placeholder textures (currently screenshots and memes)

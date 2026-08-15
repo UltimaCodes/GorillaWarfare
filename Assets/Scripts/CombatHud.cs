@@ -14,7 +14,7 @@ public class CombatHud : MonoBehaviour
     [SerializeField] float gap = 6f;
     [SerializeField] float thickness = 2f;
     [SerializeField] float length = 10f;
-    [SerializeField] float spreadScale = 26f;
+    [SerializeField] float spreadScale = 18f;
 
     [SerializeField] Color crosshairColour = new Color(0.55f, 0.9f, 1f, 0.9f);
     [SerializeField] Color hitColour = new Color(1f, 0.25f, 0.2f, 1f);
@@ -23,6 +23,7 @@ public class CombatHud : MonoBehaviour
     PlayerController player;
     Texture2D pixel;
     GUIStyle ammoStyle;
+    GUIStyle spareStyle;
 
     float hitMarker;      // 1 right after a hit, decays
     bool lastHitWasHead;
@@ -62,10 +63,10 @@ public class CombatHud : MonoBehaviour
 
         SingleShotGun gun = player.ActiveGun;
 
-        // Recoil pushes the crosshair, so you can see the climb you're fighting.
-        Vector2 recoil = player.RecoilOffset;
-        cx += recoil.y * spreadScale;
-        cy -= recoil.x * spreadScale;
+        // The crosshair stays dead centre, like CS. Recoil already rotates the camera, so shots
+        // always leave from screen centre - offsetting the crosshair on top of that counted the
+        // kick twice and put the reticle above where the bullets actually went. You compensate
+        // by pulling down against the view, not by chasing a moving reticle.
 
         // Spread opens the gap, so an inaccurate weapon looks inaccurate.
         float spread = gun != null && gun.Info != null ? gun.Info.spread : 0f;
@@ -92,25 +93,36 @@ public class CombatHud : MonoBehaviour
             Rect(cx + size - thickness, cy, thickness, size);
         }
 
-        // Ammo, bottom right.
+        // Ammo, bottom right: big number is what's in the banana, small one underneath is how
+        // many spare bananas you're carrying.
         if (gun != null && gun.Info != null && !gun.Info.melee)
         {
             if (ammoStyle == null)
             {
-                ammoStyle = new GUIStyle(GUI.skin.label);
-                ammoStyle.fontSize = 34;
-                ammoStyle.alignment = TextAnchor.LowerRight;
-                ammoStyle.fontStyle = FontStyle.Bold;
+                ammoStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
+                spareStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
             }
 
-            GUI.color = gun.Reloading ? new Color(1f, 0.5f, 0.3f, 1f) : ammoColour;
-            string text = gun.Reloading ? "RELOADING" : $"{gun.Ammo} / {gun.Info.magazineSize}";
-            GUI.Label(new Rect(0f, 0f, Screen.width - 34f, Screen.height - 26f), text, ammoStyle);
+            float right = Screen.width - 40f;
+            float bottom = Screen.height - 30f;
 
-            ammoStyle.fontSize = 18;
-            GUI.color = new Color(1f, 1f, 1f, 0.5f);
-            GUI.Label(new Rect(0f, 0f, Screen.width - 34f, Screen.height - 66f), gun.name, ammoStyle);
-            ammoStyle.fontSize = 34;
+            ammoStyle.fontSize = 52;
+            bool dry = gun.Ammo == 0;
+            GUI.color = gun.Reloading ? new Color(1f, 0.55f, 0.25f, 1f)
+                      : dry ? new Color(1f, 0.3f, 0.25f, 1f)
+                      : ammoColour;
+            GUI.Label(new Rect(0f, 0f, right, bottom), gun.Reloading ? "--" : gun.Ammo.ToString(), ammoStyle);
+
+            // Spare bananas, smaller and dimmer, below and right of the main number.
+            spareStyle.fontSize = 22;
+            GUI.color = gun.SpareMagazines > 0
+                ? new Color(1f, 1f, 1f, 0.55f)
+                : new Color(1f, 0.3f, 0.25f, 0.9f);
+            GUI.Label(new Rect(0f, 0f, right, bottom + 26f), $"x{gun.SpareMagazines}", spareStyle);
+
+            spareStyle.fontSize = 16;
+            GUI.color = new Color(1f, 1f, 1f, 0.4f);
+            GUI.Label(new Rect(0f, 0f, right, bottom - 52f), gun.name.ToUpper(), spareStyle);
         }
 
         GUI.color = Color.white;

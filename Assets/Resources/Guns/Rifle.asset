@@ -20,10 +20,11 @@ MonoBehaviour:
   spread: 0.5
   magazineSize: 30
   reloadTime: 2.2
-  verticalKick: 2.8
-  horizontalKick: 1.35
-  patternLength: 9
-  recoilRecovery: 0.42
-  recoverySpeed: 4.5
+  verticalKick: 1.75
+  horizontalKick: 0.75
+  patternLength: 12
+  recoilRecovery: 0.3
+  recoverySpeed: 3.5
   falloffStart: 30
   falloffFloor: 0.65
+  spareMagazines: 5
