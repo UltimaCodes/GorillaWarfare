@@ -33,10 +33,78 @@ public static class MatchCheck
         LoadoutSurvivesTheRoundTrip();
         WinnerNeedsAScore();
         RungLoadoutIsASingleWeapon();
+        SpawnsAvoidTheLiving();
 
         Debug.Log("[match] rules\n" + Log);
         Debug.Log(failures == 0 ? "[match] ===== ALL PASS =====" : $"[match] {failures} FAILURES");
         EditorApplication.Exit(failures == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// Coming back should not put you next to somebody.
+    ///
+    /// The scoring is pure, so the interesting half of the spawn rules can be played out here
+    /// without a scene, a map or a running game. Line of sight needs physics and is checked in
+    /// the probe instead.
+    /// </summary>
+    static void SpawnsAvoidTheLiving()
+    {
+        // A line of pads with one player standing on the first.
+        Vector3[] pads =
+        {
+            new Vector3(0f, 0f, 0f),
+            new Vector3(10f, 0f, 0f),
+            new Vector3(20f, 0f, 0f),
+            new Vector3(30f, 0f, 0f),
+        };
+
+        List<Vector3> alone = new List<Vector3> { pads[0] };
+
+        float[] scores = new float[pads.Length];
+        for (int i = 0; i < pads.Length; i++)
+            scores[i] = SpawnManager.Score(pads[i], alone);
+
+        Check(scores[0] < scores[3], "a pad with somebody on it scores worst",
+              $"{scores[0]:F0} against {scores[3]:F0}");
+
+        Check(scores[3] > scores[2] && scores[2] > scores[1],
+              "further away scores better all the way out",
+              $"{scores[1]:F0} / {scores[2]:F0} / {scores[3]:F0}");
+
+        // The nearest living player decides, not the average. Somebody on the far side of the
+        // map should not make the person round the corner look further away than they are.
+        List<Vector3> crowd = new List<Vector3> { pads[0], new Vector3(1000f, 0f, 0f) };
+
+        Check(Mathf.Approximately(SpawnManager.Score(pads[1], alone),
+                                  SpawnManager.Score(pads[1], crowd)),
+              "a distant player does not make a close one safer",
+              $"{SpawnManager.Score(pads[1], crowd):F0}");
+
+        // Picking. The shortlist has to stay inside the best few and never fall off the end.
+        float[] ranked = { 5f, 40f, 30f, 10f };
+        bool everBad = false;
+        bool sawSecond = false;
+
+        for (int i = 0; i < 400; i++)
+        {
+            int pick = SpawnManager.PickFromBest(ranked, 2);
+
+            // Best two are index 1 (40) and index 2 (30).
+            if (pick != 1 && pick != 2)
+                everBad = true;
+
+            if (pick == 2)
+                sawSecond = true;
+        }
+
+        Check(!everBad, "the shortlist never picks a bad pad", "400 draws stayed in the best two");
+
+        // And it has to actually vary. Always taking the single best turns spawns into a fixed
+        // rotation that can be camped exactly as effectively as a bad one.
+        Check(sawSecond, "and it does not always pick the same one", "second best came up");
+
+        Check(SpawnManager.PickFromBest(ranked, 99) >= 0 && SpawnManager.PickFromBest(new float[0], 3) == 0,
+              "a silly shortlist and an empty map are survivable", "no exception");
     }
 
     static string[] Ladder => WeaponLoadout.GunGameLadder;
