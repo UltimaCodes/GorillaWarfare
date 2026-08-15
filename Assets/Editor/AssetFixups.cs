@@ -12,6 +12,7 @@ public static class AssetFixups
     {
         ScaleMonkey();
         BuildBananaMaterial();
+        ApplyBananaTexture();
         FixAudioImports();
         AssetDatabase.SaveAssets();
     }
@@ -107,6 +108,55 @@ public static class AssetFixups
 
     // One material per weapon. They were all sharing a single yellow, which is a big part of
     // why you couldn't tell them apart - shape reads at distance, colour reads instantly.
+    // Points every banana material at the modelled banana's texture, if one has been dropped in.
+    //
+    // The weapons were flat colours because the models were built from a swept circle and there
+    // was nothing to map. With a real banana there is, and the per weapon colours still matter:
+    // ripeness tints _Color per instance, so the texture shows through and each weapon ripens
+    // through its own set of colours rather than all five going the same yellow.
+    //
+    // Does nothing until the texture exists, so it's safe to leave in the pipeline.
+    public static void ApplyBananaTexture()
+    {
+        const string folder = "Assets/Resources/Models/Weapons";
+
+        string found = null;
+        foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { folder }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            string file = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            // Colour map only - normal and roughness maps would look wrong as an albedo.
+            if (file.EndsWith("Normal") || file.EndsWith("Roughness") || file.EndsWith("Metallic"))
+                continue;
+
+            found = path;
+            break;
+        }
+
+        if (found == null)
+        {
+            Debug.Log("[fixups] no banana texture yet - materials stay flat coloured");
+            return;
+        }
+
+        Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(found);
+        int applied = 0;
+
+        foreach (string guid in AssetDatabase.FindAssets("t:Material Banana", new[] { folder }))
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+            if (material == null || material.mainTexture == texture)
+                continue;
+
+            material.mainTexture = texture;
+            EditorUtility.SetDirty(material);
+            applied++;
+        }
+
+        Debug.Log($"[fixups] banana texture {System.IO.Path.GetFileName(found)} applied to {applied} material(s)");
+    }
+
     public static void BuildBananaMaterial()
     {
         (string name, Color colour, float gloss)[] weapons =
