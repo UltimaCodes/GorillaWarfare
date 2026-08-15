@@ -177,7 +177,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     public SingleShotGun ActiveGun =>
         items != null && itemIndex >= 0 && itemIndex < items.Length ? items[itemIndex] as SingleShotGun : null;
 
-    public CombatHud Hud { get; private set; }
+    public GameHud Hud { get; private set; }
 
     /// <summary>
     /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
@@ -248,8 +248,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             gameObject.AddComponent<PlayerMovement>();
             PlaceViewModel();
 
-            Hud = gameObject.AddComponent<CombatHud>();
-            Hud.Bind(this);
+            // The HUD is a scene object now rather than something bolted onto the player, so
+            // this asks the scene for it instead of creating one. It outlives you: you die and
+            // respawn several times a match and the ammo counter shouldn't be rebuilt each
+            // time, and it has to keep drawing the respawn timer while there's no player at all.
+            Hud = GameHud.Instance;
+
+            if (Hud != null)
+                Hud.Bind(this);
+            else
+                Debug.LogWarning("[player] no GameHud in the scene - "
+                                 + "run Tools/Gorilla Warfare/Build the in-game HUD");
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
             // without moving where you're aiming. It's told where the holder is rather than
