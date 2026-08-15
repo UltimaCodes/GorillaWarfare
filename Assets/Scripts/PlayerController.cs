@@ -51,8 +51,44 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // Grace period after the last shot before the view starts returning.
     const float recoilHoldTime = 0.18f;
     bool cursorLocked = true;
-    const float maxHealth = 100f;
+
+    /// <summary>
+    /// 140 rather than 100, which is the same thing as cutting every weapon's damage by 40%
+    /// but expressed as one number instead of five.
+    ///
+    /// Doing it this way keeps the relationships between the weapons exactly as they were -
+    /// the rifle still wins on sustained damage, the shotgun is still devastating up close,
+    /// the sniper still takes a head off - so none of the balance work has to be redone and
+    /// WeaponCheck's assertions about roles all still hold. Editing five damage figures by
+    /// hand would have drifted every one of those.
+    ///
+    /// What it buys: time to kill goes from 0.40s to 0.60-0.80s across the board, and the
+    /// shotgun stops being a one-shot. At 108 damage in a single trigger pull it killed a full
+    /// health player instantly, which is not a fight, it's a coin toss on who saw who first.
+    /// </summary>
+    const float maxHealth = 140f;
+
     float currentHealth = maxHealth;
+
+    // Killing someone puts you back on your feet.
+    //
+    // The complaint was dying too fast, and more health alone only delays that - you still
+    // grind down over a match with no way back up short of dying. Healing on a kill rewards
+    // winning a fight by letting you stay in the next one, which is what makes a room full of
+    // people feel like a brawl instead of a series of trades.
+    //
+    // It also scales with a streak, so the person doing well gets to keep doing well and
+    // everyone else gets an obvious target.
+    const float healPerKill = 35f;
+    const float healPerStreak = 12f;
+    const float maxStreakHeal = 36f;
+
+    /// Consecutive kills without dying. Read by the HUD.
+    public int Killstreak { get; private set; }
+
+    /// The local player, for anything that needs to reach them from elsewhere - a kill is
+    /// reported on the victim's view, so healing the killer means finding them.
+    public static PlayerController Local { get; private set; }
 
     // Set the moment health hits zero, cleared by respawning into a fresh controller. Guards
     // against a burst landing after the killing shot and being counted as a second kill.
@@ -153,6 +189,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (PV.IsMine)
         {
+            Local = this;
             LocalCamera = GetComponentInChildren<Camera>();
 
             if (LocalCamera != null)
@@ -203,6 +240,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // Respawning recreates the controller, so don't leave a dead camera in the static.
         if (LocalCamera != null && PV != null && PV.IsMine)
             LocalCamera = null;
+
+        if (Local == this)
+            Local = null;
     }
 
 
@@ -655,6 +695,31 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             Die(info.Sender, weapon, headshot);
     }
 
+    /// <summary>
+    /// Puts health back, never above the maximum. Local only - health isn't replicated, each
+    /// client owns its own and tells others when it runs out.
+    /// </summary>
+    public void Heal(float amount)
+    {
+        if (dead || amount <= 0f)
+            return;
+
+        float before = currentHealth;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+
+        if (currentHealth > before && Hud != null)
+            Hud.ShowHeal(currentHealth - before);
+    }
+
+    /// Called on the killer's own client when one of their shots finishes someone off.
+    void RewardKill()
+    {
+        Killstreak++;
+
+        float heal = healPerKill + Mathf.Min(maxStreakHeal, (Killstreak - 1) * healPerStreak);
+        Heal(heal);
+    }
+
     /// killer is null for falling off the map and anything else self inflicted.
     void Die(Player killer, string weapon, bool headshot)
     {
@@ -662,6 +727,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
 
         dead = true;
+        Killstreak = 0;
 
         // Only the victim runs this - it is the one client that knows the health hit zero - so
         // it has to tell everyone else. Before this nobody but you knew you had died, which
@@ -687,7 +753,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // You did that. 2D, and only for the person who gets to feel good about it - a kill
         // sound that plays for everyone is just another explosion.
         if (killer != null && killer.IsLocal && killer != PV.Owner)
+        {
             GameAudio.Play2D(GameAudio.Kill, GameAudio.KillVolume);
+
+            // Healing happens here rather than in MatchState because it's a local, felt thing
+            // rather than a scored one - nobody else needs to know your health went up.
+            if (Local != null)
+                Local.RewardKill();
+        }
 
         MatchState.ReportKill(killer, PV.Owner, weapon, headshot);
     }

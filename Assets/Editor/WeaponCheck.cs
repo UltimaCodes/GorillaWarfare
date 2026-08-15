@@ -428,6 +428,36 @@ public static class WeaponCheck
                   $"{g2.spareMagazines} bananas = {g2.spareMagazines * g2.magazineSize} rounds in reserve");
         }
 
+        // ---- how long a fight lasts ----
+        //
+        // This was the actual complaint: everything killed in 0.40s, which is Counter-Strike
+        // territory and not what a game you play with mates wants. The shotgun was worse - 108
+        // damage in one trigger pull against 100 health, so it wasn't a fight at all, it was a
+        // coin toss on who saw who first.
+        //
+        // Fixed by raising health rather than by editing five damage figures, which keeps every
+        // relationship between the weapons intact. These bounds are what stop it drifting back.
+        const float health = 140f;
+
+        foreach (string weapon in new[] { "Pistol", "Shotgun", "Rifle", "Sniper", "Peel" })
+        {
+            GunInfo g = Resources.Load<GunInfo>($"Guns/{weapon}");
+            if (g == null)
+                continue;
+
+            float burst = g.damage * Mathf.Max(1, g.pelletsPerShot);
+            int shots = Mathf.CeilToInt(health / burst);
+            float ttk = (shots - 1) / Mathf.Max(g.fireRate, 0.01f);
+
+            // Nothing kills a healthy player in one trigger pull to the body. A sniper round to
+            // the head is the one exception and it's meant to be.
+            Check(sb, shots >= 2, $"{weapon} can't one-shot a full health player",
+                  $"{burst:F0} damage against {health:F0} health");
+
+            Check(sb, ttk >= 0.45f && ttk <= 2.0f, $"{weapon} time to kill is playable",
+                  $"{shots} shots, {ttk:F2}s");
+        }
+
         // ---- a miss still has to feel like something ----
         //
         // ReportShot used to live inside the hit path, so a shot into open space produced no
