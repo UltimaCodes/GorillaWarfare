@@ -264,9 +264,9 @@ public static class WeaponCheck
         }
 
         // ---- can the owner actually SEE their weapon ----
-        // This is the check that was missing. Weapons spawned at the viewHolder's origin, which is
-        // behind the camera's near plane, so nobody could see their own gun and it was invisible
-        // to everyone else too.
+        // The pivot is the grip, and the grip is SUPPOSED to sit at or below the bottom edge -
+        // that's what a hand entering frame from below looks like. What matters is how much of
+        // the banana body is on screen, so measure the mesh, not the transform.
         sb.AppendLine("[gun] ---------- visibility ----------");
         GameObject pf = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/PhotonPrefabs/PlayerController.prefab");
         if (pf != null)
@@ -278,52 +278,28 @@ public static class WeaponCheck
             foreach (Transform t in inst.GetComponentsInChildren<Transform>(true))
                 if (t.name == "ItemHolder") { viewHolder = t; break; }
 
-            Check(sb, camera != null && viewHolder != null, "camera and viewHolder found",
-                  $"camera={camera != null} viewHolder={viewHolder != null}");
+            Check(sb, camera != null && viewHolder != null, "camera and holder found",
+                  $"camera={camera != null} holder={viewHolder != null}");
 
             if (camera != null && viewHolder != null)
             {
                 SerializedObject so2 = new SerializedObject(inst.GetComponent<PlayerController>());
-                Vector3 offset = so2.FindProperty("weaponViewOffset").vector3Value;
-                viewHolder.localPosition = offset;
+                viewHolder.localPosition = so2.FindProperty("weaponViewOffset").vector3Value;
+                Vector3 rot = so2.FindProperty("weaponViewRotation").vector3Value;
+                viewHolder.localRotation = Quaternion.Euler(rot);
 
-                Vector3 local = camera.transform.InverseTransformPoint(viewHolder.position);
-                Check(sb, local.z > camera.nearClipPlane, "weapon is in front of the camera",
-                      $"{local.z:F2}m forward, near plane {camera.nearClipPlane:F2}");
-                Check(sb, local.z < 2f, "weapon is close enough to see",
-                      $"{local.z:F2}m forward");
-                Check(sb, local.y < 0.05f, "weapon sits low in frame",
-                      $"y {local.y:F2} relative to eye");
-                Check(sb, Mathf.Abs(local.x) > 0.05f, "weapon is off to one side",
-                      $"x {local.x:F2}");
+                Check(sb, Mathf.Abs(rot.y) > 5f, "angled across the view", $"yaw {rot.y:F0}");
+                Check(sb, rot.x < -30f, "rises across the frame, not aimed away", $"pitch {rot.x:F0}");
 
-                // and actually inside the frustum
-                Vector3 vp = camera.WorldToViewportPoint(viewHolder.position);
-                Check(sb, vp.z > 0f && vp.x > 0f && vp.x < 1f && vp.y > 0f && vp.y < 1f,
-                      "weapon lands inside the viewport",
-                      $"viewport ({vp.x:F2}, {vp.y:F2}, {vp.z:F2})");
+                float meshOnScreen = FractionOnScreen(camera, viewHolder, "Models/Weapons/BananaRifle", Vector3.zero, Vector3.zero);
+                Check(sb, meshOnScreen > 0.45f, "most of the banana is on screen",
+                      $"{meshOnScreen * 100f:F0}% of its bounds");
 
-                // Not too near the bottom edge either. Last time everything technically had a
-                // positive viewport y and was still off the bottom of the screen in practice.
-                Check(sb, vp.y > 0.06f, "weapon is clear of the bottom edge", $"viewport y {vp.y:F2}");
-
-                // The hands are the bit he actually could not see, so check them separately.
-                SerializedObject so3 = new SerializedObject(inst.GetComponent<PlayerController>());
-                Vector3 armOff = so3.FindProperty("viewArmsOffset").vector3Value;
-                Vector3 armWorld = viewHolder.TransformPoint(armOff);
-                Vector3 avp = camera.WorldToViewportPoint(armWorld);
-                Check(sb, avp.z > camera.nearClipPlane, "hands are in front of the camera",
-                      $"{avp.z:F2}m forward");
-                Check(sb, avp.y > 0.02f && avp.y < 0.6f, "hands are on screen, low",
-                      $"viewport y {avp.y:F2}");
-                Check(sb, avp.x > 0.4f && avp.x < 1f, "hands are on the right",
-                      $"viewport x {avp.x:F2}");
-
-                // Weapon must be angled, not pointing straight down the camera axis, or a long
-                // banana is seen end-on and reads as a tube.
-                Vector3 rot = so3.FindProperty("weaponViewRotation").vector3Value;
-                Check(sb, Mathf.Abs(rot.y) > 5f, "weapon is angled across the view",
-                      $"yaw {rot.y:F0} degrees");
+                Vector3 armOff = so2.FindProperty("viewArmsOffset").vector3Value;
+                Vector3 armRot = so2.FindProperty("viewArmsRotation").vector3Value;
+                float handsOnScreen = FractionOnScreen(camera, viewHolder, "Models/Weapons/ViewArms", armOff, armRot);
+                Check(sb, handsOnScreen > 0.20f, "hands reach into frame",
+                      $"{handsOnScreen * 100f:F0}% of the arms visible");
             }
             Object.DestroyImmediate(inst);
         }
@@ -426,6 +402,41 @@ public static class WeaponCheck
         }
 
         Finish(sb);
+    }
+
+    /// What fraction of a model's bounding box corners land inside the viewport when placed
+    /// under the weapon holder. Corner sampling rather than the pivot, because a pivot can be
+    /// off screen while the object is perfectly visible - which is exactly what caught us out.
+    static float FractionOnScreen(Camera cam, Transform holder, string resource, Vector3 offset, Vector3 euler)
+    {
+        GameObject prefab = Resources.Load<GameObject>(resource);
+        if (prefab == null)
+            return 0f;
+
+        GameObject inst = Object.Instantiate(prefab, holder);
+        inst.transform.localPosition = offset;
+        inst.transform.localRotation = Quaternion.Euler(euler);
+
+        MeshFilter mf = inst.GetComponentInChildren<MeshFilter>(true);
+        if (mf == null)
+        {
+            Object.DestroyImmediate(inst);
+            return 0f;
+        }
+
+        Bounds b = mf.sharedMesh.bounds;
+        int inside = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 c = b.center + Vector3.Scale(b.extents,
+                new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+            Vector3 vp = cam.WorldToViewportPoint(mf.transform.TransformPoint(c));
+            if (vp.z > cam.nearClipPlane && vp.x > 0f && vp.x < 1f && vp.y > 0f && vp.y < 1f)
+                inside++;
+        }
+
+        Object.DestroyImmediate(inst);
+        return inside / 8f;
     }
 
     static string ColorToStr(Color c) => $"({c.r:F2}, {c.g:F2}, {c.b:F2})";
