@@ -4,7 +4,6 @@ using UnityEngine;
 using Photon.Pun;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 using Photon.Realtime;
-using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObservable
 {
@@ -13,8 +12,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // Populated at runtime by WeaponLoadout. Left serialized so the prefab's old entries are
     // visible, but they're replaced on spawn.
     [SerializeField] Item[] items;
-    [SerializeField] Image healthbarImage;
-    [SerializeField] GameObject ui;
 
     // The camera sits at (0, 0.5, 0.303) inside CameraHolder while ItemHolder is at its origin,
     // so a weapon spawned at zero lands below and behind the camera, inside the near clip plane.
@@ -168,9 +165,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // hitbox at all and every shot went straight through them.
             if (TryGetComponent(out PlayerMovement movement))
                 Destroy(movement);
-
-            if (ui != null)
-                Destroy(ui);
 
             // Weapons hang off CameraHolder, which is a first person position - to everyone else
             // that's floating in the middle of the body. Move them onto the hand.
@@ -577,9 +571,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
 
         currentHealth -= damage;
-
-        if (healthbarImage != null)
-            healthbarImage.fillAmount = currentHealth / maxHealth;
 
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, 0.7f, 0.1f);

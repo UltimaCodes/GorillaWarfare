@@ -17,8 +17,6 @@ public class MatchHud : MonoBehaviour
     const int gameSceneIndex = 1;
     const float feedEntrySeconds = 6f;
 
-    // Has to match MatchState's warmup, which is the one number the reveal pace is built on.
-    const float WarmupLength = 8f;
     const float revealGap = 0.55f;
 
     static readonly Color Warmup = new Color(1f, 0.85f, 0.1f);
@@ -181,7 +179,7 @@ public class MatchHud : MonoBehaviour
         string[] weapons = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
 
         // Warmup counts down, so time already spent is what drives the reveal.
-        float elapsed = Mathf.Max(0f, WarmupLength - MatchState.TimeLeft);
+        float elapsed = Mathf.Max(0f, MatchState.WarmupLength - MatchState.TimeLeft);
 
         GUI.color = Warmup;
         GUI.Label(new Rect(0f, centre - 170f, Screen.width, 60f),

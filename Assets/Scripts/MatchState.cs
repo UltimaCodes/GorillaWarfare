@@ -82,6 +82,10 @@ public class MatchState : MonoBehaviourPunCallbacks
 
     public static float RespawnDelay => Instance != null ? Instance.respawnSeconds : 3f;
 
+    /// How long warmup runs. The HUD paces the loadout reveal off this, and had its own copy of
+    /// the number until the probe shortened one of them and the two silently disagreed.
+    public static float WarmupLength => Instance != null ? Instance.warmupSeconds : 8f;
+
     public static MatchMode Mode => (MatchMode)RoomInt(ModeKey, (int)MatchMode.Deathmatch);
     public static MatchPhase Phase => (MatchPhase)RoomInt(PhaseKey, (int)MatchPhase.Warmup);
 
