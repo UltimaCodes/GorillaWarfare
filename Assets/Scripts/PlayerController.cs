@@ -59,6 +59,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     const float maxHealth = 100f;
     float currentHealth = maxHealth;
 
+    // Set the moment health hits zero, cleared by respawning into a fresh controller. Guards
+    // against a burst landing after the killing shot and being counted as a second kill.
+    bool dead;
+    WeaponLoadout loadout;
+
     // Pitch lives on cameraHolder, which nothing replicates - we send it ourselves.
     float remoteVerticalLook;
     const float pitchLerpSpeed = 15f;
@@ -66,9 +71,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // Camera on the prefab is Untagged so Camera.main is useless. Billboards need this.
     public static Camera LocalCamera { get; private set; }
 
+    /// Hands the static over to the death camera while the controller is gone, so nameplates
+    /// keep facing the right way instead of hunting for a camera that no longer exists.
+    public static void SetLocalCamera(Camera camera) => LocalCamera = camera;
+
+
+    /// Replicated so every client builds the same weapons for this player. Gun game rewrites
+    /// it as you climb the ladder; deathmatch sets it once per match.
+    public const string LoadoutKey = "guns";
+    public const string ItemIndexKey = "itemIndex";
 
     PhotonView PV;
     MonkeyRig rig;
+    Transform itemHolder;
 
     public PhotonView View => PV;
 
@@ -82,6 +97,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     void Awake()
     {
         PV = GetComponent<PhotonView>();
+
+        // Resolved once. It was being found by walking every transform on the player, from
+        // four separate call sites, on an object that respawns every time you die.
+        itemHolder = FindItemHolder();
+
+        if (itemHolder == null)
+            Debug.LogError("No ItemHolder on the player - there is nowhere to put a weapon.", this);
     }
 
     void Start()
@@ -118,21 +140,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             LocalCamera = GetComponentInChildren<Camera>();
             gameObject.AddComponent<PlayerMovement>();
             PlaceViewModel();
-            BuildLoadout();
 
             Hud = gameObject.AddComponent<CombatHud>();
             Hud.Bind(this);
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
             // without moving where you're aiming.
-            foreach (Transform t in GetComponentsInChildren<Transform>(true))
-            {
-                if (t.name == "ItemHolder")
-                {
-                    t.gameObject.AddComponent<WeaponSway>();
-                    break;
-                }
-            }
+            if (itemHolder != null)
+                itemHolder.gameObject.AddComponent<WeaponSway>();
         }
         else
         {
@@ -156,8 +171,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // Weapons hang off CameraHolder, which is a first person position - to everyone else
             // that's floating in the middle of the body. Move them onto the hand.
             AttachWeaponsToHand();
-
         }
+
+        // Both copies. Everyone needs the models - it is how you tell what someone is holding -
+        // and only the owner's are allowed to fire. This used to run for the owner alone, so
+        // remote players were left carrying whatever the prefab happened to ship with.
+        BuildLoadout();
+
+        // After the loadout, never before. Building a loadout clears weapons out of the holder,
+        // and the arms live in that same holder - built first, they survived exactly one frame,
+        // which is why the hands were never visible no matter where they were positioned.
+        if (PV.IsMine)
+            BuildViewArms();
     }
 
     void OnDestroy()
@@ -178,9 +203,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
         }
 
-        Look();
         UpdateCursorLock();
         FeedRig();
+
+        // The match is over and the scoreboard is up. Aiming and firing through it looks like
+        // the game failed to notice it had ended.
+        if (MatchState.Phase == MatchPhase.Over)
+            return;
+
+        Look();
 
         // Stowed weapons are deactivated so their own Update never runs. Without this a reload
         // started before switching would sit frozen until you came back to it.
@@ -236,45 +267,51 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             reloadGun.Reload();
         }
 
-        if(transform.position.y < -10f)
-        {
-            Die();
-        }
+        if (transform.position.y < -10f)
+            Die(null, "the void", false);
     }
 
 
-    void EquipItem(int _index)
+    void EquipItem(int index)
     {
-        if(_index == previousItemIndex)
-        {
+        // The index arrives over the network, and for a while a remote copy carried whatever
+        // the prefab shipped with while its owner carried a full loadout - so this was handed
+        // a 3 for a two element array and threw on every weapon switch, on every other client.
+        // PUN dispatches callbacks in a bare foreach with no try/catch, so that also silently
+        // dropped the update for every callback target queued behind this one.
+        if (items == null || items.Length == 0 || index < 0 || index >= items.Length)
             return;
-        }
 
-        itemIndex = _index;
+        if (index == previousItemIndex)
+            return;
 
+        itemIndex = index;
         items[itemIndex].itemGameObject.SetActive(true);
 
-        if(previousItemIndex != -1)
-        {
+        if (previousItemIndex >= 0 && previousItemIndex < items.Length)
             items[previousItemIndex].itemGameObject.SetActive(false);
-        }
 
         previousItemIndex = itemIndex;
 
         if (PV.IsMine)
-        {
-            Hashtable hash = new Hashtable();
-            hash.Add("itemIndex", itemIndex);
-            PhotonNetwork.LocalPlayer.SetCustomProperties(hash);
-        }
+            PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable { { ItemIndexKey, itemIndex } });
     }
 
     public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
     {
-        if (changedProps.ContainsKey("itemIndex") && !PV.IsMine && targetPlayer == PV.Owner)
+        if (targetPlayer != PV.Owner)
+            return;
+
+        // A new loadout means new weapon objects on every client, owner included - this is how
+        // gun game moves you up a rung without respawning you.
+        if (changedProps.ContainsKey(LoadoutKey))
         {
-            EquipItem((int)changedProps["itemIndex"]);
+            BuildLoadout();
+            return;
         }
+
+        if (changedProps.ContainsKey(ItemIndexKey) && !PV.IsMine)
+            EquipItem((int)changedProps[ItemIndexKey]);
     }
 
 
@@ -290,22 +327,22 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// holder's origin, which is behind the camera.
     void PlaceViewModel()
     {
-        Transform holder = FindItemHolder();
-        if (holder == null)
+        if (itemHolder == null)
             return;
 
-        holder.localPosition = weaponViewOffset;
-        holder.localRotation = Quaternion.Euler(weaponViewRotation);
-
-        BuildViewArms(holder);
+        itemHolder.localPosition = weaponViewOffset;
+        itemHolder.localRotation = Quaternion.Euler(weaponViewRotation);
     }
 
     // First person arms. The owner's real body is ShadowsOnly - you can't show a full gorilla
     // from inside its own head - so this is a separate pair of arms parented to the weapon
     // holder, which is how basically every FPS does it. They sway with the gun because they're
     // children of it.
-    void BuildViewArms(Transform holder)
+    void BuildViewArms()
     {
+        if (itemHolder == null)
+            return;
+
         GameObject prefab = Resources.Load<GameObject>("Models/Weapons/ViewArms");
         if (prefab == null)
         {
@@ -313,7 +350,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
         }
 
-        GameObject arms = Instantiate(prefab, holder);
+        GameObject arms = Instantiate(prefab, itemHolder);
         arms.transform.localPosition = viewArmsOffset;
         arms.transform.localRotation = Quaternion.Euler(viewArmsRotation);
 
@@ -340,39 +377,68 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // makes a first person gun feel attached to the view rather than to a character.
     void AttachWeaponsToHand()
     {
-        if (rig == null || rig.RightHand == null)
+        if (rig == null || rig.RightHand == null || itemHolder == null)
             return;
 
-        Transform holder = FindItemHolder();
-        if (holder == null)
-            return;
-
-        holder.SetParent(rig.RightHand, false);
-        holder.localPosition = weaponHandOffset;
-        holder.localRotation = Quaternion.Euler(weaponHandRotation);
+        itemHolder.SetParent(rig.RightHand, false);
+        itemHolder.localPosition = weaponHandOffset;
+        itemHolder.localRotation = Quaternion.Euler(weaponHandRotation);
     }
 
-    // Which weapons this player carries. A gamemode can hand a different list in later; for
-    // now everyone gets everything.
-    void BuildLoadout()
+    /// Which weapons a player is carrying, as every client sees it. The list is a replicated
+    /// custom property rather than a local decision, because the copy of you on someone else's
+    /// screen has to build exactly the same weapons in the same order - that index is what
+    /// gets replicated when you switch.
+    public static string[] LoadoutFor(Player player)
     {
-        Transform holder = FindItemHolder();
-        if (holder == null)
+        if (player != null
+            && player.CustomProperties.TryGetValue(LoadoutKey, out object value)
+            && value is string names
+            && !string.IsNullOrEmpty(names))
         {
-            Debug.LogError("No ItemHolder on the player - cannot build a loadout.", this);
-            return;
+            return names.Split(',');
         }
 
-        WeaponLoadout loadout = gameObject.AddComponent<WeaponLoadout>();
-        List<SingleShotGun> guns = loadout.Build(holder, LocalCamera, WeaponLoadout.AllWeapons);
+        // No match running, or the property has not arrived yet. Everything, which is what it
+        // did before gamemodes existed - and a rebuild follows the moment the property lands.
+        return WeaponLoadout.AllWeapons;
+    }
+
+    /// Publishes what the local player is carrying. Only the owner may call this.
+    public static void PublishLoadout(IEnumerable<string> weapons)
+    {
+        PhotonNetwork.LocalPlayer.SetCustomProperties(
+            new Hashtable { { LoadoutKey, string.Join(",", weapons) } });
+    }
+
+    void BuildLoadout()
+    {
+        if (itemHolder == null)
+            return;
+
+        if (loadout == null)
+            loadout = gameObject.AddComponent<WeaponLoadout>();
+
+        // The owner traces shots and so needs the camera; nobody else may fire at all.
+        List<SingleShotGun> guns = loadout.Build(itemHolder, PV.IsMine ? LocalCamera : null,
+                                                 LoadoutFor(PV.Owner), PV.IsMine);
 
         items = new Item[guns.Count];
         for (int i = 0; i < guns.Count; i++)
             items[i] = guns[i];
 
+        // Rebuilding replaces every weapon object, so whatever was equipped is gone. Remote
+        // copies re-read the owner's replicated index rather than snapping back to the first
+        // weapon, otherwise a gun game rebuild would show the wrong banana until you switched.
         previousItemIndex = -1;
-        if (items.Length > 0)
-            EquipItem(0);
+        EquipItem(PV.IsMine ? 0 : StatOf(PV.Owner, ItemIndexKey));
+    }
+
+    static int StatOf(Player player, string key)
+    {
+        return player != null && player.CustomProperties.TryGetValue(key, out object value) && value is int i
+            ? i
+            : 0;
     }
 
     /// Weapons report their shots through here so they don't each need a PhotonView of their
@@ -485,36 +551,60 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
-    public void TakeDamage(float damage)
+    public void TakeDamage(float damage, string weapon, bool headshot)
     {
-        PV.RPC(nameof(RPC_TakeDamage), PV.Owner, damage);
+        PV.RPC(nameof(RPC_TakeDamage), PV.Owner, damage, weapon, headshot);
     }
 
     [PunRPC]
-    void RPC_TakeDamage(float damage, PhotonMessageInfo info)
+    void RPC_TakeDamage(float damage, string weapon, bool headshot, PhotonMessageInfo info)
     {
+        // Already dead and waiting to respawn. Without this a burst that lands after the
+        // killing shot credits a second kill for the same death.
+        if (dead)
+            return;
+
         currentHealth -= damage;
 
-        healthbarImage.fillAmount = currentHealth / maxHealth;
+        if (healthbarImage != null)
+            healthbarImage.fillAmount = currentHealth / maxHealth;
 
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, 0.7f, 0.1f);
 
-        if (currentHealth <= 0)
-        {
-            // Credit first - Die() destroys this object on the way out.
-            RoomManager.CreditKill(info.Sender);
-            Die();
-        }
+        if (currentHealth <= 0f)
+            Die(info.Sender, weapon, headshot);
     }
 
-    void Die()
+    /// killer is null for falling off the map and anything else self inflicted.
+    void Die(Player killer, string weapon, bool headshot)
+    {
+        if (dead)
+            return;
+
+        dead = true;
+
+        // Only the victim runs this - it is the one client that knows the health hit zero - so
+        // it has to tell everyone else. Before this nobody but you knew you had died, which
+        // left the kill feed and the match itself with nothing to listen to.
+        int killerActor = killer != null ? killer.ActorNumber : -1;
+        PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot);
+
+        if (RoomManager.Instance != null)
+            RoomManager.Instance.HandleLocalDeath(transform.position);
+    }
+
+    [PunRPC]
+    void RPC_Died(int killerActor, string weapon, bool headshot)
     {
         GameAudio.PlayAt(GameAudio.Death, transform.position, 0.8f);
 
-        RoomManager.CreditDeath(PhotonNetwork.LocalPlayer);
+        Player killer = killerActor >= 0 && PhotonNetwork.InRoom
+            ? PhotonNetwork.CurrentRoom.GetPlayer(killerActor)
+            : null;
 
-        if (RoomManager.Instance != null)
-            RoomManager.Instance.RespawnLocalPlayer();
+        // Everyone gets the kill feed entry; only the master acts on the score, so two clients
+        // can never disagree about it and a late joiner reads the same numbers as everyone else.
+        MatchState.ReportKill(killer, PV.Owner, weapon, headshot);
     }
 }

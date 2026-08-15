@@ -6,10 +6,10 @@ using Photon.Pun;
 
 // What everyone else sees of you, and what their copy of you is holding.
 //
-// Everything else about a weapon is verified against the owner's copy, which is the one the
-// checks could reach. But a remote copy takes a completely different path through
-// PlayerController.Start - no loadout is built, nothing is configured - so none of that
-// carries over. This asserts the parts that only exist on somebody else's screen.
+// The weapon and model checks only ever exercised the owner's copy, because that's the one that
+// gets a loadout built. A remote copy takes a different branch through PlayerController.Start,
+// so none of what those suites prove carries over. This covers the other branch, plus the
+// handful of invariants that hold the two together.
 public static class RemoteCopyCheck
 {
     const string PrefabPath = "Assets/Resources/PhotonPrefabs/PlayerController.prefab";
@@ -32,12 +32,15 @@ public static class RemoteCopyCheck
 
         GameObject instance = Object.Instantiate(prefab);
 
-        CheckHolderIsEmpty(instance);
-        CheckItemsArrayCoversTheLoadout(instance);
-        CheckEquipItemBounds(instance);
+        CheckHolderShipsEmpty(instance);
         CheckPhotonViewCount(instance);
+        CheckEquipItemSurvivesABadIndex(instance);
 
         Object.DestroyImmediate(instance);
+
+        CheckLoadoutClearingSparesTheArms();
+        CheckLoadoutFallback();
+        CheckLadderIsBuildable();
 
         foreach (string note in Notes)
             Debug.Log($"[remote] {note}");
@@ -45,7 +48,7 @@ public static class RemoteCopyCheck
         foreach (string failure in Failures)
             Debug.LogError($"[remote] FAIL {failure}");
 
-        Debug.Log(Failures.Count == 0 ? "[remote] ALL PASS" : $"[remote] {Failures.Count} FAILURES");
+        Debug.Log(Failures.Count == 0 ? "[remote] ===== ALL PASS =====" : $"[remote] {Failures.Count} FAILURES");
         EditorApplication.Exit(Failures.Count == 0 ? 0 : 1);
     }
 
@@ -60,9 +63,9 @@ public static class RemoteCopyCheck
         return null;
     }
 
-    // WeaponLoadout.Build clears the holder before it builds, but it only runs for the owner.
-    // Anything left parented here in the prefab is what every other client renders on your hand.
-    static void CheckHolderIsEmpty(GameObject instance)
+    // Weapons are built at runtime on every copy. Anything sitting in the holder in the asset
+    // is a leftover, and it's a leftover other people can see hanging off your hand.
+    static void CheckHolderShipsEmpty(GameObject instance)
     {
         Transform holder = FindItemHolder(instance);
         if (holder == null)
@@ -75,55 +78,107 @@ public static class RemoteCopyCheck
         foreach (Transform child in holder)
             leftovers.Add(child.name);
 
-        Notes.Add($"ItemHolder children: {leftovers.Count} [{string.Join(", ", leftovers)}]");
+        Notes.Add($"ItemHolder ships with {leftovers.Count} children");
 
         if (leftovers.Count > 0)
-            Failures.Add($"ItemHolder still carries {leftovers.Count} prefab weapon(s) - remote players render these, not bananas");
+            Failures.Add($"ItemHolder still carries [{string.Join(", ", leftovers)}] - remote players render these");
     }
 
-    // The owner builds a loadout and stores it in items[]; remote copies never do, so they keep
-    // whatever the prefab serialized. itemIndex is replicated between the two.
-    static void CheckItemsArrayCoversTheLoadout(GameObject instance)
+    // Runtime loadouts only work because shots report through the player's own view.
+    static void CheckPhotonViewCount(GameObject instance)
     {
-        PlayerController controller = instance.GetComponent<PlayerController>();
-        FieldInfo field = typeof(PlayerController).GetField("items", BindingFlags.NonPublic | BindingFlags.Instance);
-        Item[] items = field.GetValue(controller) as Item[];
+        PhotonView[] views = instance.GetComponentsInChildren<PhotonView>(true);
+        Notes.Add($"PhotonViews per player: {views.Length}");
 
-        int serialized = items != null ? items.Length : 0;
-        int loadout = WeaponLoadout.AllWeapons.Length;
-
-        Notes.Add($"prefab items[] length {serialized}, owner loadout length {loadout}");
-
-        if (serialized < loadout)
-            Failures.Add($"itemIndex is replicated but a remote copy only has {serialized} items for an owner carrying {loadout}");
+        if (views.Length != 1)
+            Failures.Add($"{views.Length} PhotonViews per player - every spawn and respawn allocates all of them");
     }
 
-    // The replicated itemIndex is fed straight into items[] with no bounds check.
-    static void CheckEquipItemBounds(GameObject instance)
+    // itemIndex arrives over the network and there is no guarantee the sender's loadout and the
+    // receiver's are the same size yet. It threw for months; it must now be survivable.
+    static void CheckEquipItemSurvivesABadIndex(GameObject instance)
     {
         PlayerController controller = instance.GetComponent<PlayerController>();
         MethodInfo equip = typeof(PlayerController).GetMethod("EquipItem", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        int highest = WeaponLoadout.AllWeapons.Length - 1;
+        if (equip == null)
+        {
+            Failures.Add("no EquipItem to test");
+            return;
+        }
 
-        try
+        foreach (int index in new[] { -1, 0, 3, 99 })
         {
-            equip.Invoke(controller, new object[] { highest });
-            Notes.Add($"EquipItem({highest}) survived");
+            try
+            {
+                equip.Invoke(controller, new object[] { index });
+            }
+            catch (TargetInvocationException e)
+            {
+                Failures.Add($"EquipItem({index}) threw {e.InnerException.GetType().Name} - a remote client runs this on every weapon switch");
+                return;
+            }
         }
-        catch (TargetInvocationException e)
-        {
-            Failures.Add($"EquipItem({highest}) threw {e.InnerException.GetType().Name} - this is what a remote client runs when you switch weapons");
-        }
+
+        Notes.Add("EquipItem survives -1, 0, 3 and 99 against an unbuilt loadout");
     }
 
-    // The loadout rewrite moved shots onto the player's view so weapons wouldn't need their own.
-    static void CheckPhotonViewCount(GameObject instance)
+    // The first person arms live in the same holder the loadout builds into. Clearing it
+    // wholesale destroyed them one frame after spawn, which is why the hands were never
+    // visible however carefully they were positioned.
+    static void CheckLoadoutClearingSparesTheArms()
     {
-        PhotonView[] views = instance.GetComponentsInChildren<PhotonView>(true);
-        Notes.Add($"PhotonViews on the prefab: {views.Length}");
+        GameObject host = new GameObject("loadout host");
+        GameObject holder = new GameObject("ItemHolder");
+        holder.transform.SetParent(host.transform, false);
 
-        if (views.Length > 1)
-            Failures.Add($"{views.Length} PhotonViews per player - every spawn and respawn allocates all of them");
+        GameObject arms = new GameObject("ViewArms");
+        arms.transform.SetParent(holder.transform, false);
+
+        WeaponLoadout loadout = host.AddComponent<WeaponLoadout>();
+        loadout.Build(holder.transform, null, WeaponLoadout.AllWeapons, false);
+
+        bool armsSurvived = arms != null && arms.transform.parent == holder.transform;
+        Notes.Add($"arms survive a loadout build: {armsSurvived}");
+
+        if (!armsSurvived)
+            Failures.Add("building a loadout destroys the view arms - the hands will vanish one frame after spawning");
+
+        int weapons = 0;
+        foreach (Transform child in holder.transform)
+        {
+            if (child.GetComponent<Item>() != null)
+                weapons++;
+        }
+
+        if (weapons != WeaponLoadout.AllWeapons.Length)
+            Failures.Add($"built {weapons} weapons out of {WeaponLoadout.AllWeapons.Length}");
+
+        Object.DestroyImmediate(host);
+    }
+
+    // A client can receive a player before it receives that player's loadout property. The
+    // fallback has to be something buildable, not an empty array.
+    static void CheckLoadoutFallback()
+    {
+        string[] fallback = PlayerController.LoadoutFor(null);
+
+        Notes.Add($"loadout fallback: [{string.Join(", ", fallback)}]");
+
+        if (fallback == null || fallback.Length == 0)
+            Failures.Add("LoadoutFor falls back to nothing - a player with no property yet would spawn unarmed");
+    }
+
+    // Gun game walks this list and hands out one weapon at a time, so every rung has to resolve
+    // to a real asset or somebody climbs into an empty hand.
+    static void CheckLadderIsBuildable()
+    {
+        foreach (string weapon in WeaponLoadout.GunGameLadder)
+        {
+            if (Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + weapon) == null)
+                Failures.Add($"gun game ladder wants '{weapon}' and there is no asset for it");
+        }
+
+        Notes.Add($"gun game ladder: {string.Join(" -> ", WeaponLoadout.GunGameLadder)}");
     }
 }

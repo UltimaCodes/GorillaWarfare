@@ -28,7 +28,15 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public const string DeathsKey = "deaths";
 
     GameObject localController;
+    GameObject spectatorCamera;
     Coroutine spawnRoutine;
+    Coroutine deathRoutine;
+
+    /// True between dying and respawning. The HUD reads it to draw the countdown.
+    public static bool AwaitingRespawn { get; private set; }
+
+    /// When the respawn happens, in Time.time. Only meaningful while AwaitingRespawn.
+    public static float RespawnAt { get; private set; }
 
     // Fallback in case someone opens the game scene directly without going via the menu.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -54,6 +62,15 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         DontDestroyOnLoad(gameObject);
         Instance = this;
+
+        // Built here rather than dropped in a scene so there is nothing to wire up and no
+        // serialized copy to drift from the code. Both live on the one object that survives
+        // the trip between the menu and the game.
+        if (GetComponent<MatchState>() == null)
+            gameObject.AddComponent<MatchState>();
+
+        if (GetComponent<MatchHud>() == null)
+            gameObject.AddComponent<MatchHud>();
     }
 
     public override void OnEnable()
@@ -97,12 +114,13 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
+        ClearDeathState();
         localController = null;
     }
 
     void TrySpawn()
     {
-        if (spawnRoutine == null && localController == null)
+        if (spawnRoutine == null && localController == null && deathRoutine == null)
             spawnRoutine = StartCoroutine(SpawnWhenReady());
     }
 
@@ -131,6 +149,68 @@ public class RoomManager : MonoBehaviourPunCallbacks
         localController = PhotonNetwork.Instantiate(playerPrefab, position, rotation, 0);
     }
 
+    /// <summary>
+    /// Called by the local player when its health hits zero. Dying used to destroy and respawn
+    /// the controller in the same frame, which meant death had no weight at all - you barely
+    /// registered it had happened.
+    /// </summary>
+    public void HandleLocalDeath(Vector3 where)
+    {
+        if (deathRoutine == null)
+            deathRoutine = StartCoroutine(DieThenRespawn(where));
+    }
+
+    IEnumerator DieThenRespawn(Vector3 where)
+    {
+        AwaitingRespawn = true;
+        RespawnAt = Time.time + MatchState.RespawnDelay;
+
+        // Destroy first, then build the stand-in camera. The player's camera carries the only
+        // AudioListener, and two live at once makes Unity complain and mute one of them.
+        if (localController != null)
+            PhotonNetwork.Destroy(localController);
+
+        localController = null;
+
+        spectatorCamera = BuildSpectatorCamera(where);
+
+        while (Time.time < RespawnAt)
+            yield return null;
+
+        ClearDeathState();
+        deathRoutine = null;
+
+        TrySpawn();
+    }
+
+    // Something has to keep rendering while the controller is gone, or death is a black screen.
+    // Sits slightly above where you fell and looks down at it, which reads as a body cam.
+    GameObject BuildSpectatorCamera(Vector3 where)
+    {
+        GameObject host = new GameObject("~DeathCamera");
+        host.transform.position = where + Vector3.up * 3.5f;
+        host.transform.rotation = Quaternion.Euler(55f, Random.Range(0f, 360f), 0f);
+
+        Camera camera = host.AddComponent<Camera>();
+        host.AddComponent<AudioListener>();
+
+        // Nameplates find the camera through here, so they keep facing the right way while dead.
+        PlayerController.SetLocalCamera(camera);
+
+        return host;
+    }
+
+    void ClearDeathState()
+    {
+        AwaitingRespawn = false;
+
+        if (spectatorCamera != null)
+        {
+            Destroy(spectatorCamera);
+            spectatorCamera = null;
+        }
+    }
+
     public void RespawnLocalPlayer()
     {
         if (localController != null)
@@ -141,11 +221,12 @@ public class RoomManager : MonoBehaviourPunCallbacks
     }
 
     // Stats live entirely in custom properties, which Photon replicates and the scoreboard
-    // already reads. PUN lets you set another player's properties, so the victim credits the
-    // killer directly - no RPC and no hunting for the killer's objects.
+    // already reads.
     //
-    // Two people finishing the same player off in the same instant could lose a kill. For a
-    // game this size that's fine.
+    // Only the master writes them. Custom properties do not update the local cache until the
+    // server echoes them back, so a client incrementing its own copy loses a kill any time two
+    // land inside one round trip - MatchState keeps the running tally instead and these just
+    // publish it.
     public static void CreditKill(Player killer)
     {
         if (killer == null)

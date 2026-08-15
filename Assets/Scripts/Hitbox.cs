@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // A damage volume attached to a bone. Head hits hurt more than leg hits.
@@ -23,13 +24,16 @@ public class Hitbox : MonoBehaviour
         partName = label;
     }
 
+    /// True if this box counts as a headshot, for feedback and the kill feed.
+    public bool IsHead => partName == "head" || partName == "neck";
+
     /// Returns true if the damage was applied.
-    public bool Apply(float baseDamage)
+    public bool Apply(float baseDamage, string weapon)
     {
         if (target == null)
             return false;
 
-        target.TakeDamage(baseDamage * multiplier);
+        target.TakeDamage(baseDamage * multiplier, weapon, IsHead);
         return true;
     }
 
@@ -65,11 +69,16 @@ public class Hitbox : MonoBehaviour
             return 0;
         }
 
+        // One traversal, not one per bone. This used to walk the entire rig thirteen times
+        // for every player that spawned, and respawns make that a recurring cost.
+        Dictionary<string, Transform> bones = new Dictionary<string, Transform>();
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            bones[t.name] = t;
+
         int built = 0;
         foreach ((string bone, float radius, float mult, string label) in parts)
         {
-            Transform t = FindBone(root, bone);
-            if (t == null)
+            if (!bones.TryGetValue(bone, out Transform t))
                 continue;
 
             GameObject go = new GameObject($"hitbox_{label}");
@@ -88,14 +97,4 @@ public class Hitbox : MonoBehaviour
         return built;
     }
 
-    static Transform FindBone(Transform root, string name)
-    {
-        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
-        {
-            if (t.name == name)
-                return t;
-        }
-
-        return null;
-    }
 }

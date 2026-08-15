@@ -11,8 +11,20 @@ public class RoomListItem : MonoBehaviour
     {
         info = _info;
 
-        if (text != null)
-            text.text = $"{info.Name}  ({info.PlayerCount}{(info.MaxPlayers > 0 ? "/" + info.MaxPlayers : "")})";
+        if (text == null)
+            return;
+
+        // Published in CustomRoomPropertiesForLobby, so it's here without joining first.
+        string mode = "DM";
+        if (info.CustomProperties != null
+            && info.CustomProperties.TryGetValue(MatchState.ModeKey, out object value)
+            && value is int m)
+        {
+            mode = (MatchMode)m == MatchMode.GunGame ? "GUN GAME" : "DM";
+        }
+
+        string count = info.MaxPlayers > 0 ? $"{info.PlayerCount}/{info.MaxPlayers}" : info.PlayerCount.ToString();
+        text.text = $"{info.Name}  [{mode}]  ({count})";
     }
 
     public void OnClick()

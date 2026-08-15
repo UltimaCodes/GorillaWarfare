@@ -3,6 +3,7 @@ using UnityEngine;
 using Photon.Pun;
 using TMPro;
 using Photon.Realtime;
+using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 public class Launcher : MonoBehaviourPunCallbacks
 {
@@ -18,6 +19,16 @@ public class Launcher : MonoBehaviourPunCallbacks
     [SerializeField] GameObject startGameButton;
 
     [SerializeField] byte maxPlayersPerRoom = 8;
+
+    /// Which mode a room this client creates will run. Lives here rather than on MatchState
+    /// because it has to be chosen before the room exists.
+    public MatchMode SelectedMode { get; private set; } = MatchMode.Deathmatch;
+
+    public void CycleMode()
+    {
+        SelectedMode = SelectedMode == MatchMode.Deathmatch ? MatchMode.GunGame : MatchMode.Deathmatch;
+        GameAudio.Play2D(GameAudio.UI, "click_001");
+    }
 
     // Used to be static and never cleared, so dead rooms hung around in the browser for
     // the whole session (and across play sessions in the editor).
@@ -41,6 +52,11 @@ public class Launcher : MonoBehaviourPunCallbacks
         // PUN defaults to 10 serializations/sec which looks choppy. Has to stay <= SendRate.
         PhotonNetwork.SendRate = 30;
         PhotonNetwork.SerializationRate = 20;
+
+        // Built rather than placed, same as the rest of the HUDs. It picks the mode until the
+        // menu rebuild in M5 gives it a real button.
+        if (GetComponent<MatchSetupHud>() == null)
+            gameObject.AddComponent<MatchSetupHud>();
     }
 
     void OnDestroy()
@@ -98,7 +114,13 @@ public class Launcher : MonoBehaviourPunCallbacks
         {
             MaxPlayers = maxPlayersPerRoom,
             IsVisible = true,
-            IsOpen = true
+            IsOpen = true,
+
+            // The mode has to be a room property so late joiners get it from the server rather
+            // than from whoever happens to answer first, and it has to be in the lobby list so
+            // you can tell what a room is before committing to joining it.
+            CustomRoomProperties = new Hashtable { { MatchState.ModeKey, (int)SelectedMode } },
+            CustomRoomPropertiesForLobby = new[] { MatchState.ModeKey },
         };
 
         PhotonNetwork.CreateRoom(roomName, options);
@@ -201,6 +223,17 @@ public class Launcher : MonoBehaviourPunCallbacks
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
         AddPlayerListItem(newPlayer);
+    }
+
+    // There was no handler for this at all, so anyone who left the lobby stayed in the list
+    // until something else rebuilt it - which, sitting in a room, nothing does.
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        ClearList(playerListItems);
+
+        Player[] players = PhotonNetwork.PlayerList;
+        for (int i = 0; i < players.Length; i++)
+            AddPlayerListItem(players[i]);
     }
 
     void AddPlayerListItem(Player player)

@@ -22,6 +22,11 @@ public class SingleShotGun : Gun
     bool reloading;
     float reloadDoneAt;
 
+    // False on the copies of a player that other people see. Those need the model so you can
+    // tell what someone is holding, but they must never trace a shot - the owner already did,
+    // and a second trace from a replicated transform would be a phantom hit.
+    bool owned = true;
+
     public int Ammo { get; private set; } = -1;
     public int SpareMagazines { get; private set; }
     public bool Reloading => reloading;
@@ -32,15 +37,21 @@ public class SingleShotGun : Gun
     // Shared trace buffer. 16 is plenty - a shot passes through our own hitboxes at most.
     static readonly RaycastHit[] hits = new RaycastHit[16];
 
+    // Everything except the movement capsules. Resolved once - LayerMask.NameToLayer is a
+    // string lookup and this used to run for every pellet of every shotgun blast.
+    static int traceMask;
+    static bool traceMaskReady;
+
     public GunInfo Info => itemInfo as GunInfo;
 
     /// Set up a weapon built at runtime by WeaponLoadout. Safe to call before Awake.
-    public void Configure(GunInfo info, Camera camera, GameObject impactPrefab)
+    public void Configure(GunInfo info, Camera camera, GameObject impactPrefab, bool isOwned)
     {
         itemInfo = info;
         cam = camera;
         bulletImpactPrefab = impactPrefab;
         itemGameObject = gameObject;
+        owned = isOwned;
         Ammo = info != null ? info.magazineSize : 0;
         SpareMagazines = info != null ? info.spareMagazines : 0;
     }
@@ -49,7 +60,7 @@ public class SingleShotGun : Gun
     {
         owner = GetComponentInParent<PlayerController>();
 
-        if (cam == null && owner != null)
+        if (owned && cam == null && owner != null)
             cam = owner.GetComponentInChildren<Camera>();
 
         if (Info != null)
@@ -135,7 +146,7 @@ public class SingleShotGun : Gun
 
     public void Reload()
     {
-        if (reloading || Info == null || Ammo >= Info.magazineSize)
+        if (!owned || reloading || Info == null || Ammo >= Info.magazineSize)
             return;
 
         // No spare bananas left - you're done with this weapon until you find more.
@@ -162,9 +173,23 @@ public class SingleShotGun : Gun
         ApplyRipeness();
     }
 
+    static int TraceMask
+    {
+        get
+        {
+            if (!traceMaskReady)
+            {
+                traceMask = ~(1 << LayerMask.NameToLayer(Hitbox.PlayerLayerName));
+                traceMaskReady = true;
+            }
+
+            return traceMask;
+        }
+    }
+
     void TryShoot()
     {
-        if (cam == null || owner == null || Info == null || reloading)
+        if (!owned || cam == null || owner == null || Info == null || reloading)
             return;
 
         if (Time.time < nextShotTime)
@@ -226,7 +251,7 @@ public class SingleShotGun : Gun
 
         // Everything except the Player layer: shots pass through movement capsules and land on
         // the hitboxes instead, which is what makes aiming at a head mean anything.
-        int mask = ~(1 << LayerMask.NameToLayer(Hitbox.PlayerLayerName));
+        int mask = TraceMask;
 
         // RaycastAll rather than Raycast, because the camera sits inside our own hitboxes. A
         // single raycast can stop on one of those, and then the shot goes nowhere - it just
@@ -260,17 +285,17 @@ public class SingleShotGun : Gun
         Hitbox box = hit.collider.GetComponent<Hitbox>();
         if (box != null)
         {
-            box.Apply(damage);
+            box.Apply(damage, gameObject.name);
 
             // Hit confirmation. Without this you're firing into the void and guessing.
             if (owner != null && owner.Hud != null)
-                owner.Hud.ShowHit(box.partName == "head" || box.partName == "neck");
+                owner.Hud.ShowHit(box.IsHead);
 
             GameAudio.Play2D(GameAudio.Impact, 0.35f, 0.15f);
         }
         else
         {
-            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
+            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage, gameObject.name, false);
         }
 
         if (!alreadyReported)

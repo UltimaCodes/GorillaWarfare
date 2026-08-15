@@ -82,6 +82,17 @@ public class PlayerMovement : MonoBehaviour
         if (dt <= 0f)
             return;
 
+        // Once the match is over you stand still and read the scoreboard. Gravity still runs,
+        // so anyone who died mid-air lands rather than hanging there.
+        if (MatchState.Phase == MatchPhase.Over)
+        {
+            velocity.x = 0f;
+            velocity.z = 0f;
+            velocity.y -= gravity * dt;
+            controller.Move(velocity * dt);
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.Space))
             jumpPressedAt = Time.time;
 
