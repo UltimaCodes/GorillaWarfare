@@ -98,7 +98,20 @@ public static class WeaponCheck
         }
 
         // ---- banana models actually replace the old guns ----
-        foreach (string weapon in new[] { "Pistol", "Rifle" })
+        //
+        // All five, with their own bounds. It used to check the pistol and the rifle and take
+        // the rest on trust, which is how a sniper could be any length at all - and it is the
+        // one most likely to be wrong, being seven times the length of the fruit it came from.
+        (string weapon, float min, float max)[] models =
+        {
+            ("Pistol",  0.20f, 0.45f),
+            ("Shotgun", 0.45f, 0.85f),
+            ("Rifle",   0.45f, 0.85f),
+            ("Sniper",  1.00f, 1.90f),   // absurd on purpose
+            ("Peel",    0.12f, 0.35f),
+        };
+
+        foreach ((string weapon, float min, float max) in models)
         {
             GameObject banana = Resources.Load<GameObject>($"Models/Weapons/Banana{weapon}");
             Check(sb, banana != null, $"banana{weapon} model", banana == null ? "missing" : "loaded");
@@ -112,7 +125,7 @@ public static class WeaponCheck
                 // assert it's the forward one. Assuming the axis is how the last check
                 // reported a correctly sized banana as too small.
                 float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
-                Check(sb, longest > 0.15f && longest < 0.9f, $"banana{weapon} is weapon sized",
+                Check(sb, longest > min && longest < max, $"banana{weapon} is weapon sized",
                       $"longest axis {longest:F2}m");
                 Check(sb, b.size.z >= longest - 0.001f, $"banana{weapon} points forward",
                       $"z {b.size.z:F2} should be the longest of ({b.size.x:F2}, {b.size.y:F2}, {b.size.z:F2})");
@@ -357,6 +370,19 @@ public static class WeaponCheck
         // The trace has to skip our own hitboxes rather than stopping on them.
         Check(sb, gunSrc.Contains("RaycastNonAlloc"), "trace skips our own hitboxes",
               "RaycastNonAlloc, nearest non-self hit");
+
+        // Every weapon is the same banana at a different size, so they all share one texture.
+        // Without it they render flat coloured, which is what they looked like before.
+        Texture albedo = Resources.Load<Texture>("Models/Weapons/BananaAlbedo");
+        Check(sb, albedo != null, "the banana texture is in Resources",
+              albedo == null ? "missing" : $"{albedo.width}x{albedo.height}");
+
+        foreach ((string weapon, float _, float __) in models)
+        {
+            Material mat = Resources.Load<Material>($"Models/Weapons/Banana{weapon}Mat");
+            Check(sb, mat != null && mat.mainTexture != null, $"banana{weapon} is textured",
+                  mat == null ? "no material" : mat.mainTexture != null ? mat.mainTexture.name : "flat colour");
+        }
 
         // ---- view arms ----
         GameObject arms = Resources.Load<GameObject>("Models/Weapons/ViewArms");
