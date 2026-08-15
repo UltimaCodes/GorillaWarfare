@@ -28,21 +28,23 @@ courtesy. The author's own wording, which has to travel with anything the game s
 
 ## Music
 
-Menu and combat tracks are **Dark Moon** and **Let the Panic** from *Electronic Music Pack 1* by
-**Retro Indie Josh**, from [OpenGameArt](https://opengameart.org/content/electronic-music-pack-1).
-Instrumental, no vocals.
+**Nothing in yet.** The first attempt was wrong for the game and has been taken out.
 
-**CC BY-SA 4.0**, and the author asks for this notice verbatim:
+What fits this thing is darksynth and industrial - the Cruelty Squad and ULTRAKILL register.
+**Karl Casey / White Bat Audio** is the obvious source: it's that exact sound, and it's cleared
+for use in games as long as the credit line is present.
 
-> Contains music (c)2025 Retro Indie Josh (https://retroindiejosh.itch.io/)
-> Licensed under Creative Commons Attribution-ShareAlike 4.0 International
+> Music by Karl Casey @ White Bat Audio
 
-ShareAlike is stickier than the rest of what's here: anything built *on* this music would have to
-carry the same licence. Playing it in a game doesn't trigger that, and this game isn't going
-anywhere, but it's the one asset with a condition attached beyond a credit.
+His terms: use it in a game, credit him, don't sell the soundtrack separately from the game and
+don't re-release it under another name. None of which is a problem here.
 
-Not the ULTRAKILL or Cruelty Squad soundtracks, before you ask - those are commercial and
-copyrighted, and no amount of the project being private makes bundling them fine.
+- Bandcamp: https://karlcasey.bandcamp.com
+- YouTube: White Bat Audio
+
+Drop two tracks into `Assets/Resources/Audio/Music/` as `menu.ogg` and `combat.ogg` and
+MusicPlayer picks them up. It disables itself while they're missing, so the game runs fine
+without them.
 
 ## Movement
 
