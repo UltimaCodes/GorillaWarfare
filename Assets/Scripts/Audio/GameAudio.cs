@@ -136,6 +136,27 @@ public static class GameAudio
         PlayFlat(clip, volume, 0f);
     }
 
+    /// <summary>
+    /// Same, but at a deliberate pitch rather than a random wobble.
+    ///
+    /// This is the one that carries the combo. A sound that climbs in pitch as you keep
+    /// connecting is the oldest trick there is - Peggle's ending, a coin streak in Mario, the
+    /// ranking meter in ULTRAKILL - and it works because it turns a series of separate events
+    /// into one rising line. Nothing else here costs so little and does so much.
+    /// </summary>
+    public static void PlayPitched(string bank, string clipName, float volume, float pitch)
+    {
+        AudioClip clip = Pick(bank, clipName);
+        if (clip == null)
+            return;
+
+        AudioSource src = NextSource();
+        src.spatialBlend = 0f;
+        src.volume = volume;
+        src.pitch = pitch;
+        src.PlayOneShot(clip);
+    }
+
     static void PlayFlat(AudioClip clip, float volume, float pitchJitter)
     {
         AudioSource src = NextSource();

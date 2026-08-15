@@ -285,7 +285,12 @@ public class SingleShotGun : Gun
         // A shake with no stop. Feeling the weapon go off shouldn't cost you frames, and a
         // rifle at ten rounds a second would stutter permanently if it did.
         if (!Info.melee)
+        {
             Juice.Shake(Mathf.Clamp01(Info.damage / 60f));
+
+            if (owner != null)
+                owner.AddFirePunch(Mathf.Clamp01(Info.damage / 90f));
+        }
 
         if (!Info.melee && Ammo > 0)
         {
@@ -416,12 +421,22 @@ public class SingleShotGun : Gun
             // 2D and named: this happened to you, and which one it was matters. It used to
             // play a generic impact, which is the same sound a shot into a wall makes - so
             // the one piece of information you most wanted was indistinguishable from missing.
-            GameAudio.Play2D(GameAudio.Hit, box.IsHead ? "headshot" : "hit", GameAudio.HitVolume);
+            // Every hit in a row comes back a step higher, up to a point. One hit is a tick;
+            // six in a row is a rising line, and the line is the part you chase.
+            int hits = owner != null ? owner.RegisterHit() : 1;
+            float pitch = 1f + Mathf.Min(hits - 1, 9) * 0.055f;
+
+            GameAudio.PlayPitched(GameAudio.Hit, box.IsHead ? "headshot" : "hit",
+                                  GameAudio.HitVolume, pitch);
 
             // The sound says you hit; the stop says it landed. A headshot gets most of the
             // budget, because the whole reason to aim at a head is that connecting should feel
             // different from connecting anywhere else.
             Juice.Hit(box.IsHead ? 0.75f : 0.3f);
+
+            // The number, where it happened.
+            if (owner != null && owner.Hud != null)
+                owner.Hud.ShowDamage(hit.point, damage * box.multiplier, box.IsHead);
         }
         else
         {

@@ -98,6 +98,40 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// Consecutive kills without dying. Read by the HUD.
     public int Killstreak { get; private set; }
 
+    // Consecutive hits, and how long you have to land the next one before it lapses.
+    //
+    // Separate from the killstreak on purpose - a streak is about winning fights, a combo is
+    // about the seconds inside one. The combo is what makes a shotgun blast or a held rifle
+    // burst climb while it happens rather than paying out only at the end.
+    const float comboWindow = 1.4f;
+
+    int combo;
+    float comboLapsesAt;
+
+    /// How many hits you've landed back to back. The HUD draws it; the hit sound rides it.
+    public int Combo => Time.time < comboLapsesAt ? combo : 0;
+
+    /// <summary>
+    /// Called for every shot that connects. Returns where in the combo this hit sits, which
+    /// the weapon turns into a pitch.
+    /// </summary>
+    public int RegisterHit()
+    {
+        combo = Time.time < comboLapsesAt ? combo + 1 : 1;
+        comboLapsesAt = Time.time + comboWindow;
+
+        if (Hud != null)
+            Hud.ShowCombo(combo);
+
+        return combo;
+    }
+
+    // Multikills - kills close enough together to be one moment rather than two.
+    const float multikillWindow = 4f;
+
+    int multikill;
+    float multikillLapsesAt;
+
     /// The local player, for anything that needs to reach them from elsewhere - a kill is
     /// reported on the victim's view, so healing the killer means finding them.
     public static PlayerController Local { get; private set; }
@@ -592,7 +626,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (LocalCamera == null || itemHolder == null)
             return;
 
-        float targetFov = wants ? info.aimFov : baseFov;
+        // Both punches decay on unscaled time, because hitstop is usually running when they
+        // are - on scaled time they'd hang at full stretch through the freeze.
+        float decay = 1f - Mathf.Exp(-9f * Time.unscaledDeltaTime);
+        fovPunch = Mathf.Lerp(fovPunch, 0f, decay);
+        firePunch = Mathf.Lerp(firePunch, 0f, decay);
+
+        float targetFov = (wants ? info.aimFov : baseFov) + fovPunch * 7f + firePunch * 2.2f;
         float t = 1f - Mathf.Exp(-aimSpeed * Time.deltaTime);
 
         LocalCamera.fieldOfView = Mathf.Lerp(LocalCamera.fieldOfView, targetFov, t);
@@ -741,9 +781,30 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         Killstreak++;
 
+        multikill = Time.time < multikillLapsesAt ? multikill + 1 : 1;
+        multikillLapsesAt = Time.time + multikillWindow;
+
         float heal = healPerKill + Mathf.Min(maxStreakHeal, (Killstreak - 1) * healPerStreak);
         Heal(heal);
+
+        if (Hud != null)
+            Hud.ShowKill(multikill, Killstreak);
+
+        // The kill sound climbs with the multikill, same idea as the hit combo. Two kills in
+        // four seconds should not sound identical to two kills a minute apart.
+        GameAudio.PlayPitched(GameAudio.Kill, "kill", GameAudio.KillVolume,
+                              1f + Mathf.Min(multikill - 1, 4) * 0.09f);
+
+        // A short punch of field of view. Small enough not to disorient, big enough to feel.
+        fovPunch = 1f;
     }
+
+    // A quick widening of the view on a kill, and a smaller one every time you fire. Reads as
+    // the world lurching rather than the camera moving, which is why it's separate from shake.
+    float fovPunch;
+    float firePunch;
+
+    public void AddFirePunch(float strength) => firePunch = Mathf.Max(firePunch, strength);
 
     /// killer is null for falling off the map and anything else self inflicted.
     void Die(Player killer, string weapon, bool headshot)
@@ -779,8 +840,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // sound that plays for everyone is just another explosion.
         if (killer != null && killer.IsLocal && killer != PV.Owner)
         {
-            GameAudio.Play2D(GameAudio.Kill, GameAudio.KillVolume);
-
             // Healing happens here rather than in MatchState because it's a local, felt thing
             // rather than a scored one - nobody else needs to know your health went up.
             if (Local != null)
