@@ -161,13 +161,13 @@ public class RoomManager : MonoBehaviourPunCallbacks
     /// the controller in the same frame, which meant death had no weight at all - you barely
     /// registered it had happened.
     /// </summary>
-    public void HandleLocalDeath(Vector3 where)
+    public void HandleLocalDeath(Vector3 where, Vector3 facing)
     {
         if (deathRoutine == null)
-            deathRoutine = StartCoroutine(DieThenRespawn(where));
+            deathRoutine = StartCoroutine(DieThenRespawn(where, facing));
     }
 
-    IEnumerator DieThenRespawn(Vector3 where)
+    IEnumerator DieThenRespawn(Vector3 where, Vector3 facing)
     {
         AwaitingRespawn = true;
         RespawnAt = Time.time + MatchState.RespawnDelay;
@@ -179,7 +179,7 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         localController = null;
 
-        spectatorCamera = BuildSpectatorCamera(where);
+        spectatorCamera = BuildSpectatorCamera(where, facing);
 
         while (Time.time < RespawnAt)
             yield return null;
@@ -192,11 +192,14 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     // Something has to keep rendering while the controller is gone, or death is a black screen.
     // Sits slightly above where you fell and looks down at it, which reads as a body cam.
-    GameObject BuildSpectatorCamera(Vector3 where)
+    GameObject BuildSpectatorCamera(Vector3 where, Vector3 facing)
     {
         GameObject host = new GameObject("~DeathCamera");
-        host.transform.position = where + Vector3.up * 3.5f;
-        host.transform.rotation = Quaternion.Euler(55f, Random.Range(0f, 360f), 0f);
+
+        // Up and behind where you were looking, then pointed back at the spot. A random yaw
+        // was cheaper and half the time showed you a wall.
+        host.transform.position = where + Vector3.up * 3.5f - facing * 2.5f;
+        host.transform.LookAt(where);
 
         Camera camera = host.AddComponent<Camera>();
         host.AddComponent<AudioListener>();

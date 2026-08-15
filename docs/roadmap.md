@@ -1,6 +1,6 @@
 # Roadmap
 
-Where this is going and in what order. Updated 2026-08-14.
+Where this is going and in what order. Updated 2026-08-15.
 
 ## Design philosophy
 
@@ -17,6 +17,39 @@ something to check work against rather than a vibe:
 - **Funny is allowed.** It's a game about monkeys shooting each other with bananas. Lean in.
 - **Readable underneath the noise.** ULTRAKILL is chaotic but you can always find your health.
   Garish is fine, confusing isn't.
+
+---
+
+## Checking it still works
+
+Six suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
+open the project.
+
+```
+"C:/Program Files/Unity/Hub/Editor/6000.2.9f1/Editor/Unity.exe" -batchmode -quit -nographics   -projectPath "C:/DevProjects/Unity/OldProjects/FPS/GorillaWarfare"   -executeMethod WeaponCheck.Run -logFile -
+```
+
+| suite | what it holds down |
+|---|---|
+| `WeaponCheck` | weapon balance, roles, models, audio banks, viewmodel framing |
+| `PlayerModelCheck` | the gorilla: scale, rig, bones, gait |
+| `RemoteCopyCheck` | the copy of you other people see, and the invariants tying it to yours |
+| `SceneCheck` | opens both shipping scenes, looks for missing scripts and magenta materials |
+| `MatchCheck` | the match rules, including a whole gun game played out |
+| `PlayModeProbe` | **runs the actual game** in Photon offline mode |
+
+`PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
+
+```
+"C:/Program Files/Unity/Hub/Editor/6000.2.9f1/Editor/Unity.exe" -batchmode -nographics   -projectPath "C:/DevProjects/Unity/OldProjects/FPS/GorillaWarfare"   -executeMethod PlayModeProbe.Run -logFile -
+```
+
+It spawns a player, checks it's carrying what the match rolled, kills it, and watches it come
+back. What it can't do is see a second client — offline mode is one player — so anything about
+remote copies still needs two people.
+
+`AssetFixups.All` reapplies import settings. `ProjectCleanup.Run` strips leftovers back out of
+the player prefab if they ever reappear.
 
 ---
 
@@ -41,8 +74,8 @@ Regressions and broken basics. Nothing else matters while the game can't be play
 - [x] `PlayerController` builds `MonkeyRig`, which spawns the model and drives the bones
 - [x] `CHIMP_L` and its subtree removed from the prefab — 15 objects, no dangling fileIDs
 - [x] Hide own body from own camera, keep the shadow (`ShadowsOnly`)
-- [ ] Reparent weapons to `b_Right_Hand` on remote copies — they currently sit on `CameraHolder`,
-      which is first-person only, so others see a gun floating at head height
+- [x] Reparent weapons onto the hand on remote copies — they sat on `CameraHolder`, which is
+      first-person only, so others saw a gun floating at head height
 - [ ] Tune the gait numbers against the real model; current values are guesses
 - [ ] Nobody has seen it render yet — unverified
 
@@ -106,25 +139,37 @@ Moved out rather than dropped:
 Two modes.
 
 **Shared plumbing**
-- [ ] Match state machine: warmup → live → over → next map
-- [ ] Round timer, replicated, visible
-- [ ] End-of-match scoreboard with a winner
-- [ ] Respawn delay instead of instant
-- [ ] Master client owns match state; must survive host migration
-- [ ] Mode picked in the lobby
+- [x] Match state machine: warmup → live → over → next match
+- [x] Round timer, replicated, visible
+- [x] End-of-match scoreboard with a winner
+- [x] Respawn delay instead of instant, with a camera so death isn't a black screen
+- [x] Master client owns match state; survives host migration
+- [x] Mode picked before the room is created, and shown in the room browser
+- [x] Scores reset between matches — PUN never clears player properties by itself, they even
+      follow you into the next room you join
+- [ ] Next *map* rather than next match — that's M6, there's only one map to rotate to
 
 **Deathmatch (timed)**
-- [ ] Each match rolls a random set of 3 weapons; you spawn holding one of them
-- [ ] Most kills when the clock runs out wins
+- [x] Each match rolls a random set of 3 weapons; everyone carries the same three
+- [x] Most kills when the clock runs out wins
 
 **Gun game**
-- [ ] Fixed weapon ladder, 2 kills to advance
-- [ ] Everyone works down the same order
-- [ ] Final rung is melee — killing with it wins the match
-- [ ] Needs a melee weapon, which M2 doesn't currently plan for
+- [x] Fixed weapon ladder, 2 kills to advance
+- [x] Everyone works up the same order
+- [x] Final rung is melee — killing with it wins the match
+- [x] Melee weapon exists (Peel, landed in M2)
 
-**Done when:** both modes can be picked, played start to finish, and declare a winner without
-anyone touching anything.
+Everything about a match lives in room custom properties rather than in fields, which is what
+makes late joins and host migration fall out for free instead of each needing its own catch-up
+path. The clock is a deadline, not a countdown: `PhotonNetwork.Time` is server synchronised, so
+every client works out the remaining time itself and nobody broadcasts a tick.
+
+`MatchCheck` plays a whole gun game against the rules with no server — nine kills, five rungs,
+in order. `PlayModeProbe` runs the actual game in Photon's offline mode and checks a player
+spawns with the weapons the match rolled, dies, and comes back.
+
+**Done when:** ~~both modes can be picked, played start to finish, and declare a winner without
+anyone touching anything.~~ DONE, apart from playing it with a second person.
 
 ---
 
@@ -223,6 +268,12 @@ Things the checks can't reach, so they need a person:
 - whether the recoil, gait and weapon framing feel right
 - whether the hitboxes line up with the gorilla visually
 - whether the bananas read as their weapons at a glance
+- **anything that needs a second client.** The probe runs a real match in offline mode, which
+  covers spawning, loadouts, dying and respawning — but offline mode is one player, so it can't
+  see a remote copy of anybody. Weapons on someone else's hand, replicated aim, and the kill
+  feed firing on a client that didn't do the killing all still need two people.
+- whether match and respawn lengths feel right. Warmup 8s, deathmatch 5min, gun game 10min,
+  scoreboard 12s, respawn 3s — all guesses, all one field each in `MatchState`.
 
 ## Known limitations
 
@@ -237,6 +288,16 @@ Not tasks, but things that are true and worth knowing before they bite.
   can now burn your free-tier quota. Worth regenerating if the game gets any attention.
 - **No anti-cheat, no server authority** of any kind. Correct call at this scale; just don't be
   surprised later.
+- **Everyone has to be on the same build.** PUN sends an RPC as an index into `RpcList` in
+  `PhotonServerSettings`, so two clients with different lists would resolve the same index to
+  different methods. `AppVersion` is empty, which means mismatched builds can still find each
+  other's rooms rather than being kept apart. Fine while everyone updates together.
+- **Region is automatic again, properly this time.** `FixedRegion` was cleared a while back but
+  `DevRegion` was still `uae`, and that overrides the best-region pick in the editor and in any
+  development build. So the editor and a release build could land on different regions and not
+  see each other's rooms. Both pick their own best region now. If that splits people up, pin
+  everyone by setting `FixedRegion` in `PhotonServerSettings.asset` — one field, and it beats
+  automatic for a group that's geographically spread.
 
 ## Decided against
 
@@ -258,6 +319,13 @@ Recorded so it doesn't get quietly relitigated.
 - [ ] `Game.unity` will do a Unity 6 format migration on first open
 
 ## Recently closed
+
+- The copy of you that other people saw was still holding the 2024 M1911 and AK74, because a
+  loadout was only ever built for the owner
+- The first person arms were destroyed one frame after being built — the loadout cleared the
+  whole holder and the arms live in it. The geometry was right the whole time
+- Weapon switching threw `IndexOutOfRangeException` on every other client
+- Scores lost a kill whenever two landed inside one server round trip
 
 - Late-join invisibility — fixed by rewriting the spawn path to Photon's own pattern and
   deleting `PlayerManager` entirely

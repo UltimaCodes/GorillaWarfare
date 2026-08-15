@@ -136,3 +136,109 @@ across prefabs and scenes, which is a bigger change than it sounds and belongs w
 rework. Worked around for now, `TODO` left in `SingleShotGun`.
 
 **The late-join visibility bug** — still open, see [player-fixes.md](player-fixes.md).
+
+---
+
+# Second pass — before M3
+
+Everything found going over the project again ahead of the game loop. The theme this time was
+**the copy of you that other people see**: every check written so far only ever exercised the
+owner's player, because that's the branch that builds a loadout, and a remote copy takes a
+completely different path through `PlayerController.Start`.
+
+## The remote copy
+
+**Other people saw you holding the 2024 guns.** `BuildLoadout` lived inside `if (PV.IsMine)`, and
+`WeaponLoadout.Build` is the only thing that clears the weapon holder. So a remote copy kept
+whatever the prefab shipped with — the M1911 and the AK74 — and `AttachWeaponsToHand` dutifully
+parented that onto the gorilla's hand. Weapons are built on every copy now, from a replicated
+list, with an ownership flag so only yours may trace a shot.
+
+**Weapon switching threw on every other client.** `itemIndex` is replicated and was being fed
+straight into `items[]` with no bounds check. Yours had four entries, theirs had the prefab's
+two, so switching to weapon 3 or 4 threw `IndexOutOfRangeException` on everyone else's machine.
+Worse than a log line: PUN dispatches callbacks in a bare `foreach` with no `try`/`catch`
+(`LoadBalancingClient.cs:4391`), so the throw also dropped that property update for every
+callback target queued behind it — `ScoreboardItem` among them.
+
+**Three PhotonViews per player.** The runtime loadout was built on the premise that weapons
+don't carry their own view. The prefab never got the message, so every spawn and every respawn
+allocated all three.
+
+## The one that explains a lot
+
+**The first person arms were destroyed one frame after being built.** `PlaceViewModel` built
+them into the item holder, and the very next line, `BuildLoadout`, emptied that holder. Every
+round of tuning the arm position was tuning an object that didn't survive its first frame — and
+`WeaponCheck` measured 38% of them on screen because it instantiated its own copy and measured
+that, never running the spawn path. Building a loadout only clears weapons now, and the arms are
+built after it rather than before.
+
+## Scoring and match state
+
+**Scores lost a kill whenever two landed close together.** `SetCustomProperties` does *not*
+update the local cache in an online room — it sends `OpSetPropertiesOfActor` and waits for the
+server to echo (`Player.cs:390`). So read-increment-write inside one round trip read the same
+value twice and wrote the same number twice. The master keeps its own tally now and publishes
+that; it's also the only client that writes scores at all, so two clients can't disagree.
+
+**Nobody but you knew you had died.** `RPC_TakeDamage` was sent to `PV.Owner` alone, so the
+victim was the only client that saw its health reach zero. There was no death event for a kill
+feed or a match to listen to. It's broadcast now, carrying the weapon and whether it was a
+headshot, because the victim is the last client that can still see either.
+
+**Kills and deaths were never reset, and followed you between rooms.** PUN keeps `LocalPlayer`
+across rooms and never clears its custom properties — the teardown at
+`LoadBalancingClient.cs:3073` says so explicitly — and join publishes them to the new room. So
+you arrived in a fresh match carrying the last one's score.
+
+## Found by reading M3 back before testing it
+
+- Deathmatch rolled its three weapons into a field on the master. If the host left, the next
+  master had nothing there and rolled a fresh set for the next person who joined.
+- A phase transition takes a round trip to come back, and until it does `Phase` and `TimeLeft`
+  both still read the old values — so `Update` fired the same transition again every frame, each
+  one another property write.
+- Leaving the room while dead left the respawn coroutine running, so it came back a few seconds
+  later and tried to spawn into a room we'd left.
+
+## Photon settings
+
+**`DevRegion` was still `uae`.** `FixedRegion` was cleared a while back, but `DevRegion`
+overrides the best-region pick in the editor and in any development build — so the earlier
+"unpinned" fix had never actually applied while developing, and an editor client and a release
+build could pick different regions and never see each other's rooms.
+
+**`RpcList` had five RPCs that don't exist** (leftovers from the PUN demos and from methods
+deleted with `PlayerManager`) and was missing `RPC_Died`. PUN falls back to sending the method
+name as a string when it isn't in the list, so this was bandwidth rather than breakage.
+
+## Smaller
+
+- `Launcher` had no `OnPlayerLeftRoom` at all, so anyone leaving the lobby stayed in the list
+  until something else happened to rebuild it.
+- `items[itemIndex].Use()` was unguarded, and gun game can briefly leave you holding nothing
+  while a rebuild lands.
+- Weapon hotkeys were `(i + 1).ToString()` — a string built per weapon per frame purely to ask
+  whether a key was down. A `KeyCode` table now.
+- The death camera picked a random yaw, so half the time it showed you a wall. It looks at where
+  you fell now.
+
+## Performance
+
+- `MonkeyRig` resolved eleven bones by walking the whole skeleton once per bone. `Hitbox` did
+  the same for thirteen. One traversal each now.
+- Footsteps raycast for ground *before* checking whether you had moved, so eight players idling
+  in a lobby cast eight rays a frame to establish that nobody had taken a step.
+- `SingleShotGun` called `LayerMask.NameToLayer` — a string lookup — once per pellet, so a
+  shotgun blast did it eight times.
+- Both HUDs built strings and `GUIStyle`s inside `OnGUI`, which runs at least twice a frame.
+
+## Left alone on purpose
+
+**The map's placeholder textures.** `Game.unity` uses the meme materials and the chimp skin, and
+the chimp skin is also the game icon. They're ugly, they're in use, and replacing them is M7.
+
+**`AppVersion` is empty**, so mismatched builds can still find each other's rooms. Setting it
+would keep them apart but would also mean bumping it on every change. Noted in the roadmap
+instead.
