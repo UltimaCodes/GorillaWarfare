@@ -461,10 +461,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         // The bang happens whether or not you connected. It used to be inside the hit path, so
         // missing was completely silent.
-        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, 0.6f);
+        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, GameAudio.ShotVolume);
 
         if (hit)
-            GameAudio.PlayAt(GameAudio.Impact, endPoint, 0.5f);
+            GameAudio.PlayAt(GameAudio.Impact, endPoint, GameAudio.ImpactVolume);
 
         // Flash, tracer and decal on the weapon that actually fired, so it's right for
         // spectators too.
@@ -649,7 +649,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         currentHealth -= damage;
 
         // 2D - this happened to you, not near you.
-        GameAudio.Play2D(GameAudio.Hurt, 0.7f, 0.1f);
+        GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume, 0.1f);
 
         if (currentHealth <= 0f)
             Die(info.Sender, weapon, headshot);
@@ -676,7 +676,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     [PunRPC]
     void RPC_Died(int killerActor, string weapon, bool headshot)
     {
-        GameAudio.PlayAt(GameAudio.Death, transform.position, 0.8f);
+        GameAudio.PlayAt(GameAudio.Death, transform.position, GameAudio.DeathVolume);
 
         Player killer = killerActor >= 0 && PhotonNetwork.InRoom
             ? PhotonNetwork.CurrentRoom.GetPlayer(killerActor)
@@ -684,6 +684,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         // Everyone gets the kill feed entry; only the master acts on the score, so two clients
         // can never disagree about it and a late joiner reads the same numbers as everyone else.
+        // You did that. 2D, and only for the person who gets to feel good about it - a kill
+        // sound that plays for everyone is just another explosion.
+        if (killer != null && killer.IsLocal && killer != PV.Owner)
+            GameAudio.Play2D(GameAudio.Kill, GameAudio.KillVolume);
+
         MatchState.ReportKill(killer, PV.Owner, weapon, headshot);
     }
 }

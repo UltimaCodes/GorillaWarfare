@@ -230,7 +230,9 @@ public class SingleShotGun : Gun
 
         reloading = true;
         reloadDoneAt = Time.time + Info.reloadTime;
-        GameAudio.Play2D(GameAudio.UI, 0.4f);
+
+        // Was a random clip out of the UI bank, so reloading sounded like clicking a button.
+        GameAudio.Play2D(GameAudio.Reload, GameAudio.ReloadVolume, 0.06f);
     }
 
     /// Timestamp rather than a coroutine. Switching weapons deactivates the old one, which kills
@@ -406,7 +408,10 @@ public class SingleShotGun : Gun
             if (owner != null && owner.Hud != null)
                 owner.Hud.ShowHit(box.IsHead);
 
-            GameAudio.Play2D(GameAudio.Impact, 0.35f, 0.15f);
+            // 2D and named: this happened to you, and which one it was matters. It used to
+            // play a generic impact, which is the same sound a shot into a wall makes - so
+            // the one piece of information you most wanted was indistinguishable from missing.
+            GameAudio.Play2D(GameAudio.Hit, box.IsHead ? "headshot" : "hit", GameAudio.HitVolume);
         }
         else
         {
