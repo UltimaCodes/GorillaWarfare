@@ -243,7 +243,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             LocalCamera = GetComponentInChildren<Camera>();
 
             if (LocalCamera != null)
+            {
+                // The camera is built fresh on every respawn and arrives holding whatever the
+                // prefab was authored with, so the saved field of view has to be reapplied
+                // rather than read once at startup.
+                GameSettings.ApplyFov();
                 baseFov = LocalCamera.fieldOfView;
+            }
 
             gameObject.AddComponent<PlayerMovement>();
             PlaceViewModel();
@@ -328,7 +334,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (MatchState.Phase == MatchPhase.Over)
             return;
 
-        UpdateAim(AimInputOverride ?? Input.GetMouseButton(1));
+        UpdateAim(AimInputOverride ?? KeyBinds.Held(KeyBinds.Action.Aim));
         Look();
 
         // Gun game hands you exactly one weapon and can leave you briefly holding nothing while
@@ -347,32 +353,24 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 stowed.TickReloadWhileStowed();
         }
 
-        // Number keys, from a table rather than (i + 1).ToString() - that built a string per
-        // weapon per frame purely to ask whether a key was down.
-        int keys = Mathf.Min(items.Length, WeaponKeys.Length);
-        for (int i = 0; i < keys; i++)
-        {
-            if (Input.GetKeyDown(WeaponKeys[i]))
-            {
-                EquipItem(i);
-                break;
-            }
-        }
-
+        // Cycling rather than number keys. Both modes hand out a single weapon now, so slots
+        // one through five addressed a rack that no longer exists - and the two people who
+        // still want to flick between things want it bound to something they chose.
         float scroll = Input.GetAxisRaw("Mouse ScrollWheel");
-        if (scroll > 0f)
+
+        if (scroll > 0f || KeyBinds.Pressed(KeyBinds.Action.NextWeapon))
             EquipItem(itemIndex >= items.Length - 1 ? 0 : itemIndex + 1);
-        else if (scroll < 0f)
+        else if (scroll < 0f || KeyBinds.Pressed(KeyBinds.Action.PreviousWeapon))
             EquipItem(itemIndex <= 0 ? items.Length - 1 : itemIndex - 1);
 
         Item held = items[Mathf.Clamp(itemIndex, 0, items.Length - 1)];
 
-        if (Input.GetMouseButtonDown(0))
+        if (KeyBinds.Pressed(KeyBinds.Action.Fire))
             held.Use();
-        else if (Input.GetMouseButton(0) && held is SingleShotGun heldGun)
+        else if (KeyBinds.Held(KeyBinds.Action.Fire) && held is SingleShotGun heldGun)
             heldGun.UseHeld();
 
-        if (Input.GetKeyDown(KeyCode.R) && held is SingleShotGun reloadGun)
+        if (KeyBinds.Pressed(KeyBinds.Action.Reload) && held is SingleShotGun reloadGun)
             reloadGun.Reload();
 
         FallOutOfTheWorldCheck();
@@ -386,11 +384,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (transform.position.y < -10f)
             Die(null, "the void", false);
     }
-
-    static readonly KeyCode[] WeaponKeys =
-    {
-        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5,
-    };
 
     void EquipItem(int index)
     {
@@ -616,10 +609,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void Look()
     {
-        float sensitivity = mouseSensitivity * aimSensitivity;
+        // aimSensitivity is the weapon's own zoom compensation - a scope that magnifies four
+        // times has to slow the mouse by the same ratio or aiming makes you twitchier, not
+        // steadier. The player's ADS preference multiplies that rather than replacing it, and
+        // only while actually scoped.
+        float sensitivity = GameSettings.Sensitivity * aimSensitivity;
+
+        if (IsAiming)
+            sensitivity *= GameSettings.AdsSensitivity;
+
+        float invert = GameSettings.InvertY ? -1f : 1f;
 
         horizontalLookRotation += Input.GetAxisRaw("Mouse X") * sensitivity;
-        verticalLookRotation -= Input.GetAxisRaw("Mouse Y") * sensitivity;
+        verticalLookRotation -= Input.GetAxisRaw("Mouse Y") * sensitivity * invert;
         verticalLookRotation = Mathf.Clamp(verticalLookRotation, -90f, 90f);
 
         UpdateRecoil();
@@ -733,11 +735,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void UpdateCursorLock()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // The settings screen owns the cursor while it's up. Without this the game grabs it
+        // back the instant you click a slider, and you end up dragging the camera instead.
+        if (SettingsMenu.IsOpen)
         {
             cursorLocked = false;
         }
-        else if (Input.GetMouseButtonDown(0))
+        else if (KeyBinds.Pressed(KeyBinds.Action.Menu))
+        {
+            cursorLocked = false;
+        }
+        else if (KeyBinds.Pressed(KeyBinds.Action.Fire))
         {
             cursorLocked = true;
         }

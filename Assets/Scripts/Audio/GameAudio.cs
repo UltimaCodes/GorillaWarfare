@@ -112,7 +112,7 @@ public static class GameAudio
         AudioSource src = NextSource();
         src.transform.position = position;
         src.spatialBlend = 1f;
-        src.volume = volume;
+        src.volume = volume * GameSettings.SfxVolume;
         src.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
         src.PlayOneShot(clip);
     }
@@ -152,7 +152,7 @@ public static class GameAudio
 
         AudioSource src = NextSource();
         src.spatialBlend = 0f;
-        src.volume = volume;
+        src.volume = volume * GameSettings.SfxVolume;
         src.pitch = pitch;
         src.PlayOneShot(clip);
     }
@@ -161,7 +161,7 @@ public static class GameAudio
     {
         AudioSource src = NextSource();
         src.spatialBlend = 0f;
-        src.volume = volume;
+        src.volume = volume * GameSettings.SfxVolume;
         src.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
         src.PlayOneShot(clip);
     }
