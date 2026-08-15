@@ -113,7 +113,7 @@ public static class ProjectCleanup
     }
 
     // The screen space canvas carrying the original healthbar, and a label reading "Wont add
-    // ammo or anything so heres a muaaz healthbar". Health is drawn by CombatHud now, which
+    // ammo or anything so heres a muaaz healthbar". Health is drawn by GameHud now, which
     // means it can react to being shot instead of quietly sliding down.
     static void StripLegacyHealthbar(GameObject prefab, List<string> changes)
     {

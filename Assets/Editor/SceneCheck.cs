@@ -129,9 +129,54 @@ public static class SceneCheck
         if (points.Length < 4)
             Failures.Add($"only {points.Length} spawnpoints for an 8 player room");
 
-        // The game scene must be build index 1 - RoomManager and MatchHud both hard code it.
+        // The game scene must be build index 1 - RoomManager hard codes it.
         if (scene.buildIndex != 1)
             Failures.Add($"Game is build index {scene.buildIndex}, but the spawn path waits for index 1");
+
+        CheckHud();
+    }
+
+    /// <summary>
+    /// The HUD is a scene object rather than something built at runtime, which is the whole
+    /// point of it - it can be moved, recoloured and re-fonted without touching C#.
+    ///
+    /// The cost of that is that it can also be half deleted. A missing reference doesn't throw;
+    /// GameHud checks every slot before using it, so a dragged-away health bar just quietly
+    /// stops appearing and looks like a bug in the health code. This walks every serialized
+    /// reference and names the empty ones.
+    /// </summary>
+    static void CheckHud()
+    {
+        GameHud hud = Object.FindFirstObjectByType<GameHud>(FindObjectsInactive.Include);
+
+        if (hud == null)
+        {
+            Failures.Add("Game has no GameHud - no health, ammo, crosshair, clock or kill feed. "
+                         + "Run Tools/Gorilla Warfare/Build the in-game HUD");
+            return;
+        }
+
+        if (hud.GetComponentInParent<Canvas>() == null)
+            Failures.Add("GameHud is not under a Canvas, so none of it will draw");
+
+        int empty = 0;
+        SerializedProperty property = new SerializedObject(hud).GetIterator();
+
+        while (property.NextVisible(true))
+        {
+            if (property.propertyPath == "m_Script"
+                || property.propertyType != SerializedPropertyType.ObjectReference)
+                continue;
+
+            if (property.objectReferenceValue != null)
+                continue;
+
+            Failures.Add($"GameHud.{property.propertyPath} is empty - that part of the HUD is missing");
+            empty++;
+        }
+
+        if (empty == 0)
+            Notes.Add("Game: HUD is fully wired");
     }
 
     static void CheckMenuScene()

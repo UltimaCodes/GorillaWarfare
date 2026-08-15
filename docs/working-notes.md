@@ -56,8 +56,19 @@ cancelling out is not the same as no bugs.
 `MatchState`. The player prefab carries one `PhotonView` and an empty `ItemHolder`; anything
 found sitting in that holder is a leftover and `RemoteCopyCheck` fails on it.
 
-Exceptions, deliberate: the menu UI and the mode selector are real objects so Ryaan can edit
-them.
+Exceptions, deliberate: the menu UI, the mode selector and the in-game HUD are real objects so
+Ryaan can edit them.
+
+**The HUD is scene data.** `GameHud` decides what the labels say and whether they're visible;
+where they sit, what size they are and what font they use belongs to the scene. Two things are
+driven from code on purpose and shouldn't be moved back: the scope, which has to track the
+window's aspect ratio, and the crosshair ticks, which open with the weapon's spread. Everything
+else that looks like a layout decision in that script is a bug.
+
+Run `Tools/Gorilla Warfare/Build the in-game HUD` to rebuild it. That **replaces** the whole
+`GameHud` root, so any restyling done by hand is lost - it's for starting over, not for updates.
+`SceneCheck` walks every serialized slot and names the empty ones, because a reference dragged
+loose doesn't throw, it just silently stops drawing and looks like a bug in the health code.
 
 **Weapon keys stay role names** — `Pistol`, `Shotgun`, `Rifle`, `Sniper`, `Peel`. The gun game
 ladder is defined in power order and reads at a glance. What players see lives in `itemName` on
@@ -92,6 +103,13 @@ all take `-quit`. **`PlayModeProbe` must not** — it enters play mode and exits
 `PlayModeProbe` runs the real game in Photon offline mode and writes screenshots to
 `Logs/probe-shots/`. Reading those images is the only way to judge anything visual; several
 bugs measured fine and looked obviously wrong.
+
+**The HUD can't be photographed.** It's a screen space overlay canvas, and overlay canvases
+don't appear in a camera rendered to a texture, which is the only kind of picture the probe can
+take. So the probe reads the labels back instead - the health number against the player's
+health, the round count against the magazine, the weapon name against what's equipped - which
+catches the thing a screenshot wouldn't anyway: a number that's present, correctly placed and
+stale.
 
 **What no check can reach:** anything needing a second client. Offline mode is one player.
 Remote weapon switching, replicated aim, the kill feed firing on a client that didn't do the

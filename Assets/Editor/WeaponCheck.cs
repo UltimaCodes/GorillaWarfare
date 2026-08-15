@@ -397,8 +397,12 @@ public static class WeaponCheck
         }
 
         // ---- crosshair must not double count recoil ----
-        string hudSrc = System.IO.File.ReadAllText("Assets/Scripts/CombatHud.cs");
-        Check(sb, !hudSrc.Contains("cy -= recoil.x"), "crosshair stays at screen centre",
+        // The crosshair is anchored to the middle of the canvas and only ever moved by the
+        // weapon's spread. Recoil already rotates the camera, so shots leave from the centre of
+        // the screen; nudging the crosshair as well would double count it and put the reticle
+        // where the bullets aren't.
+        string hudSrc = System.IO.File.ReadAllText("Assets/Scripts/GameHud.cs");
+        Check(sb, !hudSrc.Contains("recoil"), "crosshair stays at screen centre",
               "recoil already rotates the camera, so shots leave from centre");
 
         // ---- ripeness ----

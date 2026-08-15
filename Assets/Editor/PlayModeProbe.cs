@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using TMPro;
 using UnityEngine;
 using Photon.Pun;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
@@ -162,6 +163,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- joining and leaving ----
         yield return CheckJoinAndLeaveMessages();
 
+        // ---- the HUD is showing what the game thinks is true ----
+        yield return CheckHudReadsTheGame(player);
+
         // ---- hitstop ----
         yield return CheckHitstopRestores();
 
@@ -206,6 +210,12 @@ public class ProbeRunner : MonoBehaviour
     {
         FieldInfo info = target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
         info?.SetValue(target, value);
+    }
+
+    static T Get<T>(object target, string field) where T : class
+    {
+        FieldInfo info = target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
+        return info?.GetValue(target) as T;
     }
 
     static PlayerController LocalPlayer()
@@ -598,6 +608,16 @@ public class ProbeRunner : MonoBehaviour
 
         Check(visible == 0, "the weapon is out of the way", $"{visible} renderers still drawn");
 
+        // The scope overlay is HUD rather than weapon, and it only exists on a weapon that can
+        // aim - so it's checked here, holding the sniper, rather than in the HUD check, which
+        // runs while you're carrying whatever the match happened to roll.
+        GameObject scopeOverlay = GameHud.Instance != null
+            ? Get<GameObject>(GameHud.Instance, "scope") : null;
+
+        Check(scopeOverlay != null && scopeOverlay.activeSelf, "the scope comes up over the screen",
+              scopeOverlay == null ? "the HUD has no scope"
+              : scopeOverlay.activeSelf ? "covering everything but the glass" : "still hidden");
+
         PlayerController.AimInputOverride = true;
         yield return null;
 
@@ -615,6 +635,9 @@ public class ProbeRunner : MonoBehaviour
         Check(Mathf.Abs(cam.fieldOfView - hipFov) < 1.5f, "letting go returns the view",
               $"back to {cam.fieldOfView:F0}");
         Check(!player.IsAiming, "the player stops aiming", "IsAiming false");
+
+        Check(scopeOverlay == null || !scopeOverlay.activeSelf, "and the scope drops away",
+              "otherwise you finish the match looking down a tube");
 
         // And it comes back, or you'd have an invisible banana for the rest of the round.
         int redrawn = 0;
@@ -947,12 +970,121 @@ public class ProbeRunner : MonoBehaviour
         return nearest;
     }
 
+    /// <summary>
+    /// The HUD is a scene object now, so nothing about it is guaranteed by the compiler.
+    ///
+    /// A screenshot can't settle this: the HUD is a screen space overlay canvas, and overlay
+    /// canvases don't appear in a camera rendered to a texture, which is the only kind of
+    /// picture this probe can take. So rather than looking at it, this reads what the labels
+    /// actually say and compares them against the state they're supposed to be reporting. That
+    /// catches what a screenshot wouldn't anyway - a number that's present, correctly placed
+    /// and stale.
+    /// </summary>
+    IEnumerator CheckHudReadsTheGame(PlayerController player)
+    {
+        GameHud hud = GameHud.Instance;
+
+        if (hud == null)
+        {
+            Check(false, "the HUD is in the scene", "no GameHud - run the HUD builder");
+            yield break;
+        }
+
+        Check(player.Hud == hud, "the player found the HUD",
+              player.Hud == hud ? "the one in the scene"
+              : player.Hud == null ? "player never bound one" : "bound to something else");
+
+        // A couple of frames for Update to push the game's state into the labels.
+        yield return null;
+        yield return null;
+
+        TMP_Text health = Get<TMP_Text>(hud, "healthNumber");
+        Check(health != null && health.text == player.HealthPoints.ToString(),
+              "the health number matches the player",
+              health == null ? "no label" : $"says {health.text}, player has {player.HealthPoints}");
+
+        SingleShotGun gun = player.ActiveGun;
+
+        if (gun != null && gun.Info != null && !gun.Info.melee)
+        {
+            TMP_Text rounds = Get<TMP_Text>(hud, "ammoNumber");
+            Check(rounds != null && rounds.text == gun.Ammo.ToString(),
+                  "the round count matches the magazine",
+                  rounds == null ? "no label" : $"says {rounds.text}, magazine holds {gun.Ammo}");
+
+            // The bare spare count is the whole reason it reads as a count rather than as a
+            // multiplier. An x creeping back in here is a regression.
+            TMP_Text spare = Get<TMP_Text>(hud, "spareNumber");
+            Check(spare != null && !spare.text.Contains("x"), "spare bananas are a bare number",
+                  spare == null ? "no label" : spare.text);
+        }
+
+        TMP_Text weapon = Get<TMP_Text>(hud, "weaponName");
+        string expected = gun != null ? WeaponLoadout.DisplayName(gun.name).ToUpper() : null;
+        Check(weapon != null && expected != null && weapon.text == expected,
+              "the weapon name matches what you're holding",
+              weapon == null ? "no label" : $"says {weapon.text}, holding {expected}");
+
+        // The clock has to be counting something. A HUD that reports 0:00 through a live match
+        // is worse than no clock at all, because you'd believe it.
+        TMP_Text clock = Get<TMP_Text>(hud, "clock");
+        Check(clock != null && clock.text.Contains(":") && clock.text != "0:00",
+              "the clock is running", clock == null ? "no label" : clock.text);
+
+        // ---- the feed actually renders a row ----
+        RectTransform feed = Get<RectTransform>(hud, "feedContainer");
+        MatchState state = MatchState.Instance;
+
+        if (feed != null && state != null)
+        {
+            state.OnPlayerEnteredRoom(PhotonNetwork.LocalPlayer);
+            yield return null;
+            yield return null;
+
+            string written = null;
+
+            foreach (TMP_Text row in feed.GetComponentsInChildren<TMP_Text>())
+            {
+                if (row.gameObject.activeInHierarchy && !string.IsNullOrEmpty(row.text))
+                {
+                    written = row.text;
+                    break;
+                }
+            }
+
+            // Pooled off a hidden template, so "a row exists" is not the same as "a row is
+            // visible with words in it" - the template never waking up is the failure mode.
+            Check(written != null, "a feed line reaches the screen", written ?? "no visible row");
+        }
+
+        // ---- damage numbers ----
+        RectTransform numbers = Get<RectTransform>(hud, "damageContainer");
+
+        if (numbers != null && PlayerController.LocalCamera != null)
+        {
+            // Three metres in front of the camera, so it projects onto the screen rather than
+            // behind it, which the HUD correctly refuses to draw.
+            hud.ShowDamage(PlayerController.LocalCamera.transform.position
+                           + PlayerController.LocalCamera.transform.forward * 3f, 24f, false);
+
+            yield return null;
+            yield return null;
+
+            bool drawn = false;
+
+            foreach (TMP_Text label in numbers.GetComponentsInChildren<TMP_Text>())
+                drawn |= label.gameObject.activeInHierarchy && label.text == "24";
+
+            Check(drawn, "a damage number reaches the screen", drawn ? "24" : "nothing visible");
+        }
+    }
+
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't
     /// be seen composited, but it can be checked on its own and written out to look at.
     void CheckScopeMask()
     {
         const int size = 256;
-        Texture2D mask = CombatHud.BuildScopeMask(size);
+        Texture2D mask = GameHud.BuildScopeMask(size);
 
         if (mask == null)
         {
