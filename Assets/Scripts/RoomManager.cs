@@ -70,6 +70,11 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         if (GetComponent<MatchHud>() == null)
             gameObject.AddComponent<MatchHud>();
+
+        // Here rather than in a scene, because a music player that reloads with the scene
+        // restarts the track every time you join a room.
+        if (GetComponent<MusicPlayer>() == null)
+            gameObject.AddComponent<MusicPlayer>();
     }
 
     public override void OnEnable()

@@ -92,7 +92,7 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public void CreateRoom()
     {
-        GameAudio.Play2D(GameAudio.UI, "click_001");
+        GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
 
         string roomName = roomNameInputField != null ? roomNameInputField.text.Trim() : string.Empty;
         if (string.IsNullOrEmpty(roomName))
@@ -159,14 +159,14 @@ public class Launcher : MonoBehaviourPunCallbacks
         if (!PhotonNetwork.IsMasterClient)
             return;
 
-        GameAudio.Play2D(GameAudio.UI, "confirmation_001");
+        GameAudio.Play2D(GameAudio.UI, "confirm", GameAudio.UiVolume);
 
         PhotonNetwork.LoadLevel(1);
     }
 
     public void LeaveRoom()
     {
-        GameAudio.Play2D(GameAudio.UI, "back_001");
+        GameAudio.Play2D(GameAudio.UI, "back", GameAudio.UiVolume);
         PhotonNetwork.LeaveRoom();
         OpenMenu("loading");
     }
@@ -176,7 +176,7 @@ public class Launcher : MonoBehaviourPunCallbacks
         if (info == null)
             return;
 
-        GameAudio.Play2D(GameAudio.UI, "click_001");
+        GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
         PhotonNetwork.JoinRoom(info.Name);
         OpenMenu("loading");
     }
@@ -252,7 +252,7 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     void ShowError(string message)
     {
-        GameAudio.Play2D(GameAudio.UI, "error_001");
+        GameAudio.Play2D(GameAudio.UI, "error_001", GameAudio.UiVolume);
 
         if (errorText != null)
             errorText.text = message;

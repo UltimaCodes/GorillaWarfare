@@ -79,6 +79,6 @@ public class MatchSetupHud : MonoBehaviour
         PhotonNetwork.CurrentRoom.SetCustomProperties(
             new Hashtable { { MatchState.ModeKey, (int)next } });
 
-        GameAudio.Play2D(GameAudio.UI, "click_001");
+        GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
     }
 }

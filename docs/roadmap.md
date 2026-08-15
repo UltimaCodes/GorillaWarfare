@@ -195,14 +195,32 @@ anyone touching anything.~~ DONE, apart from playing it with a second person.
 
 ## M4 — Audio
 
-- [ ] Replace the death sound - still the sci-fi explosion from the Kenney pack
-- [ ] Replace the menu confirm - same problem
-- [ ] Melee needs its own swing/whoosh, currently borrows a punch sample
-- [ ] Reload sound - it borrows a UI click right now, which is wrong
-- [ ] Hit confirmation sound — the single best piece of feedback in a shooter
-- [ ] Kill sound, distinct from hit
-- [ ] Music: menu and combat
-- [ ] Volume mix pass; nothing should clip or vanish
+- [x] Death sound - was the sci-fi explosion, now a low organic thud
+- [x] Menu confirm and back - were the same problem
+- [x] Melee swing, its own sound rather than a borrowed punch
+- [x] Reload - it played a random clip out of the UI bank, so reloading sounded like
+      clicking a button. It's fruit now: a peel, a bite, and a fresh one out of the bunch
+- [x] Hit confirmation, with a separate brighter one for headshots. It used to play a generic
+      impact, which is the same sound a shot into a wall makes - so the one thing you most
+      wanted to know was indistinguishable from missing
+- [x] Kill sound, downward where the hit goes up, and only for the person who did it
+- [x] Music: menu and combat, crossfaded, hosted on RoomManager so it survives the scene change
+- [x] Volume mix pass - every level lives in GameAudio rather than at each call site
+
+The feedback sounds are synthesised (`tools/sound_generator.py`) rather than sourced. The pack
+sounds standing in were wrong in specific ways and finding replacements means trawling for
+something that happens to fit; these were written to fit, and they're CC0 by construction and
+tunable by editing a number.
+
+Music is sourced, because generated music goes wrong quickly and the failure mode is a tune
+that's noticeably bad rather than merely absent.
+
+`AudioCheck` covers it: every bank the code names has clips, every clip asked for by name
+exists, no gun clip contains more than one shot (the bug that shipped), nothing is inaudible or
+clipped, and the music loops without a click.
+
+**Done when:** ~~everything has a sound and the mix is even.~~ DONE, but nobody has heard it -
+see Unverified.
 
 ---
 
@@ -296,6 +314,11 @@ Things the checks can't reach, so they need a person:
 - whether the recoil, gait and weapon framing feel right
 - whether the hitboxes line up with the gorilla visually
 - whether the bananas read as their weapons at a glance
+- **all of M4.** Every sound is verified to exist, to be one shot, and not to clip. Whether any
+  of it sounds *good* is not something a check can answer, and the synthesised ones especially
+  are worth a listen before they're trusted.
+- the scope overlay composited over the game - IMGUI doesn't appear in a camera render, so the
+  mask is checked on its own and the rest is unseen
 - **anything that needs a second client.** The probe runs a real match in offline mode, which
   covers spawning, loadouts, dying and respawning — but offline mode is one player, so it can't
   see a remote copy of anybody. Weapons on someone else's hand, replicated aim, and the kill

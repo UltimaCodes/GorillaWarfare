@@ -15,6 +15,31 @@ public static class GameAudio
     public const string Death = "Death";
     public const string UI = "UI";
 
+    /// Your shot landed. The single most useful sound in a shooter - it's the difference
+    /// between aiming and guessing - so it gets its own bank rather than borrowing the impact.
+    public const string Hit = "Hit";
+
+    /// Someone died and it was you. Deliberately a different shape to a hit, not a louder one.
+    public const string Kill = "Kill";
+
+    /// Eating one banana and pulling out another. Used to borrow a random UI click.
+    public const string Reload = "Reload";
+
+    // One place for how loud everything is, rather than a number at each call site.
+    //
+    // The ordering is what matters more than the values: hit and kill confirmation sit above
+    // the guns, because they're the sounds you're actually listening for, and a gunshot you
+    // fired yourself is information you already have.
+    public const float ShotVolume = 0.55f;
+    public const float ImpactVolume = 0.4f;
+    public const float HitVolume = 0.8f;
+    public const float KillVolume = 0.95f;
+    public const float ReloadVolume = 0.6f;
+    public const float HurtVolume = 0.7f;
+    public const float DeathVolume = 0.85f;
+    public const float FootstepVolume = 0.45f;
+    public const float UiVolume = 0.7f;
+
     const int poolSize = 16;
 
     static readonly Dictionary<string, AudioClip[]> banks = new Dictionary<string, AudioClip[]>();

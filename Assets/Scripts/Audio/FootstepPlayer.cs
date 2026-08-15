@@ -8,7 +8,7 @@ using UnityEngine;
 public class FootstepPlayer : MonoBehaviour
 {
     [SerializeField] float strideLength = 2.2f;
-    [SerializeField] float volume = 0.5f;
+    [SerializeField] float volume = GameAudio.FootstepVolume;
 
     // Standing still still jitters a little, and interpolation nudges remote players about.
     const float minSpeed = 0.6f;

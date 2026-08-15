@@ -26,6 +26,24 @@ courtesy. The author's own wording, which has to travel with anything the game s
 > by 3dUVpro (https://sketchfab.com/3dUVpro) licensed under CC-BY-4.0
 > (http://creativecommons.org/licenses/by/4.0/)
 
+## Music
+
+Menu and combat tracks are **Dark Moon** and **Let the Panic** from *Electronic Music Pack 1* by
+**Retro Indie Josh**, from [OpenGameArt](https://opengameart.org/content/electronic-music-pack-1).
+Instrumental, no vocals.
+
+**CC BY-SA 4.0**, and the author asks for this notice verbatim:
+
+> Contains music (c)2025 Retro Indie Josh (https://retroindiejosh.itch.io/)
+> Licensed under Creative Commons Attribution-ShareAlike 4.0 International
+
+ShareAlike is stickier than the rest of what's here: anything built *on* this music would have to
+carry the same licence. Playing it in a game doesn't trigger that, and this game isn't going
+anywhere, but it's the one asset with a condition attached beyond a credit.
+
+Not the ULTRAKILL or Cruelty Squad soundtracks, before you ask - those are commercial and
+copyrighted, and no amount of the project being private makes bundling them fine.
+
 ## Movement
 
 Quake 3 / CPM movement is based on
