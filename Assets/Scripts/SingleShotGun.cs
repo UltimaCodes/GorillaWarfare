@@ -156,6 +156,25 @@ public class SingleShotGun : Gun
         return local.size.z;
     }
 
+    /// <summary>
+    /// Shows or hides the model without deactivating the weapon.
+    ///
+    /// SetActive would do it, but it also stops Update, which is what runs the reload timer -
+    /// and a weapon that stops reloading while you happen to be scoped is a weapon that gets
+    /// you killed. Only the renderers go.
+    /// </summary>
+    public void SetVisible(bool visible)
+    {
+        if (visualRenderers == null)
+            return;
+
+        foreach (Renderer r in visualRenderers)
+        {
+            if (r != null)
+                r.enabled = visible;
+        }
+    }
+
     /// Tints the banana by how much of the magazine is left. A property block rather than a
     /// material instance, so five weapons don't become five materials and every player doesn't
     /// get their own copy of each.
@@ -295,13 +314,20 @@ public class SingleShotGun : Gun
         Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f));
         ray.origin = cam.transform.position;
 
-        if (Info.spread > 0f)
+        float spread = Info.spread;
+
+        // Aiming tightens the cone. Without this a scope magnifies the target and the shot
+        // still lands wherever it likes, which reads as the scope being broken.
+        if (owner != null && owner.IsAiming)
+            spread *= Info.aimSpreadScale;
+
+        if (spread > 0f)
         {
             // Cone around the aim direction. Deterministic recoil plus a little spread reads as
             // a weapon with character; spread alone just reads as broken.
             Vector3 dir = ray.direction;
-            dir = Quaternion.Euler(Random.Range(-Info.spread, Info.spread),
-                                   Random.Range(-Info.spread, Info.spread), 0f) * dir;
+            dir = Quaternion.Euler(Random.Range(-spread, spread),
+                                   Random.Range(-spread, spread), 0f) * dir;
             ray.direction = dir;
         }
 

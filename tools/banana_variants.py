@@ -42,7 +42,7 @@ VARIANTS = [
     # Obnoxiously, unhelpfully long. Thin as well as long - scaling a banana up uniformly gives
     # a log, and a log this size fills most of the screen and takes the fight with it. A spear
     # is funnier anyway.
-    ("BananaSniper",  1.45, 1, 0.45),
+    ("BananaSniper",  1.18, 1, 0.45),
 
     # What's left after you eat one. Short and hooked.
     ("BananaPeel",    0.22, 1, 0.85),

@@ -31,11 +31,29 @@ public class WeaponSway : MonoBehaviour
     Vector3 lastOwnerPosition;
     float bobPhase;
 
+    // Damped right down while aiming. A weapon that wanders is fine from the hip and useless
+    // through a scope, where the whole point is that the barrel sits still.
+    [SerializeField] float aimDamping = 0.15f;
+
+    float damping = 1f;
+
     void Start()
     {
         restPosition = transform.localPosition;
         restRotation = transform.localRotation;
         lastOwnerPosition = transform.position;
+    }
+
+    /// <summary>
+    /// Where the weapon should settle back to. Aiming moves the holder, so the rest pose is
+    /// handed in each frame rather than captured once - otherwise sway keeps dragging the
+    /// weapon back to where it sat before you raised it, and the two fight over the transform.
+    /// </summary>
+    public void SetRest(Vector3 position, Quaternion rotation, bool aiming)
+    {
+        restPosition = position;
+        restRotation = rotation;
+        damping = aiming ? aimDamping : 1f;
     }
 
     void LateUpdate()
@@ -51,9 +69,11 @@ public class WeaponSway : MonoBehaviour
         Vector3 swayOffset = new Vector3(
             Mathf.Clamp(-mx * swayAmount, -maxSway, maxSway),
             Mathf.Clamp(-my * swayAmount, -maxSway, maxSway),
-            0f);
+            0f) * damping;
 
-        Quaternion swayTilt = Quaternion.Euler(my * swayRotation, -mx * swayRotation, -mx * swayRotation);
+        Quaternion swayTilt = Quaternion.Euler(my * swayRotation * damping,
+                                               -mx * swayRotation * damping,
+                                               -mx * swayRotation * damping);
 
         // --- bob from moving
         Vector3 delta = transform.position - lastOwnerPosition;
@@ -72,7 +92,7 @@ public class WeaponSway : MonoBehaviour
         Vector3 bob = new Vector3(
             Mathf.Sin(bobPhase * 0.5f) * bobDistance * strength,
             -Mathf.Abs(Mathf.Sin(bobPhase)) * bobDistance * strength,
-            0f);
+            0f) * damping;
 
         float t = 1f - Mathf.Exp(-swaySmooth * dt);
         transform.localPosition = Vector3.Lerp(transform.localPosition, restPosition + swayOffset + bob, t);

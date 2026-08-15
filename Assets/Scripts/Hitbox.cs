@@ -103,6 +103,40 @@ public class Hitbox : MonoBehaviour
         return built;
     }
 
+    // Everything except players and their hitboxes.
+    //
+    // Ground probes used to pass ~0 and hit anything at all - including the probing player's
+    // own legs. That went unnoticed while hitboxes were 26 metre spheres, because a raycast
+    // starting inside a convex collider reports nothing. Sizing them correctly put the knee
+    // right under the ray, so every player was permanently "grounded" and got footsteps
+    // mid-jump. Two bugs cancelling each other out is not the same as no bugs.
+    static int worldMask;
+    static bool worldMaskReady;
+
+    public static int WorldMask
+    {
+        get
+        {
+            if (!worldMaskReady)
+            {
+                int player = LayerMask.NameToLayer(PlayerLayerName);
+                int hitbox = LayerMask.NameToLayer(LayerName);
+
+                worldMask = ~0;
+
+                if (player >= 0)
+                    worldMask &= ~(1 << player);
+
+                if (hitbox >= 0)
+                    worldMask &= ~(1 << hitbox);
+
+                worldMaskReady = true;
+            }
+
+            return worldMask;
+        }
+    }
+
     /// <summary>
     /// Undoes whatever scale a parent is imposing, so this object sits at world scale 1.
     /// Bones are the reason this exists - an imported rig can carry any scale it likes, and

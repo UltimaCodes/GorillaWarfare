@@ -139,7 +139,6 @@ public class ProbeRunner : MonoBehaviour
         yield return null;
 
         CheckWeapons(player);
-        CheckArms(player);
         CheckHitboxes(player);
         ReportScales(player);
 
@@ -156,6 +155,9 @@ public class ProbeRunner : MonoBehaviour
 
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
+
+        // ---- aiming down the banana ----
+        yield return CheckAimingDownSights(player);
 
         // ---- what an enemy looks like ----
         // Two weapons, because the pose is different: a pistol is one fist, everything longer
@@ -254,23 +256,6 @@ public class ProbeRunner : MonoBehaviour
         Check(active == 1, "exactly one weapon is drawn", $"{active} active");
     }
 
-    // The one that has been silently broken the whole time.
-    void CheckArms(PlayerController player)
-    {
-        Transform holder = Holder(player);
-        if (holder == null)
-            return;
-
-        bool found = false;
-        foreach (Transform child in holder)
-        {
-            if (child.name.StartsWith("ViewArms"))
-                found = true;
-        }
-
-        Check(found, "the first person arms survived the loadout",
-              found ? "still parented to the holder" : "destroyed - the hands will be invisible");
-    }
 
     // Diagnostics rather than assertions - these are the numbers that decide whether a weapon
     // on somebody else's hand is the right size, and whether the hitboxes are a shape you can
@@ -372,6 +357,96 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
+    // Right click on Big Mike. Driven straight through UpdateAim, because batch mode has no
+    // mouse and this is the only way to see whether any of it moves.
+    IEnumerator CheckAimingDownSights(PlayerController player)
+    {
+        PlayerController.PublishLoadout(new[] { "Sniper" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        Transform holder = Holder(player);
+
+        if (cam == null || holder == null)
+        {
+            Check(false, "there is a camera and a holder to aim with", "missing");
+            yield break;
+        }
+
+        float hipFov = cam.fieldOfView;
+        Vector3 hipPosition = holder.localPosition;
+
+        GunInfo sniper = Resources.Load<GunInfo>("Guns/Sniper");
+        Check(sniper != null && sniper.canAim, "Big Mike aims", sniper == null ? "no asset" : $"canAim={sniper.canAim}");
+
+        // Wait for it to arrive rather than for a number of frames. The transition is an
+        // exponential lerp against deltaTime, so how far it gets in ninety frames depends
+        // entirely on the frame rate - and batch mode runs at several hundred, which left it
+        // stalled a third of the way there and looking like a broken feature.
+        PlayerController.AimInputOverride = true;
+        yield return Until(() => Mathf.Abs(cam.fieldOfView - sniper.aimFov) < 0.5f, "finish aiming");
+
+        float aimedFov = cam.fieldOfView;
+        Vector3 aimedPosition = holder.localPosition;
+
+        log.AppendLine($"  ..    fov {hipFov:F1} -> {aimedFov:F1}, holder x {hipPosition.x:F3} -> {aimedPosition.x:F3}");
+
+        Check(aimedFov < hipFov - 10f, "aiming narrows the view", $"{hipFov:F0} down to {aimedFov:F0}");
+        Check(player.IsAiming, "the player reports aiming", "IsAiming true");
+
+        // Counter-Strike style: the weapon isn't repositioned, it's simply not drawn. Posing it
+        // could never work - narrowing the field of view magnifies whatever is in it, and the
+        // weapon is in it, so it grew exactly as fast as the world did and filled the screen.
+        int visible = 0;
+        foreach (SingleShotGun gun in player.GetComponentsInChildren<SingleShotGun>(true))
+        {
+            foreach (Renderer r in gun.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.enabled && gun.gameObject.activeInHierarchy)
+                    visible++;
+            }
+        }
+
+        Check(visible == 0, "the weapon is out of the way", $"{visible} renderers still drawn");
+
+        PlayerController.AimInputOverride = true;
+        yield return null;
+
+        // The scoped view itself can't be photographed from here. Camera.Render draws the scene
+        // and nothing else, so IMGUI never lands in it, and ScreenCapture needs an end of frame
+        // that batch mode never reaches - it hung the whole probe until the watchdog killed it.
+        // The scene behind the scope is capturable, and the mask is checkable on its own.
+        Capture(null, "aiming");
+        CheckScopeMask();
+
+        // And back again, or you'd be stuck scoped for the rest of the match.
+        PlayerController.AimInputOverride = false;
+        yield return Until(() => Mathf.Abs(cam.fieldOfView - hipFov) < 0.5f, "come back off the scope");
+
+        Check(Mathf.Abs(cam.fieldOfView - hipFov) < 1.5f, "letting go returns the view",
+              $"back to {cam.fieldOfView:F0}");
+        Check(!player.IsAiming, "the player stops aiming", "IsAiming false");
+
+        // And it comes back, or you'd have an invisible banana for the rest of the round.
+        int redrawn = 0;
+        foreach (SingleShotGun gun in player.GetComponentsInChildren<SingleShotGun>(true))
+        {
+            if (!gun.gameObject.activeInHierarchy)
+                continue;
+
+            foreach (Renderer r in gun.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.enabled)
+                    redrawn++;
+            }
+        }
+
+        Check(redrawn > 0, "the weapon comes back", $"{redrawn} renderers drawn again");
+
+        PlayerController.AimInputOverride = null;
+    }
+
     IEnumerator CheckEnemyIsVisible(PlayerController player, string weapon)
     {
         Camera camera = PlayerController.LocalCamera;
@@ -578,7 +653,6 @@ public class ProbeRunner : MonoBehaviour
 
         if (respawned != null)
         {
-            CheckArms(respawned);
             CheckHitboxes(respawned);
         }
     }
@@ -603,7 +677,6 @@ public class ProbeRunner : MonoBehaviour
         Check(built.Count == 1 && built[0] == "Peel", "a one weapon loadout rebuilds in place",
               built.Count == 0 ? "nothing built" : string.Join(",", built));
 
-        CheckArms(player);
     }
 
     IEnumerator CaptureEveryWeapon(PlayerController player)
@@ -674,6 +747,37 @@ public class ProbeRunner : MonoBehaviour
         }
 
         return nearest;
+    }
+
+    /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't
+    /// be seen composited, but it can be checked on its own and written out to look at.
+    void CheckScopeMask()
+    {
+        const int size = 256;
+        Texture2D mask = CombatHud.BuildScopeMask(size);
+
+        if (mask == null)
+        {
+            Check(false, "the scope mask builds", "null");
+            return;
+        }
+
+        float middle = mask.GetPixel(size / 2, size / 2).a;
+        float corner = mask.GetPixel(2, 2).a;
+
+        // The very midpoint of an edge. The circle is inscribed in the square, so a point a few
+        // pixels in from here is still inside the glass - which is what the first version of
+        // this sampled, and it read the vignette as a hole in the rim.
+        float edge = mask.GetPixel(size / 2, 0).a;
+
+        Check(middle < 0.05f, "you can see through the middle of the scope", $"alpha {middle:F2}");
+        Check(corner > 0.95f, "the corners are blacked out", $"alpha {corner:F2}");
+        Check(edge > 0.95f, "the rim is closed all the way round", $"alpha {edge:F2}");
+
+        System.IO.Directory.CreateDirectory(ShotFolder);
+        System.IO.File.WriteAllBytes(System.IO.Path.Combine(ShotFolder, "scope-mask.png"), mask.EncodeToPNG());
+
+        Object.DestroyImmediate(mask);
     }
 
     // Renders whatever the player is looking at to a PNG next to the log.

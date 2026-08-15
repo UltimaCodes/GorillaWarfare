@@ -28,10 +28,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // straight ahead you see a long thin banana end-on, which reads as a tube - you need the
     // yaw to show its curve and silhouette, which is how CS frames a rifle.
     [SerializeField] Vector3 weaponViewRotation = new Vector3(-4f, -14f, 7f);
-    // Arms are built running back from the weapon, so they sit behind the holder and slightly
-    // in from it - the hands meet the banana, the elbows disappear off the bottom.
-    [SerializeField] Vector3 viewArmsOffset = new Vector3(-0.02f, 0.02f, -0.24f);
-    [SerializeField] Vector3 viewArmsRotation = new Vector3(4f, 12f, -7f);
+
+    [SerializeField] float aimSpeed = 12f;
 
     [Header("Third person weapon placement")]
     [SerializeField] Vector3 weaponHandOffset = new Vector3(0.02f, 0f, 0.06f);
@@ -60,6 +58,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // against a burst landing after the killing shot and being counted as a second kill.
     bool dead;
     WeaponLoadout loadout;
+
+    // Whatever the camera was set to on the prefab, so aiming has something to return to.
+    float baseFov = 60f;
+    float aimSensitivity = 1f;
+    WeaponSway sway;
 
     // Pitch lives on cameraHolder, which nothing replicates - we send it ourselves.
     float remoteVerticalLook;
@@ -90,6 +93,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         items != null && itemIndex >= 0 && itemIndex < items.Length ? items[itemIndex] as SingleShotGun : null;
 
     public CombatHud Hud { get; private set; }
+
+    /// <summary>
+    /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
+    ///
+    /// Batch mode has no mouse, and driving UpdateAim directly doesn't work either - the real
+    /// Update calls it again the same frame with the button released, so the two fight and the
+    /// transition stalls halfway. Overriding the input instead exercises the actual path.
+    /// </summary>
+    public static bool? AimInputOverride { get; set; }
+
+    /// True while the right mouse button is down on a weapon that can aim. Read by the weapon
+    /// for its spread, and by the HUD to get the crosshair out of the way.
+    public bool IsAiming { get; private set; }
 
     /// 0 to 1. The HUD draws it; the old screen space healthbar on the prefab is gone.
     public float HealthFraction => Mathf.Clamp01(currentHealth / maxHealth);
@@ -139,6 +155,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (PV.IsMine)
         {
             LocalCamera = GetComponentInChildren<Camera>();
+
+            if (LocalCamera != null)
+                baseFov = LocalCamera.fieldOfView;
+
             gameObject.AddComponent<PlayerMovement>();
             PlaceViewModel();
 
@@ -146,9 +166,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             Hud.Bind(this);
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
-            // without moving where you're aiming.
+            // without moving where you're aiming. It's told where the holder is rather than
+            // reading it once at Start, because aiming moves that and the two would otherwise
+            // fight over the same transform every frame.
             if (itemHolder != null)
-                itemHolder.gameObject.AddComponent<WeaponSway>();
+                sway = itemHolder.gameObject.AddComponent<WeaponSway>();
         }
         else
         {
@@ -175,12 +197,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // and only the owner's are allowed to fire. This used to run for the owner alone, so
         // remote players were left carrying whatever the prefab happened to ship with.
         BuildLoadout();
-
-        // After the loadout, never before. Building a loadout clears weapons out of the holder,
-        // and the arms live in that same holder - built first, they survived exactly one frame,
-        // which is why the hands were never visible no matter where they were positioned.
-        if (PV.IsMine)
-            BuildViewArms();
     }
 
     void OnDestroy()
@@ -209,6 +225,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (MatchState.Phase == MatchPhase.Over)
             return;
 
+        UpdateAim(AimInputOverride ?? Input.GetMouseButton(1));
         Look();
 
         // Gun game hands you exactly one weapon and can leave you briefly holding nothing while
@@ -288,6 +305,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         itemIndex = index;
         items[itemIndex].itemGameObject.SetActive(true);
 
+        // Switching away while scoped left the old weapon's renderers off, so it came back
+        // invisible next time you drew it.
+        if (items[itemIndex] is SingleShotGun drawn)
+            drawn.SetVisible(true);
+
         if (previousItemIndex >= 0 && previousItemIndex < items.Length)
             items[previousItemIndex].itemGameObject.SetActive(false);
 
@@ -339,34 +361,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         itemHolder.localPosition = weaponViewOffset;
         itemHolder.localRotation = Quaternion.Euler(weaponViewRotation);
-    }
-
-    // First person arms. The owner's real body is ShadowsOnly - you can't show a full gorilla
-    // from inside its own head - so this is a separate pair of arms parented to the weapon
-    // holder, which is how basically every FPS does it. They sway with the gun because they're
-    // children of it.
-    void BuildViewArms()
-    {
-        if (itemHolder == null)
-            return;
-
-        GameObject prefab = Resources.Load<GameObject>("Models/Weapons/ViewArms");
-        if (prefab == null)
-        {
-            Debug.LogWarning("No view arms model - you won't see your hands.", this);
-            return;
-        }
-
-        GameObject arms = Instantiate(prefab, itemHolder);
-        arms.transform.localPosition = viewArmsOffset;
-        arms.transform.localRotation = Quaternion.Euler(viewArmsRotation);
-
-        Material mat = Resources.Load<Material>("Models/Weapons/ViewArmsMat");
-        if (mat != null)
-        {
-            foreach (Renderer r in arms.GetComponentsInChildren<Renderer>(true))
-                r.sharedMaterial = mat;
-        }
     }
 
     Transform FindItemHolder()
@@ -491,8 +485,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void Look()
     {
-        horizontalLookRotation += Input.GetAxisRaw("Mouse X") * mouseSensitivity;
-        verticalLookRotation -= Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
+        float sensitivity = mouseSensitivity * aimSensitivity;
+
+        horizontalLookRotation += Input.GetAxisRaw("Mouse X") * sensitivity;
+        verticalLookRotation -= Input.GetAxisRaw("Mouse Y") * sensitivity;
         verticalLookRotation = Mathf.Clamp(verticalLookRotation, -90f, 90f);
 
         UpdateRecoil();
@@ -501,6 +497,55 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // recovering doesn't undo where you actually pointed the mouse.
         transform.localEulerAngles = new Vector3(0f, horizontalLookRotation + recoilOffset.y, 0f);
         cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation - recoilOffset.x, 0f, 0f);
+    }
+
+    // Aiming down the banana.
+    //
+    // Three things move together, and they have to: the view narrows, the weapon comes up to
+    // the centre, and the mouse slows down by the same ratio the view narrowed. Without that
+    // last part a scope makes you twitchier rather than steadier - the same hand movement
+    // sweeps the same angle across a much smaller window.
+    /// <param name="held">
+    /// Whether the aim button is down. Passed in rather than read here so the behaviour can be
+    /// driven without an input device - there is no mouse in a batch mode play test, and an
+    /// aim mode nothing can exercise is an aim mode nobody has checked.
+    /// </param>
+    void UpdateAim(bool held)
+    {
+        GunInfo info = ActiveGun != null ? ActiveGun.Info : null;
+        bool wants = info != null && info.canAim && held && !ActiveGun.Reloading;
+
+        IsAiming = wants;
+
+        if (LocalCamera == null || itemHolder == null)
+            return;
+
+        float targetFov = wants ? info.aimFov : baseFov;
+        float t = 1f - Mathf.Exp(-aimSpeed * Time.deltaTime);
+
+        LocalCamera.fieldOfView = Mathf.Lerp(LocalCamera.fieldOfView, targetFov, t);
+
+        // Sensitivity follows the actual field of view rather than the target, so it stays
+        // matched to what you're looking at all the way through the transition.
+        aimSensitivity = LocalCamera.fieldOfView / baseFov;
+
+        // The weapon goes away entirely, the way a scoped rifle does in Counter-Strike, and the
+        // HUD draws a scope instead.
+        //
+        // Tried posing it instead - centred, pushed out in front, sighting along the top. It
+        // never worked, and it can't: narrowing the field of view magnifies whatever is in it,
+        // and the weapon is in it, so it grows exactly as fast as the world does. Engines that
+        // keep the model on screen while scoped render it through a second camera at its own
+        // fixed field of view. Not drawing it is the same answer for none of the work.
+        ActiveGun.SetVisible(!wants);
+
+        // Back where it belongs, since aiming no longer moves it.
+        itemHolder.localPosition = Vector3.Lerp(itemHolder.localPosition, weaponViewOffset, t);
+        itemHolder.localRotation = Quaternion.Slerp(itemHolder.localRotation,
+                                                    Quaternion.Euler(weaponViewRotation), t);
+
+        if (sway != null)
+            sway.SetRest(itemHolder.localPosition, itemHolder.localRotation, wants);
     }
 
     void UpdateRecoil()

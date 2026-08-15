@@ -68,6 +68,6 @@ public class FootstepPlayer : MonoBehaviour
     {
         // Start slightly above the pivot so we don't begin inside the floor on a step.
         return Physics.Raycast(position + Vector3.up * 0.1f, Vector3.down, groundProbe + 0.1f,
-                               ~0, QueryTriggerInteraction.Ignore);
+                               Hitbox.WorldMask, QueryTriggerInteraction.Ignore);
     }
 }

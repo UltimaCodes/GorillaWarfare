@@ -267,7 +267,7 @@ public class MonkeyRig : MonoBehaviour
         // Same probe FootstepPlayer uses: capsule is 2 tall on a centred pivot, so the feet sit
         // 1 below, plus slack for slopes and steps.
         grounded = Physics.Raycast(position + Vector3.up * 0.1f, Vector3.down, 1.45f,
-                                   ~0, QueryTriggerInteraction.Ignore);
+                                   Hitbox.WorldMask, QueryTriggerInteraction.Ignore);
     }
 
     void DriveLegs()
