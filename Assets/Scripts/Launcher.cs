@@ -43,11 +43,6 @@ public class Launcher : MonoBehaviourPunCallbacks
         // PUN defaults to 10 serializations/sec which looks choppy. Has to stay <= SendRate.
         PhotonNetwork.SendRate = 30;
         PhotonNetwork.SerializationRate = 20;
-
-        // Built rather than placed, same as the rest of the HUDs. It picks the mode until the
-        // menu rebuild in M5 gives it a real button.
-        if (GetComponent<MatchSetupHud>() == null)
-            gameObject.AddComponent<MatchSetupHud>();
     }
 
     void OnDestroy()
