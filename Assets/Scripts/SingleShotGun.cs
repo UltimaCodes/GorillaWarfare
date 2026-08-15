@@ -69,7 +69,7 @@ public class SingleShotGun : Gun
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localRotation = Quaternion.identity;
 
-        Material mat = Resources.Load<Material>("Models/Weapons/BananaMat");
+        Material mat = Resources.Load<Material>($"Models/Weapons/Banana{gameObject.name}Mat");
         if (mat != null)
         {
             foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))

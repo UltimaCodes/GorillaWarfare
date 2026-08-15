@@ -105,23 +105,36 @@ public static class AssetFixups
         Debug.Log($"[fixups] material: diffuse={(diffuse != null)} normal={(normal != null)}");
     }
 
-    // Bananas come out of a generator script, not a modelling package, so they arrive with no
-    // usable material. One shared yellow for all of them.
+    // One material per weapon. They were all sharing a single yellow, which is a big part of
+    // why you couldn't tell them apart - shape reads at distance, colour reads instantly.
     public static void BuildBananaMaterial()
     {
-        const string path = "Assets/Resources/Models/Weapons/BananaMat.mat";
-        Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (mat == null)
+        (string name, Color colour, float gloss)[] weapons =
         {
-            mat = new Material(Shader.Find("Standard"));
-            AssetDatabase.CreateAsset(mat, path);
+            ("Pistol",  new Color(0.95f, 0.80f, 0.15f), 0.35f),   // ripe yellow
+            ("Rifle",   new Color(0.62f, 0.80f, 0.22f), 0.30f),   // unripe green
+            ("Shotgun", new Color(0.86f, 0.68f, 0.20f), 0.25f),   // speckled gold
+            ("Sniper",  new Color(0.55f, 0.38f, 0.14f), 0.20f),   // overripe brown
+            ("Peel",    new Color(0.97f, 0.93f, 0.70f), 0.45f),   // pale inside
+        };
+
+        foreach ((string name, Color colour, float gloss) in weapons)
+        {
+            string path = $"Assets/Resources/Models/Weapons/Banana{name}Mat.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                mat = new Material(Shader.Find("Standard"));
+                AssetDatabase.CreateAsset(mat, path);
+            }
+
+            mat.color = colour;
+            mat.SetFloat("_Glossiness", gloss);
+            EditorUtility.SetDirty(mat);
         }
 
-        mat.color = new Color(0.94f, 0.79f, 0.16f);
-        mat.SetFloat("_Glossiness", 0.35f);
-        EditorUtility.SetDirty(mat);
         AssetDatabase.SaveAssets();
-        Debug.Log("[fixups] banana material built");
+        Debug.Log($"[fixups] {weapons.Length} weapon materials built");
     }
 
     // The gunshots are 96kHz stereo, which is studio-master quality for a sound that plays for

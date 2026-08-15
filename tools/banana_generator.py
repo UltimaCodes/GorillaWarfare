@@ -64,23 +64,89 @@ def banana_material(name, base, tip):
     b.inputs["Roughness"].default_value = 0.55
     return mat
 
+def make_cylinder(name, radius, length, axis="y", sides=12):
+    """Drum for the revolver, tube for the scope. Not a banana, but a banana alone can't say
+    'revolver' or 'sniper' - you need one recognisable gun part to carry the read."""
+    verts, faces = [], []
+    for end in (0, 1):
+        for i in range(sides):
+            a = 2 * math.pi * i / sides
+            c, s2 = math.cos(a) * radius, math.sin(a) * radius
+            off = (end - 0.5) * length
+            verts.append(Vector((c, off, s2)) if axis == "y" else Vector((off, c, s2)))
+    for i in range(sides):
+        j = (i + 1) % sides
+        faces.append((i, j, sides + j, sides + i))
+    faces.append(tuple(range(sides)))
+    faces.append(tuple(reversed(range(sides, sides * 2))))
+
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([tuple(v) for v in verts], [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    bm = bmesh.new(); bm.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh); bm.free()
+    return obj
+
+# Each weapon is a shape, not a scale. A banana on its own reads as "banana" no matter how long
+# you make it, so the ones that need to read as a specific gun get extra parts.
+#   name          colour (rgb)          parts: (kind, args, position, rotation)
+RIPE   = (0.95, 0.80, 0.15)
+GREEN  = (0.62, 0.80, 0.22)
+BROWN  = (0.55, 0.38, 0.14)
+PALE   = (0.97, 0.93, 0.70)
+SPOTTY = (0.86, 0.68, 0.20)
+
 specs = [
-    # name,        length, curve, thickness
-    # Silhouette is the whole read at a glance, so each one is a different shape rather than the
-    # same banana at different scales: stubby, long, fat and bent, or very long and straight.
-    ("BananaPistol",  0.26, 55, 0.035),
-    ("BananaRifle",   0.62, 38, 0.040),
-    ("BananaShotgun", 0.44, 70, 0.058),
-    ("BananaSniper",  0.95, 18, 0.034),
-    ("BananaPeel",    0.20, 95, 0.028),
+    # revolver: stubby banana plus a fat drum where the cylinder would be
+    ("BananaPistol", RIPE, [
+        ("banana", (0.24, 60, 0.034), (0, 0, 0), (0, 0, 0)),
+        ("cyl", (0.045, 0.055), (0, -0.02, 0.012), (0, 0, math.radians(90))),
+    ]),
+    # rifle: one long banana, two handed
+    ("BananaRifle", GREEN, [
+        ("banana", (0.66, 34, 0.038), (0, 0, 0), (0, 0, 0)),
+    ]),
+    # shotgun: two bananas taped side by side
+    ("BananaShotgun", SPOTTY, [
+        ("banana", (0.46, 62, 0.042), (0.024, 0, 0), (0, 0, 0)),
+        ("banana", (0.46, 62, 0.042), (-0.024, 0, 0), (0, 0, 0)),
+        ("cyl", (0.052, 0.030), (0, -0.03, 0), (0, 0, math.radians(90))),
+    ]),
+    # sniper: absurdly long, plus a scope tube so it isn't just a big banana
+    ("BananaSniper", BROWN, [
+        ("banana", (1.15, 14, 0.030), (0, 0, 0), (0, 0, 0)),
+        ("cyl", (0.022, 0.20), (0, 0.02, 0.045), (0, 0, 0)),
+    ]),
+    # peel: small and very curled
+    ("BananaPeel", PALE, [
+        ("banana", (0.20, 110, 0.026), (0, 0, 0), (0, 0, 0)),
+    ]),
 ]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-for name, length, curve, thick in specs:
-    for o in bpy.data.objects:
-        o.select_set(False)
-    obj = make_banana(name, length, curve, thick)
-    obj.data.materials.append(banana_material(name + "Mat", (0.95, 0.80, 0.15), (0.45, 0.35, 0.10)))
+for name, colour, parts in specs:
+    for o in list(bpy.data.objects):
+        bpy.data.objects.remove(o, do_unlink=True)
+
+    pieces = []
+    for kind, args, pos, rot in parts:
+        piece = make_banana(f"{name}_p{len(pieces)}", *args) if kind == "banana"                 else make_cylinder(f"{name}_p{len(pieces)}", *args)
+        piece.location = Vector(pos)
+        piece.rotation_euler = rot
+        pieces.append(piece)
+
+    # join into one mesh so it's a single renderer per weapon
+    for pc in pieces:
+        pc.select_set(True)
+    bpy.context.view_layer.objects.active = pieces[0]
+    if len(pieces) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.view_layer.objects.active
+    obj.name = name
+    obj.data.materials.append(banana_material(name + "Mat", colour, (0.45, 0.35, 0.10)))
 
     # The arc is built along Blender's +X. Blender is Z-up and Unity is Y-up, so Blender +Y is
     # what becomes Unity's forward (+Z) - that's the axis a held weapon has to point down.
