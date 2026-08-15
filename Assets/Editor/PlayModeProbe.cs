@@ -141,6 +141,12 @@ public class ProbeRunner : MonoBehaviour
         CheckWeapons(player);
         CheckArms(player);
         CheckHitboxes(player);
+        ReportScales(player);
+
+        // The one thing no amount of measuring settles: what it actually looks like down the
+        // barrel. One shot per weapon, because they are wildly different lengths and a framing
+        // that suits the pistol can put the sniper straight through the crosshair.
+        yield return CaptureEveryWeapon(player);
 
         // ---- match clock ----
         Check(MatchState.Phase == MatchPhase.Warmup, "a match starts in warmup", MatchState.Phase.ToString());
@@ -260,6 +266,87 @@ public class ProbeRunner : MonoBehaviour
               found ? "still parented to the holder" : "destroyed - the hands will be invisible");
     }
 
+    // Diagnostics rather than assertions - these are the numbers that decide whether a weapon
+    // on somebody else's hand is the right size, and whether the hitboxes are a shape you can
+    // aim at or a bubble you bump into.
+    void ReportScales(PlayerController player)
+    {
+        log.AppendLine($"  ..    root lossyScale                               {player.transform.lossyScale}");
+
+        MonkeyRig rig = player.GetComponent<MonkeyRig>();
+        if (rig != null && rig.RightHand != null)
+        {
+            log.AppendLine($"  ..    RightHand lossyScale                          {rig.RightHand.lossyScale}");
+            log.AppendLine($"  ..    RightHand world pos                           {rig.RightHand.position}");
+        }
+        else
+        {
+            log.AppendLine("  ..    RightHand                                     missing");
+        }
+
+        foreach (SkinnedMeshRenderer skin in player.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            log.AppendLine($"  ..    skin '{skin.name}' bounds size                {skin.bounds.size}  enabled={skin.enabled} shadows={skin.shadowCastingMode}");
+        }
+
+        Transform holder = Holder(player);
+        if (holder != null)
+            log.AppendLine($"  ..    ItemHolder lossyScale                         {holder.lossyScale}");
+
+        // Where things actually land on screen. Viewport is 0..1 with (0,0) bottom left, so
+        // anything outside that range is off frame and anything with z below the near clip is
+        // behind the glass.
+        Camera cam = PlayerController.LocalCamera;
+        if (cam != null && holder != null)
+        {
+            foreach (Transform child in holder)
+            {
+                Renderer r = child.GetComponentInChildren<Renderer>(true);
+                if (r == null || !child.gameObject.activeInHierarchy)
+                    continue;
+
+                Bounds b = r.bounds;
+                Vector3 centre = cam.WorldToViewportPoint(b.center);
+                Vector3 near = cam.WorldToViewportPoint(b.center - cam.transform.forward * b.extents.magnitude);
+
+                log.AppendLine($"  ..    '{child.name}' viewport centre {centre.x:F2},{centre.y:F2} depth {centre.z:F2}  size {b.size}  nearest depth {near.z:F2}");
+            }
+        }
+
+        foreach (SingleShotGun gun in player.GetComponentsInChildren<SingleShotGun>(true))
+        {
+            foreach (Renderer r in gun.GetComponentsInChildren<Renderer>(true))
+            {
+                log.AppendLine($"  ..    weapon '{gun.name}' renderer bounds          {r.bounds.size}  lossy={r.transform.lossyScale}");
+                break;
+            }
+        }
+
+        float biggest = 0f;
+        foreach (Hitbox box in player.GetComponentsInChildren<Hitbox>(true))
+        {
+            SphereCollider col = box.GetComponent<SphereCollider>();
+            if (col == null)
+                continue;
+
+            Vector3 s = col.transform.lossyScale;
+            float worldRadius = col.radius * Mathf.Max(s.x, Mathf.Max(s.y, s.z));
+            biggest = Mathf.Max(biggest, worldRadius);
+        }
+
+        log.AppendLine($"  ..    biggest hitbox world radius                   {biggest:F3}m");
+
+        // A hitbox is meant to be a body part. Anything approaching a metre means it has
+        // inherited a scale from the bone it hangs off, which turns it into a wall.
+        Check(biggest > 0.01f && biggest < 0.5f, "hitboxes are body sized", $"largest {biggest:F3}m");
+
+        CharacterController cc = player.GetComponent<CharacterController>();
+        if (cc != null)
+        {
+            log.AppendLine($"  ..    capsule radius/height (world)                 {cc.radius * player.transform.lossyScale.x:F2} / {cc.height * player.transform.lossyScale.y:F2}");
+        }
+    }
+
     void CheckHitboxes(PlayerController player)
     {
         Hitbox[] boxes = player.GetComponentsInChildren<Hitbox>(true);
@@ -339,6 +426,97 @@ public class ProbeRunner : MonoBehaviour
 
         CheckArms(player);
     }
+
+    IEnumerator CaptureEveryWeapon(PlayerController player)
+    {
+        // One looking down at the floor, to judge the map surfacing rather than the weapon.
+        Camera down = PlayerController.LocalCamera;
+        if (down != null)
+        {
+            Quaternion was = down.transform.rotation;
+            down.transform.rotation = Quaternion.Euler(28f, was.eulerAngles.y, 0f);
+            yield return null;
+            Capture(null, "map-floor");
+            down.transform.rotation = was;
+            yield return null;
+        }
+
+        foreach (string weapon in WeaponLoadout.AllWeapons)
+        {
+            PlayerController.PublishLoadout(new[] { weapon });
+
+            // A frame for the property callback, a frame for the rebuild to settle.
+            yield return null;
+            yield return null;
+
+            ReportViewport(player, weapon);
+            Capture(player, "viewmodel-" + weapon.ToLower());
+        }
+    }
+
+    void ReportViewport(PlayerController player, string weapon)
+    {
+        Camera cam = PlayerController.LocalCamera;
+        Transform holder = Holder(player);
+        if (cam == null || holder == null)
+            return;
+
+        foreach (Transform child in holder)
+        {
+            Renderer r = child.GetComponentInChildren<Renderer>(true);
+            if (r == null || !child.gameObject.activeInHierarchy)
+                continue;
+
+            Bounds b = r.bounds;
+            Vector3 centre = cam.WorldToViewportPoint(b.center);
+            float nearest = cam.WorldToViewportPoint(b.center - cam.transform.forward * b.extents.magnitude).z;
+
+            log.AppendLine($"  ..    {weapon,-9} '{child.name,-16}' centre {centre.x:F2},{centre.y:F2} depth {centre.z:F2} nearest {nearest:F2} len {b.size.magnitude:F2}");
+        }
+    }
+
+    // Renders whatever the player is looking at to a PNG next to the log.
+    void Capture(PlayerController ignored, string name)
+    {
+        Camera camera = PlayerController.LocalCamera;
+        if (camera == null || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+        {
+            log.AppendLine($"  ..    screenshot '{name}'                             skipped, no graphics device");
+            return;
+        }
+
+        const int width = 960;
+        const int height = 540;
+
+        RenderTexture target = new RenderTexture(width, height, 24);
+        RenderTexture previous = camera.targetTexture;
+
+        camera.targetTexture = target;
+        camera.Render();
+        camera.targetTexture = previous;
+
+        RenderTexture wasActive = RenderTexture.active;
+        RenderTexture.active = target;
+
+        Texture2D shot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        shot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        shot.Apply();
+
+        RenderTexture.active = wasActive;
+
+        string path = System.IO.Path.Combine(ShotFolder, name + ".png");
+        System.IO.Directory.CreateDirectory(ShotFolder);
+        System.IO.File.WriteAllBytes(path, shot.EncodeToPNG());
+
+        Object.DestroyImmediate(shot);
+        target.Release();
+        Object.DestroyImmediate(target);
+
+        log.AppendLine($"  ..    screenshot '{name}'                             {path}");
+    }
+
+    static string ShotFolder =>
+        System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Application.dataPath), "Logs", "probe-shots");
 
     IEnumerator Until(System.Func<bool> condition, string what)
     {

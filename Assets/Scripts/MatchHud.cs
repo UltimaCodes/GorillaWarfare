@@ -17,6 +17,10 @@ public class MatchHud : MonoBehaviour
     const int gameSceneIndex = 1;
     const float feedEntrySeconds = 6f;
 
+    // Has to match MatchState's warmup, which is the one number the reveal pace is built on.
+    const float WarmupLength = 8f;
+    const float revealGap = 0.55f;
+
     static readonly Color Warmup = new Color(1f, 0.85f, 0.1f);
     static readonly Color Live = new Color(0.95f, 0.95f, 0.95f);
     static readonly Color Urgent = new Color(1f, 0.25f, 0.15f);
@@ -163,14 +167,57 @@ public class MatchHud : MonoBehaviour
         }
 
         if (MatchState.Phase == MatchPhase.Warmup)
-        {
-            GUI.color = Warmup;
-            GUI.Label(new Rect(0f, centre - 120f, Screen.width, 60f), "GET READY", label);
+            DrawLoadoutReveal(centre);
+    }
 
-            string weapons = string.Join("   ", PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer));
-            GUI.Label(new Rect(0f, centre - 90f, Screen.width, 40f), weapons, label);
-            GUI.color = Color.white;
+    // What you're going in with, one weapon at a time.
+    //
+    // A deathmatch rolls three of five weapons and a gun game hands you one - either way the
+    // first thing you need to know is what you're holding, and being told after you've spawned
+    // and started fighting is too late. Each name snaps in rather than fading, because a fade
+    // reads as slow and polite and this shouldn't be either.
+    void DrawLoadoutReveal(float centre)
+    {
+        string[] weapons = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+
+        // Warmup counts down, so time already spent is what drives the reveal.
+        float elapsed = Mathf.Max(0f, WarmupLength - MatchState.TimeLeft);
+
+        GUI.color = Warmup;
+        GUI.Label(new Rect(0f, centre - 170f, Screen.width, 60f),
+                  MatchState.Mode == MatchMode.GunGame ? "CLIMB THE LADDER" : "YOU ARE CARRYING", label);
+
+        float y = centre - 120f;
+
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            float due = revealGap * (i + 1);
+            if (elapsed < due)
+                break;
+
+            // A single frame of overshoot as it lands, then it sits still. Cheap, and it makes
+            // each one arrive rather than appear.
+            float since = elapsed - due;
+            bool landing = since < 0.08f;
+
+            GUI.color = landing ? Color.white : Live;
+            huge.fontSize = landing ? 64 : 54;
+
+            GUI.Label(new Rect(0f, y, Screen.width, 72f), weapons[i].ToUpper(), huge);
+            huge.fontSize = 58;
+
+            y += 62f;
         }
+
+        // Only once everything has been shown, so it doesn't compete with the reveal.
+        if (elapsed > revealGap * weapons.Length + 0.4f)
+        {
+            GUI.color = Urgent;
+            GUI.Label(new Rect(0f, y + 24f, Screen.width, 40f),
+                      $"LIVE IN {Mathf.CeilToInt(MatchState.TimeLeft)}", label);
+        }
+
+        GUI.color = Color.white;
     }
 
     void DrawResults(float centre)

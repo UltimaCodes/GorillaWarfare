@@ -86,6 +86,12 @@ public class Hitbox : MonoBehaviour
             go.transform.localPosition = Vector3.zero;
             go.layer = layer;
 
+            // The gorilla's bones carry a 100x scale from the FBX, and a child inherits it -
+            // so a 0.26 radius head became a 26 metre sphere. Solid, on the Hitbox layer, which
+            // made it a wall you couldn't walk into and could shoot someone through from across
+            // the map. Cancel the bone's scale so the radii below mean metres.
+            Neutralise(go.transform);
+
             SphereCollider col = go.AddComponent<SphereCollider>();
             col.radius = radius;
             col.isTrigger = false;
@@ -95,6 +101,25 @@ public class Hitbox : MonoBehaviour
         }
 
         return built;
+    }
+
+    /// <summary>
+    /// Undoes whatever scale a parent is imposing, so this object sits at world scale 1.
+    /// Bones are the reason this exists - an imported rig can carry any scale it likes, and
+    /// everything hung off it silently inherits that.
+    /// </summary>
+    public static void Neutralise(Transform child)
+    {
+        Transform parent = child.parent;
+        if (parent == null)
+            return;
+
+        Vector3 scale = parent.lossyScale;
+
+        child.localScale = new Vector3(
+            Mathf.Approximately(scale.x, 0f) ? 1f : 1f / scale.x,
+            Mathf.Approximately(scale.y, 0f) ? 1f : 1f / scale.y,
+            Mathf.Approximately(scale.z, 0f) ? 1f : 1f / scale.z);
     }
 
 }

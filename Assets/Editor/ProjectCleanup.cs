@@ -31,6 +31,7 @@ public static class ProjectCleanup
         StripExtraViews(prefab, changes);
         ClearItemsArray(prefab, changes);
         StripDeadRenderers(prefab, changes);
+        StripLegacyHealthbar(prefab, changes);
 
         if (changes.Count > 0)
         {
@@ -109,6 +110,48 @@ public static class ProjectCleanup
         changes.Add($"cleared {items.arraySize} stale entries out of items[]");
         items.ClearArray();
         so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // The screen space canvas carrying the original healthbar, and a label reading "Wont add
+    // ammo or anything so heres a muaaz healthbar". Health is drawn by CombatHud now, which
+    // means it can react to being shot instead of quietly sliding down.
+    static void StripLegacyHealthbar(GameObject prefab, List<string> changes)
+    {
+        PlayerController controller = prefab.GetComponent<PlayerController>();
+        if (controller == null)
+            return;
+
+        SerializedObject so = new SerializedObject(controller);
+        SerializedProperty ui = so.FindProperty("ui");
+        SerializedProperty bar = so.FindProperty("healthbarImage");
+
+        GameObject canvas = ui != null ? ui.objectReferenceValue as GameObject : null;
+
+        if (canvas != null)
+        {
+            changes.Add($"removed the legacy healthbar canvas '{canvas.name}'");
+            Object.DestroyImmediate(canvas);
+        }
+
+        bool cleared = false;
+
+        if (ui != null && ui.objectReferenceValue != null)
+        {
+            ui.objectReferenceValue = null;
+            cleared = true;
+        }
+
+        if (bar != null && bar.objectReferenceValue != null)
+        {
+            bar.objectReferenceValue = null;
+            cleared = true;
+        }
+
+        if (cleared)
+        {
+            so.ApplyModifiedPropertiesWithoutUndo();
+            changes.Add("cleared the healthbar references off PlayerController");
+        }
     }
 
     // Imported with the original .3DS and disabled ever since. A disabled renderer still costs

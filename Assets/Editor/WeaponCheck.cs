@@ -289,7 +289,29 @@ public static class WeaponCheck
                 viewHolder.localRotation = Quaternion.Euler(rot);
 
                 Check(sb, Mathf.Abs(rot.y) > 5f, "angled across the view", $"yaw {rot.y:F0}");
-                Check(sb, rot.x < -30f, "rises across the frame, not aimed away", $"pitch {rot.x:F0}");
+
+                // Used to assert a steep pitch, which stopped meaning anything once the weapon
+                // models were anchored by the grip - the same angle now produces a completely
+                // different result on screen. Assert what was actually wanted instead: the far
+                // end of the banana sits higher in frame than the end you're holding.
+                Vector3 gripPoint = viewHolder.position;
+                Vector3 tipPoint = viewHolder.TransformPoint(Vector3.forward * 0.5f);
+
+                Vector3 gripView = camera.WorldToViewportPoint(gripPoint);
+                Vector3 tipView = camera.WorldToViewportPoint(tipPoint);
+
+                Check(sb, tipView.y > gripView.y, "rises across the frame, not aimed away",
+                      $"grip at y {gripView.y:F2}, tip at y {tipView.y:F2}");
+
+                // Anything nearer than the 0.3 near clip gets sliced open. The sniper is 1.5m
+                // and used to have half its length behind the camera.
+                Check(sb, gripView.z > 0.3f, "the grip clears the near clip plane",
+                      $"{gripView.z:F2}m in front of the camera");
+
+                // Low and to one side. A weapon through the middle of the screen is a weapon
+                // covering the thing you are shooting at.
+                Check(sb, gripView.y < 0.45f && gripView.x > 0.5f, "held low and to the right",
+                      $"grip viewport {gripView.x:F2},{gripView.y:F2}");
 
                 float meshOnScreen = FractionOnScreen(camera, viewHolder, "Models/Weapons/BananaRifle", Vector3.zero, Vector3.zero);
                 Check(sb, meshOnScreen > 0.45f, "most of the banana is on screen",
@@ -314,9 +336,23 @@ public static class WeaponCheck
               "no coroutine in the reload path");
         Check(sb, gunSrc.Contains("reloadDoneAt"), "reload is timestamp driven", "reloadDoneAt present");
 
-        // Decals must never parent to a player, or they ride around with whoever was hit.
-        Check(sb, gunSrc.Contains("anchor.gameObject.layer != playerLayer"),
-              "decals refuse to stick to players", "layer guarded before SetParent");
+        // Decals used to be forbidden from parenting to players, because a shot that stopped on
+        // our own hitbox left one hanging in front of the camera. The trace excludes the shooter
+        // now, so the opposite rule applies: a mark parents to whatever it landed on, so blood
+        // moves with a body and goes when that body does.
+        string decalSrc = System.IO.File.ReadAllText("Assets/Scripts/BulletDecal.cs");
+
+        Check(sb, gunSrc.Contains("BulletDecal.Spawn"), "shots leave a mark through BulletDecal",
+              "no prefab quad");
+
+        Check(sb, decalSrc.Contains("SetParent(hit.collider.transform"),
+              "a mark sticks to what it hit", "parented to the hit collider");
+
+        Check(sb, decalSrc.Contains("if (anchor == null)"),
+              "a mark dies with what it was on", "destroys itself when the anchor is gone");
+
+        Check(sb, decalSrc.Contains("Physics.Raycast"),
+              "a mark confirms there is a surface", "re-traced locally before drawing");
 
         // The trace has to skip our own hitboxes rather than stopping on them.
         Check(sb, gunSrc.Contains("RaycastNonAlloc"), "trace skips our own hitboxes",
