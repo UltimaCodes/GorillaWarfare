@@ -263,19 +263,12 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// What a player should be carrying right now, under the current mode.
     void GiveLoadout(Player player)
     {
-        string[] weapons;
+        string[] weapons = Mode == MatchMode.GunGame
+            ? Rules.LoadoutForRung(RungOf(player), WeaponLoadout.GunGameLadder)
+            : rolledWeapons ?? WeaponLoadout.RandomSelection(deathmatchWeaponCount);
 
-        if (Mode == MatchMode.GunGame)
-        {
-            int rung = Mathf.Clamp(RungOf(player), 0, WeaponLoadout.GunGameLadder.Length - 1);
-            weapons = new[] { WeaponLoadout.GunGameLadder[rung] };
-        }
-        else
-        {
-            weapons = rolledWeapons ?? WeaponLoadout.RandomSelection(deathmatchWeaponCount);
-        }
-
-        player.SetCustomProperties(new Hashtable { { PlayerController.LoadoutKey, string.Join(",", weapons) } });
+        player.SetCustomProperties(
+            new Hashtable { { PlayerController.LoadoutKey, Rules.Serialise(weapons) } });
     }
 
     // ---- kills ----
@@ -328,58 +321,131 @@ public class MatchState : MonoBehaviourPunCallbacks
     // with the peel - the last rung - ends the match on the spot.
     void AdvanceLadder(Player killer, string weapon)
     {
-        string finalWeapon = WeaponLoadout.GunGameLadder[WeaponLoadout.GunGameLadder.Length - 1];
+        Rules.LadderStep step = Rules.Advance(RungOf(killer), RungKillsOf(killer), weapon,
+                                              killsPerRung, WeaponLoadout.GunGameLadder);
 
-        if (weapon == finalWeapon)
+        if (step.wins)
         {
             FinishMatch(killer);
             return;
         }
 
-        int onRung = Bump(rungKills, killer.ActorNumber);
+        rungs[killer.ActorNumber] = step.rung;
+        rungKills[killer.ActorNumber] = step.rungKills;
 
-        if (onRung < killsPerRung)
+        killer.SetCustomProperties(new Hashtable { { RungKey, step.rung }, { RungKillsKey, step.rungKills } });
+
+        if (step.climbed)
+            GiveLoadout(killer);
+    }
+
+    /// <summary>
+    /// The parts of the rules that are decisions rather than plumbing. Split out because they
+    /// are the parts most likely to be quietly wrong, and none of them need a server to check -
+    /// a whole gun game can be played out against these in a batch mode test.
+    /// </summary>
+    public static class Rules
+    {
+        public struct LadderStep
         {
-            rungKills[killer.ActorNumber] = onRung;
-            killer.SetCustomProperties(new Hashtable { { RungKillsKey, onRung } });
-            return;
+            public int rung;
+            public int rungKills;
+            public bool climbed;   // moved up, so the loadout has to be reissued
+            public bool wins;      // killed with the last rung, so the match is over
         }
 
-        int rung = Mathf.Min(RungOf(killer) + 1, WeaponLoadout.GunGameLadder.Length - 1);
+        public static LadderStep Advance(int rung, int rungKills, string weapon, int killsPerRung, string[] ladder)
+        {
+            LadderStep step = new LadderStep { rung = rung, rungKills = rungKills };
 
-        rungKills[killer.ActorNumber] = 0;
-        rungs[killer.ActorNumber] = rung;
+            if (ladder == null || ladder.Length == 0)
+                return step;
 
-        killer.SetCustomProperties(new Hashtable { { RungKey, rung }, { RungKillsKey, 0 } });
-        GiveLoadout(killer);
+            int top = ladder.Length - 1;
+
+            // Winning is about the weapon in your hands, not the rung you are recorded at -
+            // the two can disagree for a moment while a property is still in flight.
+            if (rung >= top || weapon == ladder[top])
+            {
+                step.wins = true;
+                return step;
+            }
+
+            step.rungKills = rungKills + 1;
+
+            if (step.rungKills < killsPerRung)
+                return step;
+
+            step.rung = Mathf.Min(rung + 1, top);
+            step.rungKills = 0;
+            step.climbed = true;
+
+            return step;
+        }
+
+        public static string[] LoadoutForRung(int rung, string[] ladder)
+        {
+            if (ladder == null || ladder.Length == 0)
+                return WeaponLoadout.AllWeapons;
+
+            return new[] { ladder[Mathf.Clamp(rung, 0, ladder.Length - 1)] };
+        }
+
+        /// Loadouts travel as one comma separated string, because a custom property wants a
+        /// primitive and a string array is not one.
+        public static string Serialise(IEnumerable<string> weapons) => string.Join(",", weapons);
+
+        public static string[] Deserialise(string packed)
+        {
+            return string.IsNullOrEmpty(packed) ? WeaponLoadout.AllWeapons : packed.Split(',');
+        }
+
+        /// Highest score takes it; a tie leaves it with whoever got there first rather than
+        /// whoever happens to sort last. Nobody wins a match where nobody scored.
+        public static int WinnerIndex(int[] scores)
+        {
+            int best = -1;
+            int bestScore = 0;
+
+            for (int i = 0; i < scores.Length; i++)
+            {
+                if (scores[i] > bestScore)
+                {
+                    bestScore = scores[i];
+                    best = i;
+                }
+            }
+
+            return best;
+        }
     }
 
     Player LeaderByKills()
     {
-        Player best = null;
-        int bestScore = -1;
+        Player[] players = PhotonNetwork.PlayerList;
+        int[] scores = new int[players.Length];
 
-        foreach (Player player in PhotonNetwork.PlayerList)
-        {
-            int score = RoomManager.GetStat(player, RoomManager.KillsKey);
+        for (int i = 0; i < players.Length; i++)
+            scores[i] = RoomManager.GetStat(players[i], RoomManager.KillsKey);
 
-            // Strictly greater, so a tie leaves the earlier player holding it rather than
-            // handing the win to whoever happens to sort last.
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = player;
-            }
-        }
-
-        return bestScore > 0 ? best : null;
+        int winner = Rules.WinnerIndex(scores);
+        return winner >= 0 ? players[winner] : null;
     }
 
+    // The master's own tally first, the replicated value second. A property set a moment ago
+    // has not come back from the server yet, so reading it would undo the increment.
     int RungOf(Player player)
     {
         return rungs.TryGetValue(player.ActorNumber, out int rung)
             ? rung
             : RoomManager.GetStat(player, RungKey);
+    }
+
+    int RungKillsOf(Player player)
+    {
+        return rungKills.TryGetValue(player.ActorNumber, out int count)
+            ? count
+            : RoomManager.GetStat(player, RungKillsKey);
     }
 
     static int Bump(Dictionary<int, int> counts, int actor)
