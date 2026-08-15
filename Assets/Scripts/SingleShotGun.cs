@@ -301,15 +301,41 @@ public class SingleShotGun : Gun
         // One trace per pellet. A shotgun is just this number going up - each pellet rolls its
         // own spread, so the group is different every shot without any extra machinery.
         int pellets = Mathf.Max(1, Info.pelletsPerShot);
-        bool reported = false;
+
+        Vector3 endPoint = Vector3.zero;
+        Vector3 endNormal = Vector3.zero;
+        bool anyHit = false;
+        bool haveEnd = false;
 
         for (int i = 0; i < pellets; i++)
-            reported |= FirePellet(reported);
+        {
+            bool hit = FirePellet(out Vector3 point, out Vector3 normal);
+
+            // The first pellet decides what everyone sees. Eight decals and eight bangs for one
+            // trigger pull would be silly, and a hit is more interesting than a miss.
+            if (!haveEnd || (hit && !anyHit))
+            {
+                endPoint = point;
+                endNormal = normal;
+                anyHit = hit;
+                haveEnd = true;
+            }
+        }
+
+        // Reported whether or not anything was hit.
+        //
+        // This used to fire only on a hit, which meant a shot into the sky produced no sound,
+        // no muzzle flash and no mark - nothing whatsoever. Firing into open space is most of
+        // what happens in a fight, and it was the one case with no feedback at all.
+        if (haveEnd)
+            owner.ReportShot(gameObject.name, endPoint, endNormal, anyHit);
     }
 
-    /// Returns true if this pellet hit something. Only the first hit reports to the network -
-    /// eight decals and eight bangs for one trigger pull would be silly.
-    bool FirePellet(bool alreadyReported)
+    /// <summary>
+    /// Traces one pellet. Returns whether it hit anything, and where the shot ended either way -
+    /// on a miss that's the far end of its range, which is what the tracer needs to draw.
+    /// </summary>
+    bool FirePellet(out Vector3 endPoint, out Vector3 endNormal)
     {
         Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f));
         ray.origin = cam.transform.position;
@@ -338,6 +364,10 @@ public class SingleShotGun : Gun
         // RaycastAll rather than Raycast, because the camera sits inside our own hitboxes. A
         // single raycast can stop on one of those, and then the shot goes nowhere - it just
         // silently fails to hit the wall behind it and drops a decal on our own face.
+        // Where the shot ends if it hits nothing at all.
+        endPoint = ray.origin + ray.direction * Info.maxRange;
+        endNormal = -ray.direction;
+
         int count = Physics.RaycastNonAlloc(ray, hits, Info.maxRange, mask, QueryTriggerInteraction.Ignore);
         if (count == 0)
             return false;
@@ -362,6 +392,9 @@ public class SingleShotGun : Gun
         if (!found)
             return false;
 
+        endPoint = hit.point;
+        endNormal = hit.normal;
+
         float damage = Info.DamageAtRange(hit.distance);
 
         Hitbox box = hit.collider.GetComponent<Hitbox>();
@@ -380,9 +413,6 @@ public class SingleShotGun : Gun
             hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage, gameObject.name, false);
         }
 
-        if (!alreadyReported)
-            owner.ReportShot(gameObject.name, hit.point, hit.normal);
-
         return true;
     }
 
@@ -394,14 +424,32 @@ public class SingleShotGun : Gun
 
     /// Visual side of a shot. Driven from PlayerController's RPC so every client runs it, not
     /// just the shooter. Audio is played there too, since it needs the weapon's name.
-    public void PlayFireEffects(Vector3 hitPosition, Vector3 hitNormal)
+    public void PlayFireEffects(Vector3 endPoint, Vector3 endNormal, bool hit)
     {
         if (muzzle != null)
             muzzle.Fire();
 
+        // Melee doesn't fire anything, so a streak across the room would be a lie.
+        if (Info != null && !Info.melee)
+        {
+            Vector3 from = muzzle != null ? muzzle.Tip.position : transform.position;
+            BulletTracer.Spawn(from, endPoint, TracerColour());
+        }
+
+        if (!hit)
+            return;
+
         // BulletDecal re-checks locally that there is still something at the hit point before
         // it draws anything, and works out for itself whether it landed on a person or a wall.
         // Passing the trace mask so it ignores movement capsules the same way the shot did.
-        BulletDecal.Spawn(hitPosition, hitNormal, TraceMask);
+        BulletDecal.Spawn(endPoint, endNormal, TraceMask);
+    }
+
+    /// Each weapon already has its own ripe colour, so a shotgun blast and a sniper shot don't
+    /// read as the same event. Brightened well past the fruit, because a tracer is a light.
+    Color TracerColour()
+    {
+        Color banana = Info != null ? Info.ripe : new Color(1f, 0.85f, 0.4f);
+        return Color.Lerp(banana, Color.white, 0.45f);
     }
 }

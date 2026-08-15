@@ -451,31 +451,48 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// own. That's what lets a loadout be spawned at runtime - allocating view IDs for
     /// dynamically created objects is a mess, and nothing about a gunshot actually needs its
     /// own networked identity.
-    public void ReportShot(string weaponName, Vector3 hitPoint, Vector3 hitNormal)
+    public void ReportShot(string weaponName, Vector3 endPoint, Vector3 endNormal, bool hit)
     {
-        PV.RPC(nameof(RPC_WeaponFired), RpcTarget.All, weaponName, hitPoint, hitNormal);
+        PV.RPC(nameof(RPC_WeaponFired), RpcTarget.All, weaponName, endPoint, endNormal, hit);
     }
 
     [PunRPC]
-    void RPC_WeaponFired(string weaponName, Vector3 hitPoint, Vector3 hitNormal)
+    void RPC_WeaponFired(string weaponName, Vector3 endPoint, Vector3 endNormal, bool hit)
     {
+        // The bang happens whether or not you connected. It used to be inside the hit path, so
+        // missing was completely silent.
         GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, 0.6f);
-        GameAudio.PlayAt(GameAudio.Impact, hitPoint, 0.5f);
 
-        // Flash and decal on the weapon that actually fired, so it's right for spectators too.
+        if (hit)
+            GameAudio.PlayAt(GameAudio.Impact, endPoint, 0.5f);
+
+        // Flash, tracer and decal on the weapon that actually fired, so it's right for
+        // spectators too.
         foreach (SingleShotGun gun in GetComponentsInChildren<SingleShotGun>(true))
         {
             if (gun.name == weaponName)
             {
-                gun.PlayFireEffects(hitPoint, hitNormal);
+                gun.PlayFireEffects(endPoint, endNormal, hit);
                 break;
             }
         }
     }
 
     /// Called by a weapon on each shot. Kick is (pitch, yaw) in degrees.
+    // The weapon jolts back toward you when it fires, then settles.
+    //
+    // Recoil moves the view, which tells you the shot went high. This tells you the weapon did
+    // something - without it a gun that fires ten times a second is a static banana with a
+    // noise attached, and the whole thing reads as a screenshot that occasionally beeps.
+    Vector3 viewKick;
+    const float kickBack = 0.055f;
+    const float kickRise = 0.018f;
+    const float kickRecovery = 14f;
+
     public void AddRecoil(Vector2 kick, float recovery, float speed)
     {
+        viewKick += new Vector3(0f, kickRise, -kickBack);
+
         recoilTarget += kick;
         recoilRecovery = recovery;
         recoilSpeed = speed;
@@ -543,8 +560,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (gun != null)
             gun.SetVisible(!wants);
 
+        // Kick decays toward nothing wherever the weapon is being held.
+        viewKick = Vector3.Lerp(viewKick, Vector3.zero, 1f - Mathf.Exp(-kickRecovery * Time.deltaTime));
+
         // Back where it belongs, since aiming no longer moves it.
-        itemHolder.localPosition = Vector3.Lerp(itemHolder.localPosition, weaponViewOffset, t);
+        itemHolder.localPosition = Vector3.Lerp(itemHolder.localPosition, weaponViewOffset + viewKick, t);
         itemHolder.localRotation = Quaternion.Slerp(itemHolder.localRotation,
                                                     Quaternion.Euler(weaponViewRotation), t);
 

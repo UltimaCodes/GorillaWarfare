@@ -428,6 +428,24 @@ public static class WeaponCheck
                   $"{g2.spareMagazines} bananas = {g2.spareMagazines * g2.magazineSize} rounds in reserve");
         }
 
+        // ---- a miss still has to feel like something ----
+        //
+        // ReportShot used to live inside the hit path, so a shot into open space produced no
+        // sound, no muzzle flash and no mark at all - and firing into open space is most of
+        // what happens in a fight.
+        string shootSrc = System.IO.File.ReadAllText("Assets/Scripts/SingleShotGun.cs");
+        int reportAt = shootSrc.IndexOf("owner.ReportShot");
+        int firePelletAt = shootSrc.IndexOf("bool FirePellet");
+
+        Check(sb, reportAt >= 0 && reportAt < firePelletAt,
+              "a miss still makes a noise", "the shot is reported from Shoot, not from a hit");
+
+        Check(sb, shootSrc.Contains("BulletTracer.Spawn"), "shots draw a tracer",
+              "hitscan needs a line or there is nothing to see");
+
+        Check(sb, shootSrc.Contains("muzzle.Tip.position"), "tracers start at the muzzle",
+              "not at the camera, which puts them in your forehead");
+
         // ---- a scope has to be worth using ----
         //
         // Big Mike's spread was zero, which made it pinpoint from the hip and left the scope as

@@ -15,6 +15,11 @@ public class MuzzleFlash : MonoBehaviour
     float level;
     float tipDistance = 0.35f;
 
+    /// The point shots leave from. Tracers start here rather than at the camera - those are
+    /// different places, and drawing from the camera makes shots appear to come out of your
+    /// forehead and go edge-on invisible at exactly the range you want the feedback.
+    public Transform Tip => flash != null ? flash.transform : transform;
+
     /// Where the business end is, in the weapon's local space.
     public void SetTipDistance(float distance)
     {
