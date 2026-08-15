@@ -49,6 +49,18 @@ public class CombatHud : MonoBehaviour
     static readonly Color healColour = new Color(0.4f, 1f, 0.5f, 1f);
     static readonly Color streakColour = new Color(1f, 0.55f, 0.1f, 1f);
     static readonly Color shieldColour = new Color(0.3f, 0.85f, 1f, 1f);
+    static readonly Color headColour = new Color(1f, 0.95f, 0.25f, 1f);
+    static readonly Color killColour = new Color(1f, 0.35f, 0.05f, 1f);
+
+    float killFlash;
+    string killText = string.Empty;
+    string killSubtext = string.Empty;
+
+    float comboFlash;
+    int comboShown;
+
+    GUIStyle numberStyle;
+    GUIStyle killStyle;
 
     Texture2D scopeMask;
     int scopeSize;
@@ -88,6 +100,68 @@ public class CombatHud : MonoBehaviour
         player = owner;
     }
 
+    // Numbers thrown off a hit, in world space so they stay where the shot landed while you
+    // keep moving. Fixed size pool - a shotgun lands nine at once and allocating for each is
+    // how a satisfying effect turns into a stutter.
+    struct DamageNumber
+    {
+        public Vector3 at;
+        public string text;
+        public float born;
+        public bool head;
+        public bool live;
+    }
+
+    const int maxNumbers = 24;
+    const float numberLife = 0.85f;
+
+    readonly DamageNumber[] numbers = new DamageNumber[maxNumbers];
+    int nextNumber;
+
+    /// <param name="worldPoint">Where the shot actually landed, not where the crosshair is.</param>
+    public void ShowDamage(Vector3 worldPoint, float amount, bool headshot)
+    {
+        numbers[nextNumber] = new DamageNumber
+        {
+            at = worldPoint,
+            text = Mathf.RoundToInt(amount).ToString(),
+            born = Time.unscaledTime,
+            head = headshot,
+            live = true,
+        };
+
+        nextNumber = (nextNumber + 1) % maxNumbers;
+    }
+
+    /// Hits landed back to back. Drawn as a running count once it's worth counting.
+    public void ShowCombo(int hits)
+    {
+        comboShown = hits;
+        comboFlash = 1f;
+    }
+
+    /// <param name="multikill">Kills close enough together to be one moment.</param>
+    public void ShowKill(int multikill, int streak)
+    {
+        killFlash = 1f;
+        killText = MultikillName(multikill);
+        killSubtext = streak > 1 ? $"{streak} IN A ROW" : string.Empty;
+    }
+
+    // Named rather than numbered, because "DOUBLE KILL" lands and "2" doesn't.
+    static string MultikillName(int count)
+    {
+        switch (count)
+        {
+            case 1: return "KILL";
+            case 2: return "DOUBLE";
+            case 3: return "TRIPLE";
+            case 4: return "OVERRIPE";
+            case 5: return "BLENDED";
+            default: return "FRUIT SALAD";
+        }
+    }
+
     /// Called when a kill puts health back, so the number doesn't silently jump while you're
     /// looking at something else.
     public void ShowHeal(float amount)
@@ -108,8 +182,18 @@ public class CombatHud : MonoBehaviour
         if (hitMarker > 0f)
             hitMarker = Mathf.Max(0f, hitMarker - Time.deltaTime * 3.2f);
 
+        // Unscaled throughout - hitstop is running during exactly the moments these are on
+        // screen, and on scaled time they'd hang frozen with the rest of the world.
+        float dt = Time.unscaledDeltaTime;
+
         if (healFlash > 0f)
-            healFlash = Mathf.Max(0f, healFlash - Time.deltaTime * 0.8f);
+            healFlash = Mathf.Max(0f, healFlash - dt * 0.8f);
+
+        if (killFlash > 0f)
+            killFlash = Mathf.Max(0f, killFlash - dt * 0.75f);
+
+        if (comboFlash > 0f)
+            comboFlash = Mathf.Max(0f, comboFlash - dt * 1.6f);
     }
 
     void OnGUI()
@@ -143,6 +227,9 @@ public class CombatHud : MonoBehaviour
             DrawScope(cx, cy);
             DrawAmmo(gun);
             DrawHealth();
+        DrawDamageNumbers();
+        DrawCombo(cx, cy);
+        DrawKillCallout(cx, cy);
             GUI.color = Color.white;
             return;
         }
@@ -189,6 +276,9 @@ public class CombatHud : MonoBehaviour
         }
 
         DrawHealth();
+        DrawDamageNumbers();
+        DrawCombo(cx, cy);
+        DrawKillCallout(cx, cy);
 
         DrawAmmo(gun);
 
@@ -397,6 +487,97 @@ public class CombatHud : MonoBehaviour
         spareStyle.fontSize = 16;
         GUI.color = nameColour;
         GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
+    }
+
+    // Each number rises and fades from where the shot landed. Projected every frame rather
+    // than pinned on screen, so they stay attached to the world while you strafe past.
+    void DrawDamageNumbers()
+    {
+        Camera cam = PlayerController.LocalCamera;
+        if (cam == null)
+            return;
+
+        if (numberStyle == null)
+        {
+            numberStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+            };
+        }
+
+        for (int i = 0; i < numbers.Length; i++)
+        {
+            if (!numbers[i].live)
+                continue;
+
+            float age = (Time.unscaledTime - numbers[i].born) / numberLife;
+
+            if (age >= 1f)
+            {
+                numbers[i].live = false;
+                continue;
+            }
+
+            Vector3 view = cam.WorldToViewportPoint(numbers[i].at);
+            if (view.z <= 0f)
+                continue;
+
+            float x = view.x * Screen.width;
+            float y = (1f - view.y) * Screen.height - age * 46f;
+
+            // Big on arrival, settling as it fades. Same reason the hitmarker pops.
+            numberStyle.fontSize = Mathf.RoundToInt((numbers[i].head ? 30f : 22f) * (1.25f - age * 0.25f));
+
+            Color c = numbers[i].head ? headColour : Color.white;
+            GUI.color = new Color(c.r, c.g, c.b, 1f - age * age);
+            GUI.Label(new Rect(x - 60f, y - 20f, 120f, 40f), numbers[i].text, numberStyle);
+        }
+
+        GUI.color = Color.white;
+    }
+
+    // The running count of hits landed back to back, under the crosshair where you're looking.
+    void DrawCombo(float cx, float cy)
+    {
+        int combo = player.Combo;
+        if (combo < 2)
+            return;
+
+        if (killStyle == null)
+            killStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+
+        killStyle.fontSize = Mathf.RoundToInt(26f + Mathf.Min(combo, 10) * 1.6f + comboFlash * 10f);
+
+        GUI.color = Color.Lerp(headColour, Color.white, comboFlash);
+        GUI.Label(new Rect(cx - 150f, cy + 42f, 300f, 50f), $"x{combo}", killStyle);
+        GUI.color = Color.white;
+    }
+
+    // The big one. Snaps in at full size and shrinks slightly as it fades - no easing in,
+    // because arriving instantly is the whole point.
+    void DrawKillCallout(float cx, float cy)
+    {
+        if (killFlash <= 0f)
+            return;
+
+        if (killStyle == null)
+            killStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+
+        float fade = Mathf.Clamp01(killFlash);
+
+        killStyle.fontSize = Mathf.RoundToInt(52f + fade * 14f);
+        GUI.color = new Color(killColour.r, killColour.g, killColour.b, fade);
+        GUI.Label(new Rect(cx - 300f, cy - 150f, 600f, 80f), killText, killStyle);
+
+        if (!string.IsNullOrEmpty(killSubtext))
+        {
+            killStyle.fontSize = 22;
+            GUI.color = new Color(1f, 1f, 1f, fade * 0.8f);
+            GUI.Label(new Rect(cx - 300f, cy - 96f, 600f, 40f), killSubtext, killStyle);
+        }
+
+        GUI.color = Color.white;
     }
 
     void Rect(float x, float y, float w, float h)
