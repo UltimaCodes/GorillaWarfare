@@ -221,14 +221,6 @@ public class RoomManager : MonoBehaviourPunCallbacks
         }
     }
 
-    public void RespawnLocalPlayer()
-    {
-        if (localController != null)
-            PhotonNetwork.Destroy(localController);
-
-        localController = null;
-        TrySpawn();
-    }
 
     // Stats live in custom properties, which Photon replicates and the scoreboard already
     // reads. MatchState owns writing them - it keeps the running tally, because a property does

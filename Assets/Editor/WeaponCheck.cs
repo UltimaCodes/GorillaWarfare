@@ -428,6 +428,24 @@ public static class WeaponCheck
                   $"{g2.spareMagazines} bananas = {g2.spareMagazines * g2.magazineSize} rounds in reserve");
         }
 
+        // ---- a scope has to be worth using ----
+        //
+        // Big Mike's spread was zero, which made it pinpoint from the hip and left the scope as
+        // a zoom with no reason to pull it up under pressure. Aiming has to buy accuracy you
+        // don't otherwise have, or it's decoration.
+        foreach (string weapon in new[] { "Pistol", "Shotgun", "Rifle", "Sniper", "Peel" })
+        {
+            GunInfo g = Resources.Load<GunInfo>($"Guns/{weapon}");
+            if (g == null || !g.canAim)
+                continue;
+
+            Check(sb, g.spread > 0.5f, $"{weapon} is worth scoping",
+                  $"hip spread {g.spread:F1} degrees against {g.spread * g.aimSpreadScale:F2} scoped");
+
+            Check(sb, g.aimFov < 45f, $"{weapon} actually magnifies",
+                  $"{g.aimFov:F0} degree field of view");
+        }
+
         // ---- shapes match the brief ----
         sb.AppendLine("[gun] ---------- shapes ----------");
         var lengths = new System.Collections.Generic.Dictionary<string, float>();

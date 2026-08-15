@@ -41,6 +41,7 @@ public static class RemoteCopyCheck
         CheckLoadoutOnlyClearsWeapons();
         CheckLoadoutFallback();
         CheckLadderIsBuildable();
+        ReportPrefabDrift();
 
         foreach (string note in Notes)
             Debug.Log($"[remote] {note}");
@@ -170,6 +171,69 @@ public static class RemoteCopyCheck
 
         if (fallback == null || fallback.Length == 0)
             Failures.Add("LoadoutFor falls back to nothing - a player with no property yet would spawn unarmed");
+    }
+
+    /// <summary>
+    /// Lists every serialized value on the player prefab that differs from the code's default.
+    ///
+    /// Diagnostic, not an assertion - a tuned value living in the prefab is exactly right. It's
+    /// here because the opposite mistake has been made three times now: change a default in
+    /// C#, expect it to apply, and it doesn't, because the prefab already has that field and
+    /// the prefab wins. Twice it took a screenshot to notice and once it took an hour. Printing
+    /// the drift means the next time, it's on screen before anyone goes looking.
+    /// </summary>
+    static void ReportPrefabDrift()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+        PlayerController onPrefab = prefab != null ? prefab.GetComponent<PlayerController>() : null;
+
+        if (onPrefab == null)
+            return;
+
+        // A component that has never been serialized, so its fields hold the code defaults.
+        GameObject bare = new GameObject("defaults");
+        PlayerController fresh = bare.AddComponent<PlayerController>();
+
+        SerializedObject stored = new SerializedObject(onPrefab);
+        SerializedObject defaults = new SerializedObject(fresh);
+
+        List<string> drifted = new List<string>();
+
+        SerializedProperty walk = stored.GetIterator();
+        while (walk.NextVisible(true))
+        {
+            if (walk.propertyType == SerializedPropertyType.Generic)
+                continue;
+
+            SerializedProperty other = defaults.FindProperty(walk.propertyPath);
+            if (other == null)
+                continue;
+
+            if (!SerializedProperty.DataEquals(walk, other))
+                drifted.Add($"{walk.propertyPath} = {Describe(walk)} (code says {Describe(other)})");
+        }
+
+        Object.DestroyImmediate(bare);
+
+        Notes.Add($"prefab values that override the code default: {drifted.Count}");
+        foreach (string entry in drifted)
+            Notes.Add($"    {entry}");
+    }
+
+    static string Describe(SerializedProperty p)
+    {
+        switch (p.propertyType)
+        {
+            case SerializedPropertyType.Float: return p.floatValue.ToString("0.###");
+            case SerializedPropertyType.Integer: return p.intValue.ToString();
+            case SerializedPropertyType.Boolean: return p.boolValue.ToString();
+            case SerializedPropertyType.String: return p.stringValue;
+            case SerializedPropertyType.Vector3: return p.vector3Value.ToString("0.###");
+            case SerializedPropertyType.Color: return p.colorValue.ToString();
+            case SerializedPropertyType.ObjectReference:
+                return p.objectReferenceValue != null ? p.objectReferenceValue.name : "none";
+            default: return p.propertyType.ToString();
+        }
     }
 
     // Gun game walks this list and hands out one weapon at a time, so every rung has to resolve
