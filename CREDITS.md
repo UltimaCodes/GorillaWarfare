@@ -2,12 +2,34 @@
 
 ## Audio
 
-Sound effects by [Kenney](https://kenney.nl) — CC0 1.0 (public domain). Credit isn't required,
-but the packs are good and free so here it is.
+Everything synthesised has been deleted. What's here is recorded.
 
-- Interface Sounds — menu clicks, confirm, error, back
-- Impact Sounds — footsteps, bullet impacts, hit sounds
-- Sci-Fi Sounds — weapon fire, death
+**Gunshots** - "Gunshot Sounds" by Tabasco, [OpenGameArt](https://opengameart.org/content/gunshot-sounds),
+**CC0**. Real range recordings: a CZ-52 for the Cavendish, an SKS for the Bunch, a shotgun for
+the Split, and a Mosin Nagant for Big Mike. Each source file holds a whole magazine, so
+`tools/extract_shot.py` cuts one clean shot out and aligns the bang to the front - a clip with a
+lead-in plays the shot late and reads as input lag.
+
+**Reload** - "Gun reload sounds" by SpringySpringo, [OpenGameArt](https://opengameart.org/content/gun-reload-sounds),
+**CC0**.
+
+**Footsteps, impacts, hurt, UI clicks** - [Kenney](https://kenney.nl), **CC0**.
+
+### Still missing
+
+Four banks have nothing in them, and the game is quieter than it should be until they do:
+
+| bank | what it needs |
+|---|---|
+| `Hit/hit`, `Hit/headshot` | the tick when your shot lands. **The most important sound in the game** - it's the difference between aiming and guessing |
+| `Kill/kill` | distinct from a hit, and it should go downward where the hit goes up |
+| `Death/death` | heavy and organic. Not a sci-fi explosion, which is what it used to be |
+| `Shoot/Peel/swing` | a whoosh for the melee |
+
+`GameAudio` resolves banks by folder name, so dropping a wav or ogg into any of those folders is
+the whole installation - no wiring, no references. `AudioCheck` will tell you the moment they're
+filled, and it fails on a clip containing more than one shot, which is the bug that shipped once
+already.
 
 ## Models
 
