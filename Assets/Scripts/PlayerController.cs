@@ -90,10 +90,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// streak is supposed to reward - so anything left over becomes overshield instead. It sits
     /// on top of normal health and comes off first.
     ///
-    /// Worth knowing: base health is 140, so this is +10. If you meant the +50 that "100 up to
-    /// 150" implies, this is the one number to change.
+    /// 200 against a base of 140, so a streak is worth up to 60 extra - about 43% more life.
+    /// It was 150, which bought +10 and may as well not have existed.
+    ///
+    /// What that means in a fight: a fully shielded player takes six pistol shots instead of
+    /// four, or ten rifle rounds instead of seven. Enough that whoever is on a run is genuinely
+    /// harder to put down, without making them unkillable - two sniper headshots still do it.
     /// </summary>
-    const float overshieldCeiling = 150f;
+    const float overshieldCeiling = 200f;
 
     /// Consecutive kills without dying. Read by the HUD.
     public int Killstreak { get; private set; }
