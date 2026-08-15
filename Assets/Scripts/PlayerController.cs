@@ -21,8 +21,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // That's why nobody could see their own gun. This puts it down and to the right of the eye,
     // which is where a first person weapon lives.
     [Header("First person weapon placement")]
-    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.22f, 0.30f, 0.78f);
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.26f, 0.26f, 1.05f);
     [SerializeField] Vector3 weaponViewRotation = new Vector3(0f, 0f, 0f);
+    [SerializeField] Vector3 viewArmsOffset = new Vector3(-0.06f, -0.10f, -0.30f);
+    [SerializeField] Vector3 viewArmsRotation = new Vector3(0f, 0f, 0f);
 
     [Header("Third person weapon placement")]
     [SerializeField] Vector3 weaponHandOffset = new Vector3(0.02f, 0f, 0.06f);
@@ -55,6 +57,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     MonkeyRig rig;
 
     public PhotonView View => PV;
+
+    /// What the HUD needs to draw itself.
+    public Vector2 RecoilOffset => recoilOffset;
+    public SingleShotGun ActiveGun =>
+        items != null && itemIndex >= 0 && itemIndex < items.Length ? items[itemIndex] as SingleShotGun : null;
+
+    public CombatHud Hud { get; private set; }
 
     void Awake()
     {
@@ -96,6 +105,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             gameObject.AddComponent<PlayerMovement>();
             PlaceViewModel();
             BuildLoadout();
+
+            Hud = gameObject.AddComponent<CombatHud>();
+            Hud.Bind(this);
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
             // without moving where you're aiming.
@@ -155,6 +167,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         Look();
         UpdateCursorLock();
         FeedRig();
+
+        // Stowed weapons are deactivated so their own Update never runs. Without this a reload
+        // started before switching would sit frozen until you came back to it.
+        for (int i = 0; i < items.Length; i++)
+        {
+            if (items[i] is SingleShotGun stowed && !stowed.gameObject.activeInHierarchy)
+                stowed.TickReloadWhileStowed();
+        }
 
         for (int i = 0; i < items.Length; i++)
         {
@@ -262,6 +282,33 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         holder.localPosition = weaponViewOffset;
         holder.localRotation = Quaternion.Euler(weaponViewRotation);
+
+        BuildViewArms(holder);
+    }
+
+    // First person arms. The owner's real body is ShadowsOnly - you can't show a full gorilla
+    // from inside its own head - so this is a separate pair of arms parented to the weapon
+    // holder, which is how basically every FPS does it. They sway with the gun because they're
+    // children of it.
+    void BuildViewArms(Transform holder)
+    {
+        GameObject prefab = Resources.Load<GameObject>("Models/Weapons/ViewArms");
+        if (prefab == null)
+        {
+            Debug.LogWarning("No view arms model - you won't see your hands.", this);
+            return;
+        }
+
+        GameObject arms = Instantiate(prefab, holder);
+        arms.transform.localPosition = viewArmsOffset;
+        arms.transform.localRotation = Quaternion.Euler(viewArmsRotation);
+
+        Material mat = Resources.Load<Material>("Models/Weapons/ViewArmsMat");
+        if (mat != null)
+        {
+            foreach (Renderer r in arms.GetComponentsInChildren<Renderer>(true))
+                r.sharedMaterial = mat;
+        }
     }
 
     Transform FindItemHolder()

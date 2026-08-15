@@ -18,6 +18,7 @@ public class SingleShotGun : Gun
     int shotsInBurst;          // where we are in the recoil pattern
     float lastShotTime;
     bool reloading;
+    float reloadDoneAt;
 
     public int Ammo { get; private set; } = -1;
     public bool Reloading => reloading;
@@ -25,7 +26,10 @@ public class SingleShotGun : Gun
     // Reused so we're not allocating an array every shot.
     static readonly Collider[] impactColliders = new Collider[4];
 
-    GunInfo Info => itemInfo as GunInfo;
+    // Shared trace buffer. 16 is plenty - a shot passes through our own hitboxes at most.
+    static readonly RaycastHit[] hits = new RaycastHit[16];
+
+    public GunInfo Info => itemInfo as GunInfo;
 
     /// Set up a weapon built at runtime by WeaponLoadout. Safe to call before Awake.
     public void Configure(GunInfo info, Camera camera, GameObject impactPrefab)
@@ -79,11 +83,17 @@ public class SingleShotGun : Gun
 
     void Update()
     {
+        TickReload();
+
         // The spray resets once you've been off the trigger long enough, which is what lets you
         // tap-fire accurately instead of inheriting the last burst's climb.
         if (Time.time - lastShotTime > 0.35f)
             shotsInBurst = 0;
     }
+
+    /// Reload keeps running while stowed, so switching away and back doesn't restart it. The
+    /// weapon is inactive, so pull it forward from whoever is active.
+    public void TickReloadWhileStowed() => TickReload();
 
     public override void Use()
     {
@@ -102,13 +112,19 @@ public class SingleShotGun : Gun
         if (reloading || Info == null || Ammo >= Info.magazineSize)
             return;
 
-        StartCoroutine(ReloadRoutine());
+        reloading = true;
+        reloadDoneAt = Time.time + Info.reloadTime;
+        GameAudio.Play2D(GameAudio.UI, 0.4f);
     }
 
-    IEnumerator ReloadRoutine()
+    /// Timestamp rather than a coroutine. Switching weapons deactivates the old one, which kills
+    /// its coroutines - the reload never finished, so the gun stayed "reloading" forever and its
+    /// magazine never refilled. It was bricked for the rest of the life.
+    void TickReload()
     {
-        reloading = true;
-        yield return new WaitForSeconds(Info.reloadTime);
+        if (!reloading || Time.time < reloadDoneAt)
+            return;
+
         Ammo = Info.magazineSize;
         reloading = false;
     }
@@ -176,18 +192,49 @@ public class SingleShotGun : Gun
         // the hitboxes instead, which is what makes aiming at a head mean anything.
         int mask = ~(1 << LayerMask.NameToLayer(Hitbox.PlayerLayerName));
 
-        if (!Physics.Raycast(ray, out RaycastHit hit, Info.maxRange, mask, QueryTriggerInteraction.Ignore))
+        // RaycastAll rather than Raycast, because the camera sits inside our own hitboxes. A
+        // single raycast can stop on one of those, and then the shot goes nowhere - it just
+        // silently fails to hit the wall behind it and drops a decal on our own face.
+        int count = Physics.RaycastNonAlloc(ray, hits, Info.maxRange, mask, QueryTriggerInteraction.Ignore);
+        if (count == 0)
             return false;
 
-        if (!IsOwnedByShooter(hit.collider))
-        {
-            float damage = Info.DamageAtRange(hit.distance);
+        RaycastHit hit = default;
+        float nearest = float.MaxValue;
+        bool found = false;
 
-            Hitbox box = hit.collider.GetComponent<Hitbox>();
-            if (box != null)
-                box.Apply(damage);
-            else
-                hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
+        for (int i = 0; i < count; i++)
+        {
+            if (IsOwnedByShooter(hits[i].collider))
+                continue;
+
+            if (hits[i].distance < nearest)
+            {
+                nearest = hits[i].distance;
+                hit = hits[i];
+                found = true;
+            }
+        }
+
+        if (!found)
+            return false;
+
+        float damage = Info.DamageAtRange(hit.distance);
+
+        Hitbox box = hit.collider.GetComponent<Hitbox>();
+        if (box != null)
+        {
+            box.Apply(damage);
+
+            // Hit confirmation. Without this you're firing into the void and guessing.
+            if (owner != null && owner.Hud != null)
+                owner.Hud.ShowHit(box.partName == "head" || box.partName == "neck");
+
+            GameAudio.Play2D(GameAudio.Impact, 0.35f, 0.15f);
+        }
+        else
+        {
+            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
         }
 
         if (!alreadyReported)
@@ -221,8 +268,15 @@ public class SingleShotGun : Gun
             hitPosition + hitNormal * 0.001f,
             Quaternion.LookRotation(hitNormal, Vector3.up) * bulletImpactPrefab.transform.rotation);
 
-        if (impactColliders[0] != null)
-            bulletImpactObj.transform.SetParent(impactColliders[0].transform);
+        // Only stick decals to world geometry. Parenting to anything on a player meant they
+        // rode around with whoever was hit - and when that was our own hitbox, they hung in
+        // front of the camera and followed the view.
+        Collider anchor = impactColliders[0];
+        int playerLayer = LayerMask.NameToLayer(Hitbox.PlayerLayerName);
+        int hitboxLayer = LayerMask.NameToLayer(Hitbox.LayerName);
+
+        if (anchor != null && anchor.gameObject.layer != playerLayer && anchor.gameObject.layer != hitboxLayer)
+            bulletImpactObj.transform.SetParent(anchor.transform);
 
         Destroy(bulletImpactObj, 10f);
     }

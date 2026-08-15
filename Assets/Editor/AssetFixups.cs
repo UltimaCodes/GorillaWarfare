@@ -118,6 +118,20 @@ public static class AssetFixups
             ("Peel",    new Color(0.97f, 0.93f, 0.70f), 0.45f),   // pale inside
         };
 
+        // Arms get one too - dark gorilla fur.
+        {
+            const string armPath = "Assets/Resources/Models/Weapons/ViewArmsMat.mat";
+            Material arm = AssetDatabase.LoadAssetAtPath<Material>(armPath);
+            if (arm == null)
+            {
+                arm = new Material(Shader.Find("Standard"));
+                AssetDatabase.CreateAsset(arm, armPath);
+            }
+            arm.color = new Color(0.19f, 0.17f, 0.16f);
+            arm.SetFloat("_Glossiness", 0.1f);
+            EditorUtility.SetDirty(arm);
+        }
+
         foreach ((string name, Color colour, float gloss) in weapons)
         {
             string path = $"Assets/Resources/Models/Weapons/Banana{name}Mat.mat";

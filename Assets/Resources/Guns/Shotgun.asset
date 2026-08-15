@@ -20,11 +20,11 @@ MonoBehaviour:
   spread: 4.5
   magazineSize: 6
   reloadTime: 2.8
-  verticalKick: 4.5
-  horizontalKick: 0.8
+  verticalKick: 7.5
+  horizontalKick: 1.4
   patternLength: 3
-  recoilRecovery: 0.85
-  recoverySpeed: 5
+  recoilRecovery: 0.6
+  recoverySpeed: 4
   pelletsPerShot: 9
   melee: 0
   falloffStart: 6
