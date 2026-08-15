@@ -27,6 +27,27 @@ public class MusicPlayer : MonoBehaviour
     AudioClip combat;
     AudioClip wanted;
 
+    /// <summary>
+    /// Which track belongs to where we are.
+    ///
+    /// One theme is a perfectly good answer, and it's the usual one for a game this size - so a
+    /// single file is enough. Drop in menu.ogg alone and it plays everywhere, including through
+    /// the scene change, which is the point of this living on RoomManager. Drop in both and the
+    /// match gets its own. Neither arrangement needs a setting.
+    /// </summary>
+    AudioClip should
+    {
+        get
+        {
+            bool inMatch = SceneManager.GetActiveScene().buildIndex == gameSceneIndex;
+
+            if (inMatch)
+                return combat != null ? combat : menu;
+
+            return menu != null ? menu : combat;
+        }
+    }
+
     void Awake()
     {
         menu = Resources.Load<AudioClip>("Audio/Music/menu");
@@ -60,8 +81,6 @@ public class MusicPlayer : MonoBehaviour
 
     void Update()
     {
-        AudioClip should = SceneManager.GetActiveScene().buildIndex == gameSceneIndex ? combat : menu;
-
         if (should != wanted)
             Swap(should);
 
