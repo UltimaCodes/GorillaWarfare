@@ -1,6 +1,6 @@
 # Roadmap
 
-Where this is going and in what order. Updated 2026-08-15.
+Where this is going and in what order. Updated 2026-08-15 (second pass).
 
 ## Design philosophy
 
@@ -76,8 +76,15 @@ Regressions and broken basics. Nothing else matters while the game can't be play
 - [x] Hide own body from own camera, keep the shadow (`ShadowsOnly`)
 - [x] Reparent weapons onto the hand on remote copies — they sat on `CameraHolder`, which is
       first-person only, so others saw a gun floating at head height
+- [x] Bones carry a 100x scale from the FBX and everything parented to one inherited it — the
+      weapon on a remote player's hand was a hundred times too big and the head hitbox was a
+      26 metre sphere you couldn't walk into
+- [x] Left arm was mirrored, so the pose that lowered the right arm raised the left one
+- [x] It renders — `PlayModeProbe` builds the remote rig, stands it in front of the camera and
+      photographs it
 - [ ] Tune the gait numbers against the real model; current values are guesses
-- [ ] Nobody has seen it render yet — unverified
+- [ ] Arms reach forward rather than gripping, and the banana sits at hip height not in the
+      hand — M7, it's a rig job
 
 **Done when:** other players look like a monkey that walks, aims where it's looking, and holds
 its weapon.
@@ -196,6 +203,9 @@ The big aesthetic one. See the philosophy section above.
       (`CombatHud.cs`) with ammo, hitmarker and a reactive crosshair - it works but it's
       programmer art and gets replaced wholesale here.
 - [x] Hitmarkers (headshots read differently)
+- [x] Health as ten blocks and an oversized number, flat saturated colour, stepping rather than
+      sliding. The old screen space bar is out of the prefab
+- [x] Loadout reveal during warmup — names your weapons one at a time before the match goes live
 - [ ] Damage numbers
 - [ ] **Kill feed** — who killed who with what, top corner, fading entries
 - [ ] **Join / leave messages** — "X joined", "X left". Photon already fires
@@ -233,7 +243,12 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 ## M7 — Art and shaders
 
-- [ ] Replace placeholder textures (currently screenshots and memes)
+- [x] Map surfaced with a generated 1m grid and flat panels instead of a giant eyeball and a
+      wall of embers. Not the art pass — the minimum needed to see a dark gorilla against a
+      wall, and something for Quake movement to read speed against
+- [x] Impact marks multiply rather than draw over, so they come out as a darker version of
+      whatever surface they land on. Blood is red, sticks to the body, and goes when it does
+- [ ] Replace the remaining placeholder textures (the menu still uses them)
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
 - [ ] Screenshake and hitstop
