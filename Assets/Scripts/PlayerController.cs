@@ -396,7 +396,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             && value is string names
             && !string.IsNullOrEmpty(names))
         {
-            return names.Split(',');
+            return MatchState.Rules.Deserialise(names);
         }
 
         // No match running, or the property has not arrived yet. Everything, which is what it
@@ -408,7 +408,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     public static void PublishLoadout(IEnumerable<string> weapons)
     {
         PhotonNetwork.LocalPlayer.SetCustomProperties(
-            new Hashtable { { LoadoutKey, string.Join(",", weapons) } });
+            new Hashtable { { LoadoutKey, MatchState.Rules.Serialise(weapons) } });
     }
 
     void BuildLoadout()
