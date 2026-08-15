@@ -96,6 +96,21 @@ Slots, and what MusicPlayer picks them up as. Drop them into
 Every slot falls back rather than going silent, so a partial set works: no lobby track and the
 menu one carries on, no warmup and combat starts early.
 
+## Fonts
+
+In `Assets/Fonts/`, imported but not used by anything yet. Each keeps its own licence file
+alongside it.
+
+| font | licence |
+|---|---|
+| Chomsky | SIL Open Font License 1.1 — Fredrick R. Brennan. The most permissive of the four |
+| Bring Me A Helicopter | **non-commercial only**; a commercial licence is sold separately |
+| The Wildeast | **demo version, personal use only** — the full font is paid |
+| Helvetica Punk | no licence file shipped with it |
+
+Three of those are fine for this project and would not be for a released game. Worth knowing
+before any of them ends up on a title screen that leaves this machine.
+
 ## Movement
 
 Quake 3 / CPM movement is based on
