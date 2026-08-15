@@ -156,6 +156,9 @@ public class ProbeRunner : MonoBehaviour
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
+        // ---- switching mode has to reissue weapons ----
+        yield return CheckModeChangeReissuesLoadouts();
+
         // ---- joining and leaving ----
         yield return CheckJoinAndLeaveMessages();
 
@@ -242,7 +245,7 @@ public class ProbeRunner : MonoBehaviour
         foreach (SingleShotGun gun in player.GetComponentsInChildren<SingleShotGun>(true))
             built.Add(gun.name);
 
-        string[] expected = MatchState.RolledWeapons;
+        string[] expected = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
 
         built.Sort();
         List<string> want = new List<string>(expected);
@@ -250,6 +253,10 @@ public class ProbeRunner : MonoBehaviour
 
         Check(built.Count == expected.Length, "the loadout is the size the match rolled",
               $"{built.Count} built, {expected.Length} rolled");
+
+        // One weapon, both modes. Deathmatch used to hand out three and let you switch, which
+        // made gun game's single weapon feel like a bug rather than the rule.
+        Check(built.Count == 1, "you carry exactly one weapon", $"{built.Count}");
 
         Check(string.Join(",", built) == string.Join(",", want), "the loadout is what the match rolled",
               $"built [{string.Join(",", built)}] against [{string.Join(",", want)}]");
@@ -366,6 +373,47 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
+    /// <summary>
+    /// Changing the mode has to change what you're holding.
+    ///
+    /// This is the bug that made gun game look completely broken. BeginWarmup runs from
+    /// OnJoinedRoom - the moment the room exists, long before anyone picks a mode - so everyone
+    /// got a deathmatch loadout. Switching to gun game afterwards changed the label and nothing
+    /// else, and you played the whole match with the wrong weapons, which is indistinguishable
+    /// from the ladder not working.
+    /// </summary>
+    IEnumerator CheckModeChangeReissuesLoadouts()
+    {
+        PhotonNetwork.CurrentRoom.SetCustomProperties(
+            new Hashtable { { MatchState.ModeKey, (int)MatchMode.GunGame } });
+
+        yield return Until(() => MatchState.Mode == MatchMode.GunGame, "switch to gun game");
+
+        // Offline mode applies properties locally and fires the callback, so the reissue path
+        // runs exactly as it would online.
+        yield return Until(() =>
+        {
+            string[] carrying = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+            return carrying.Length == 1 && carrying[0] == WeaponLoadout.GunGameLadder[0];
+        }, "be handed the bottom of the ladder");
+
+        string[] now = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+        Check(now.Length == 1 && now[0] == WeaponLoadout.GunGameLadder[0],
+              "gun game hands you rung one", string.Join(",", now));
+
+        Check(MatchState.LadderRung(PhotonNetwork.LocalPlayer) == 0,
+              "and starts you at the bottom", $"rung {MatchState.LadderRung(PhotonNetwork.LocalPlayer)}");
+
+        PhotonNetwork.CurrentRoom.SetCustomProperties(
+            new Hashtable { { MatchState.ModeKey, (int)MatchMode.Deathmatch } });
+
+        yield return Until(() => MatchState.Mode == MatchMode.Deathmatch, "switch back");
+        yield return null;
+
+        string[] back = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+        Check(back.Length == 1, "deathmatch also hands you one weapon", string.Join(",", back));
+    }
+
     /// <summary>
     /// Somebody arriving or leaving has to say so.
     ///
