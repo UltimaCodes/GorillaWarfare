@@ -213,6 +213,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         Look();
 
+        // Gun game hands you exactly one weapon and can leave you briefly holding nothing while
+        // a rebuild lands, so none of the input below may assume there's something in your hands.
+        if (items == null || items.Length == 0)
+        {
+            FallOutOfTheWorldCheck();
+            return;
+        }
+
         // Stowed weapons are deactivated so their own Update never runs. Without this a reload
         // started before switching would sit frozen until you came back to it.
         for (int i = 0; i < items.Length; i++)
@@ -221,56 +229,50 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 stowed.TickReloadWhileStowed();
         }
 
-        for (int i = 0; i < items.Length; i++)
+        // Number keys, from a table rather than (i + 1).ToString() - that built a string per
+        // weapon per frame purely to ask whether a key was down.
+        int keys = Mathf.Min(items.Length, WeaponKeys.Length);
+        for (int i = 0; i < keys; i++)
         {
-            if(Input.GetKeyDown((i + 1).ToString()))
+            if (Input.GetKeyDown(WeaponKeys[i]))
             {
                 EquipItem(i);
                 break;
             }
         }
 
-        if(Input.GetAxisRaw("Mouse ScrollWheel") > 0f)
-        {
-            if (itemIndex >= items.Length - 1)
-            {
-                EquipItem(0);
-            }
-            else
-            {
-                EquipItem(itemIndex + 1);
-            }
-        }
-        else if(Input.GetAxisRaw("Mouse ScrollWheel") < 0f)
-        {
-            if(itemIndex <= 0)
-            {
-                EquipItem(items.Length - 1);
-            }
-            else
-            {
-                EquipItem(itemIndex - 1);
-            }
-        }
+        float scroll = Input.GetAxisRaw("Mouse ScrollWheel");
+        if (scroll > 0f)
+            EquipItem(itemIndex >= items.Length - 1 ? 0 : itemIndex + 1);
+        else if (scroll < 0f)
+            EquipItem(itemIndex <= 0 ? items.Length - 1 : itemIndex - 1);
+
+        Item held = items[Mathf.Clamp(itemIndex, 0, items.Length - 1)];
 
         if (Input.GetMouseButtonDown(0))
-        {
-            items[itemIndex].Use();
-        }
-        else if (Input.GetMouseButton(0) && items[itemIndex] is SingleShotGun heldGun)
-        {
+            held.Use();
+        else if (Input.GetMouseButton(0) && held is SingleShotGun heldGun)
             heldGun.UseHeld();
-        }
 
-        if (Input.GetKeyDown(KeyCode.R) && items[itemIndex] is SingleShotGun reloadGun)
-        {
+        if (Input.GetKeyDown(KeyCode.R) && held is SingleShotGun reloadGun)
             reloadGun.Reload();
-        }
 
+        FallOutOfTheWorldCheck();
+    }
+
+
+    // The map has no floor past the edges, and falling forever isn't a death state anyone
+    // enjoys watching.
+    void FallOutOfTheWorldCheck()
+    {
         if (transform.position.y < -10f)
             Die(null, "the void", false);
     }
 
+    static readonly KeyCode[] WeaponKeys =
+    {
+        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5,
+    };
 
     void EquipItem(int index)
     {
@@ -591,7 +593,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot);
 
         if (RoomManager.Instance != null)
-            RoomManager.Instance.HandleLocalDeath(transform.position);
+            RoomManager.Instance.HandleLocalDeath(transform.position, transform.forward);
     }
 
     [PunRPC]
