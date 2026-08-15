@@ -405,6 +405,41 @@ public static class WeaponCheck
         Check(sb, !hudSrc.Contains("recoil"), "crosshair stays at screen centre",
               "recoil already rotates the camera, so shots leave from centre");
 
+        // ---- overshield has to survive a shotgun ----
+        sb.AppendLine("[gun] ---------- overshield ----------");
+        {
+            const float max = 140f;
+            const float full = 200f;
+
+            GunInfo blaster = Resources.Load<GunInfo>("Guns/Shotgun");
+            float pull = blaster != null ? blaster.damage * blaster.pelletsPerShot : 108f;
+
+            int bare = ShotsToKill(max, pull, max);
+            int shielded = ShotsToKill(full, pull, max);
+
+            Check(sb, shielded > bare, "overshield buys you a shotgun hit",
+                  $"{bare} pulls at {max} health, {shielded} at {full}");
+
+            // A rule that only helps against one weapon is a special case pretending to be a
+            // rule, so check the other end of the roster too.
+            GunInfo repeater = Resources.Load<GunInfo>("Guns/Rifle");
+            float shot = repeater != null ? repeater.damage : 21f;
+
+            Check(sb, ShotsToKill(full, shot, max) > ShotsToKill(max, shot, max),
+                  "and it buys you rifle shots as well",
+                  $"{ShotsToKill(max, shot, max)} vs {ShotsToKill(full, shot, max)}");
+
+            // Sixty points of shield absorbing a hundred and twenty damage is the whole design.
+            float left = PlayerController.Absorb(full, 120f, max);
+            Check(sb, Mathf.Abs(left - max) < 0.01f, "a full shield eats exactly twice its value",
+                  $"{full} minus 120 leaves {left:F1}, expected {max}");
+
+            // And no free health when there is no shield to spend.
+            float plain = PlayerController.Absorb(max, 40f, max);
+            Check(sb, Mathf.Abs(plain - (max - 40f)) < 0.01f, "without a shield damage is damage",
+                  $"{plain:F1}");
+        }
+
         // ---- who is allowed to hand out weapons ----
         //
         // None of this is reachable from a test. Photon's offline mode updates the local
@@ -595,5 +630,21 @@ public static class WeaponCheck
     {
         sb.AppendLine($"[gun] ===== {(failures == 0 ? "ALL PASS" : failures + " FAILURE(S)")} =====");
         Debug.Log(sb.ToString());
+    }
+
+    /// How many pulls it takes to kill, playing the damage through the same absorption rule the
+    /// game uses rather than dividing - which is the entire point, since the shield changes how
+    /// much each pull is worth.
+    static int ShotsToKill(float health, float perPull, float max)
+    {
+        int shots = 0;
+
+        while (health > 0f && shots < 99)
+        {
+            health = PlayerController.Absorb(health, perPull, max);
+            shots++;
+        }
+
+        return shots;
     }
 }

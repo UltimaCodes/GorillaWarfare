@@ -723,10 +723,64 @@ public class ProbeRunner : MonoBehaviour
             rig.TwoHandedGrip = info == null || info.twoHanded;
 
             log.AppendLine($"  ..    enemy hand lossyScale {hand.lossyScale}  weapon lossyScale {held.transform.lossyScale * hand.lossyScale.x}");
+
+            // The same offset the real thing uses, read off the prefab rather than guessed -
+            // otherwise this measures a weapon sitting at the hand's origin, which is not where
+            // anybody ever sees one.
+            GameObject prefab = Resources.Load<GameObject>("PhotonPrefabs/PlayerController");
+            PlayerController template = prefab != null ? prefab.GetComponent<PlayerController>() : null;
+
+            if (template != null)
+            {
+                object offset = typeof(PlayerController)
+                    .GetField("weaponHandOffset", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.GetValue(template);
+
+                if (offset is Vector3 local)
+                    held.transform.localPosition = local;
+            }
         }
 
         yield return null;
         yield return null;
+
+        // Where the weapon ends up on the body, as a fraction of how tall the body is.
+        //
+        // "The banana sits at hip height" has been on the known-issues list for a while without
+        // anybody putting a number on it, and a fraction is the only way to say it that doesn't
+        // depend on how big the gorilla happens to be. Hips are around 0.5, the chest 0.7.
+        if (hand != null)
+        {
+            // Both ends from the mesh bounds. The first version of this used the stand-in's
+            // transform as the floor, which is an arbitrary point some way up the body - it
+            // reported the gorilla as 0.87m tall when every other check in this probe measures
+            // it at 1.95m, and every fraction built on it was wrong.
+            float feet = float.MaxValue;
+            float head = float.MinValue;
+
+            foreach (SkinnedMeshRenderer skin in stand.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                feet = Mathf.Min(feet, skin.bounds.min.y);
+                head = Mathf.Max(head, skin.bounds.max.y);
+            }
+
+            float height = Mathf.Max(0.01f, head - feet);
+            float carried = (hand.position.y - feet) / height;
+
+            Check(carried > 0.5f, $"{weapon}: the weapon is carried above the hips",
+                  $"{carried:P0} of body height");
+
+            // Print the skeleton the grips are measured against, so the numbers that fix this
+            // come from the rig rather than from taste.
+            Transform spine = Get<Transform>(rig, "spine");
+            Transform shoulder = Get<Transform>(rig, "rightUpperArm");
+            Transform crown = Get<Transform>(rig, "head");
+
+            log.AppendLine($"  ..    body {height:F2}m | spine {(spine != null ? (spine.position.y - feet) / height : 0f):P0}"
+                           + $" | shoulder {(shoulder != null ? (shoulder.position.y - feet) / height : 0f):P0}"
+                           + $" | head {(crown != null ? (crown.position.y - feet) / height : 0f):P0}"
+                           + $" | hand {carried:P0}");
+        }
 
         bool visible = false;
         float tallest = 0f;
