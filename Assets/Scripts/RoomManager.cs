@@ -68,6 +68,33 @@ public class RoomManager : MonoBehaviourPunCallbacks
         if (GetComponent<MatchState>() == null)
             gameObject.AddComponent<MatchState>();
 
+        // The settings screen has to be reachable from the menu and from the middle of a
+        // match, which are two different scenes, so it rides along on the one object that
+        // survives the trip. Instantiated from a prefab rather than built in code because the
+        // last attempt at building it in code was reverted for exactly that reason.
+        if (SettingsMenu.Instance == null)
+        {
+            GameObject prefab = Resources.Load<GameObject>("SettingsMenu");
+
+            if (prefab != null)
+            {
+                GameObject screen = Instantiate(prefab);
+                screen.name = "SettingsMenu";
+                screen.transform.SetParent(transform, false);
+            }
+            else
+            {
+                Debug.LogWarning("[room] no SettingsMenu prefab in Resources - "
+                                 + "run Tools/Gorilla Warfare/Build the settings menu");
+            }
+        }
+
+        // On this object because it has to survive the trip from the menu into the game - the
+        // camera it attaches to is destroyed and rebuilt on every respawn, and something has to
+        // outlive that to put the layer back.
+        if (GetComponent<ShaderStack>() == null)
+            gameObject.AddComponent<ShaderStack>();
+
         // Here rather than in a scene, because a music player that reloads with the scene
         // restarts the track every time you join a room.
         if (GetComponent<MusicPlayer>() == null)

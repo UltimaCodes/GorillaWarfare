@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Photon.Pun;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
@@ -168,6 +169,9 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- a loadout that resolves to nothing still arms you ----
         yield return CheckEmptyLoadoutFallsBack(player);
+
+        // ---- settings, keys and the shader stack ----
+        yield return CheckSettingsApply();
 
         // ---- hitstop ----
         yield return CheckHitstopRestores();
@@ -1125,6 +1129,164 @@ public class ProbeRunner : MonoBehaviour
 
         yield return null;
         yield return null;
+    }
+
+    /// <summary>
+    /// The settings actually reach the things they claim to control.
+    ///
+    /// A settings screen is the easiest kind of thing to build wrong and not notice: every
+    /// slider moves, every value saves, and nothing happens. So this changes them through the
+    /// same API the UI uses and then checks the game, not the setting.
+    /// </summary>
+    IEnumerator CheckSettingsApply()
+    {
+        // ---- the shader stack exists and reaches the camera ----
+        Check(ShaderStack.Instance != null, "the shader stack is running",
+              ShaderStack.Instance != null ? "on RoomManager" : "RoomManager never built one");
+
+        Camera camera = PlayerController.LocalCamera;
+
+        if (camera != null)
+        {
+            var layer = camera.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessLayer>();
+
+            // The whole reason post-processing has never rendered: there was a volume and a
+            // profile in the scene since 2024 and nothing ever put a layer on the camera.
+            Check(layer != null, "the camera has a post process layer",
+                  layer != null ? "attached" : "nothing renders post processing without one");
+        }
+
+        // ---- presets rebuild the volume ----
+        GameSettings.ShaderPreset before = GameSettings.Shaders;
+
+        GameSettings.SetShaders(GameSettings.ShaderPreset.Off);
+
+        // Two frames, because Destroy is deferred to the end of the frame it was called in - a
+        // single yield counts a volume that is already on its way out.
+        yield return null;
+        yield return null;
+
+        string offVolumes = LiveVolumes();
+
+        GameSettings.SetShaders(GameSettings.ShaderPreset.Overripe);
+        yield return null;
+        yield return null;
+
+        string onVolumes = LiveVolumes();
+
+        // Named rather than counted. The first version of this counted two volumes on Off and
+        // said nothing about what they were, which is exactly the sort of number you can stare
+        // at for ten minutes - printing what it actually found named the culprit immediately.
+        Check(offVolumes == "none" && onVolumes == "~ShaderVolume",
+              "the preset is the only thing driving the picture",
+              $"Off: {offVolumes} | Overripe: {onVolumes}");
+
+        GameSettings.SetShaders(before);
+        yield return null;
+
+        // ---- sensitivity is read from settings rather than the prefab ----
+        float sensitivity = GameSettings.Sensitivity;
+        GameSettings.SetSensitivity(9.5f);
+
+        Check(Mathf.Approximately(GameSettings.Sensitivity, 9.5f), "sensitivity takes a new value",
+              GameSettings.Sensitivity.ToString("F2"));
+
+        // Saved and reloaded, because a setting that only lives in memory is a setting that
+        // resets every time the game starts - which is how it behaved before any of this.
+        GameSettings.Load();
+        Check(Mathf.Approximately(GameSettings.Sensitivity, 9.5f), "and survives a reload",
+              GameSettings.Sensitivity.ToString("F2"));
+
+        GameSettings.SetSensitivity(sensitivity);
+
+        // ---- the field of view reaches the camera ----
+        if (camera != null)
+        {
+            float fov = GameSettings.Fov;
+            GameSettings.SetFov(105f);
+            yield return null;
+
+            // Only meaningful while hip fired - aiming overrides the field of view entirely.
+            Check(Mathf.Abs(camera.fieldOfView - 105f) < 1.5f, "field of view reaches the camera",
+                  camera.fieldOfView.ToString("F0"));
+
+            GameSettings.SetFov(fov);
+            yield return null;
+        }
+
+        // ---- rebinding ----
+        KeyCode jump = KeyBinds.Get(KeyBinds.Action.Jump);
+        KeyBinds.Set(KeyBinds.Action.Jump, KeyCode.V);
+
+        Check(KeyBinds.Get(KeyBinds.Action.Jump) == KeyCode.V, "a key can be rebound",
+              KeyBinds.Get(KeyBinds.Action.Jump).ToString());
+
+        // Binding one action onto another's key has to take it away from the first, or you get
+        // a key that does two things and no way to tell which you meant.
+        KeyBinds.Set(KeyBinds.Action.Fire, KeyCode.V);
+
+        Check(KeyBinds.Get(KeyBinds.Action.Jump) == KeyCode.None,
+              "a stolen key is taken off the old action",
+              KeyBinds.Get(KeyBinds.Action.Jump).ToString());
+
+        // The menu key refuses to move, because losing it means losing the only way back to the
+        // screen that could put it right.
+        KeyCode menu = KeyBinds.Get(KeyBinds.Action.Menu);
+        KeyBinds.Set(KeyBinds.Action.Menu, KeyCode.Z);
+
+        Check(KeyBinds.Get(KeyBinds.Action.Menu) == menu, "the menu key cannot be unbound",
+              KeyBinds.Get(KeyBinds.Action.Menu).ToString());
+
+        KeyBinds.ResetAll();
+
+        Check(KeyBinds.Get(KeyBinds.Action.Jump) == jump && KeyBinds.Get(KeyBinds.Action.Fire) == KeyCode.Mouse0,
+              "defaults come back", $"jump {KeyBinds.Get(KeyBinds.Action.Jump)}");
+
+        // ---- the crosshair obeys its settings ----
+        GameHud hud = GameHud.Instance;
+
+        if (hud != null)
+        {
+            RectTransform tick = Get<RectTransform>(hud, "crosshairUp");
+
+            GameSettings.SetCrosshairThickness(7f);
+            GameSettings.SetCrosshairSize(21f);
+            yield return null;
+            yield return null;
+
+            Check(tick != null && Mathf.Abs(tick.sizeDelta.x - 7f) < 0.01f
+                  && Mathf.Abs(tick.sizeDelta.y - 21f) < 0.01f,
+                  "the crosshair takes its size from settings",
+                  tick == null ? "no tick" : tick.sizeDelta.ToString());
+
+            Image dot = Get<Image>(hud, "crosshairDot");
+            GameSettings.SetCrosshairDot(true);
+            yield return null;
+            yield return null;
+
+            Check(dot != null && dot.gameObject.activeSelf, "the centre dot can be switched on",
+                  dot == null ? "no dot" : dot.gameObject.activeSelf ? "on" : "still off");
+
+            GameSettings.SetCrosshairDot(false);
+        }
+
+        GameSettings.ResetAll();
+        yield return null;
+    }
+
+    static string LiveVolumes()
+    {
+        List<string> names = new List<string>();
+
+        foreach (var volume in Object.FindObjectsByType<UnityEngine.Rendering.PostProcessing.PostProcessVolume>(
+                     FindObjectsSortMode.None))
+        {
+            if (volume.isActiveAndEnabled)
+                names.Add(volume.name);
+        }
+
+        names.Sort();
+        return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't

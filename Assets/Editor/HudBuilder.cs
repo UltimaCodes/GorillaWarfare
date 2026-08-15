@@ -109,6 +109,13 @@ public static class HudBuilder
 
         // A diamond rather than a dot. Turned forty five degrees it reads as a mark that
         // arrived rather than as part of the crosshair that changed colour.
+        // Off by default; the settings screen turns it on. Authored here so a freshly built
+        // HUD has one, and GameHud makes its own if it finds the slot empty - which is what
+        // happens to a HUD built before the dot existed.
+        Image dot = Image(crosshair.transform, "Dot", Center, Center, Center,
+                          Vector2.zero, new Vector2(3f, 3f), Color.white);
+        dot.gameObject.SetActive(false);
+
         Image marker = Image(crosshair.transform, "HitMarker", Center, Center, Center,
                              Vector2.zero, new Vector2(18f, 18f), Color.white);
         marker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
@@ -281,6 +288,7 @@ public static class HudBuilder
         Wire(so, "crosshairLeft", leftTick.rectTransform);
         Wire(so, "crosshairRight", rightTick.rectTransform);
         Wire(so, "hitMarker", marker);
+        Wire(so, "crosshairDot", dot);
 
         Wire(so, "scope", scope);
         Wire(so, "scopeGlass", glass);
@@ -315,6 +323,69 @@ public static class HudBuilder
 
         Debug.Log($"[hud] built with font '{(font != null ? font.name : "none")}' - "
                   + "everything in it is a scene object now, move and restyle it from here");
+
+        if (Application.isBatchMode)
+            EditorApplication.Exit(0);
+    }
+
+    /// <summary>
+    /// Fills in pieces a HUD built by an older version of this script doesn't have.
+    ///
+    /// Run is destructive by design - it replaces the whole GameHud root, which is right when
+    /// you want to start over and wrong once anyone has moved anything. But the HUD keeps
+    /// gaining parts, and telling Ryaan to throw away his layout every time one arrives is not
+    /// a trade worth making. This adds what's missing and touches nothing else.
+    /// </summary>
+    [MenuItem("Tools/Gorilla Warfare/Repair the in-game HUD")]
+    public static void Repair()
+    {
+        Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+        GameHud hud = Object.FindFirstObjectByType<GameHud>();
+
+        if (hud == null)
+        {
+            Debug.LogError("[hud] no GameHud in the scene - build it first");
+            if (Application.isBatchMode)
+                EditorApplication.Exit(1);
+            return;
+        }
+
+        SerializedObject so = new SerializedObject(hud);
+        int added = 0;
+
+        // The centre dot, which arrived with the crosshair settings.
+        SerializedProperty dotSlot = so.FindProperty("crosshairDot");
+
+        if (dotSlot != null && dotSlot.objectReferenceValue == null)
+        {
+            SerializedProperty up = so.FindProperty("crosshairUp");
+            RectTransform tick = up != null ? up.objectReferenceValue as RectTransform : null;
+
+            if (tick != null && tick.parent != null)
+            {
+                Image dot = Image(tick.parent, "Dot", Center, Center, Center,
+                                  Vector2.zero, new Vector2(3f, 3f), Color.white);
+                dot.gameObject.SetActive(false);
+
+                dotSlot.objectReferenceValue = dot;
+                added++;
+
+                Debug.Log("[hud] added the crosshair dot");
+            }
+        }
+
+        if (added == 0)
+        {
+            Debug.Log("[hud] nothing missing");
+        }
+        else
+        {
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log($"[hud] repaired {added} missing piece(s), everything else left alone");
+        }
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);

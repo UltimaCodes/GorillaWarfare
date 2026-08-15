@@ -115,10 +115,16 @@ public class MusicPlayer : MonoBehaviour
         float step = Time.unscaledDeltaTime / Mathf.Max(fadeSeconds, 0.01f);
 
         // The live one comes up, the other goes down and stops once it's silent.
-        live.volume = Mathf.MoveTowards(live.volume, wanted != null ? volume : 0f, step * volume);
+        // The serialized figure is the track's own level in the mix - some of these were
+        // mastered louder than others - and the slider scales all of them together.
+        float target = volume * GameSettings.MusicVolume;
+
+        live.volume = Mathf.MoveTowards(live.volume, wanted != null ? target : 0f,
+                                        step * Mathf.Max(0.01f, target));
 
         AudioSource other = live == a ? b : a;
-        other.volume = Mathf.MoveTowards(other.volume, 0f, step * volume);
+        other.volume = Mathf.MoveTowards(other.volume, 0f,
+                                         step * Mathf.Max(0.01f, volume * GameSettings.MusicVolume));
 
         if (other.volume <= 0.001f && other.isPlaying)
             other.Stop();

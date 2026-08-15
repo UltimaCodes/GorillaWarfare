@@ -47,6 +47,7 @@ public class GameHud : MonoBehaviour
     [SerializeField] RectTransform crosshairLeft;
     [SerializeField] RectTransform crosshairRight;
     [SerializeField] Image hitMarker;
+    [SerializeField] Image crosshairDot;
 
     [Header("Scope")]
     [SerializeField] GameObject scope;
@@ -107,8 +108,6 @@ public class GameHud : MonoBehaviour
     float killFlash;
     float comboFlash;
 
-    float crosshairRest;
-
     readonly List<TMP_Text> feedRows = new List<TMP_Text>();
     readonly List<TMP_Text> standingsRows = new List<TMP_Text>();
     readonly List<DamageLabel> damageLabels = new List<DamageLabel>();
@@ -139,10 +138,18 @@ public class GameHud : MonoBehaviour
         if (canvas != null)
             canvasRect = (RectTransform)canvas.transform;
 
-        // Measured from the scene rather than hard coded, so dragging a tick in the editor also
-        // moves where it returns to when the spread closes.
-        if (crosshairUp != null)
-            crosshairRest = crosshairUp.anchoredPosition.magnitude;
+        // Made here if the scene doesn't have one. The dot arrived after the HUD was built,
+        // and re-running the builder to add it would throw away any restyling done since - so
+        // an authored dot wins and a missing one is filled in.
+        if (crosshairDot == null && crosshairUp != null && crosshairUp.parent != null)
+        {
+            GameObject made = new GameObject("Dot", typeof(RectTransform), typeof(CanvasRenderer),
+                                             typeof(Image));
+            made.transform.SetParent(crosshairUp.parent, false);
+
+            crosshairDot = made.GetComponent<Image>();
+            crosshairDot.raycastTarget = false;
+        }
 
         HideTemplate(feedTemplate);
         HideTemplate(standingsTemplate);
@@ -371,14 +378,32 @@ public class GameHud : MonoBehaviour
         GunInfo info = gun != null ? gun.Info : null;
 
         // Opens with the cone the weapon actually fires into, so an inaccurate gun looks
-        // inaccurate before you've missed with it.
-        float spread = info != null ? info.spread : 0f;
-        float gap = crosshairRest + spread * crosshairSpread;
+        // inaccurate before you've missed with it. Switchable, because some people would rather
+        // have a reticle that never moves than one that tells them the truth.
+        float spread = GameSettings.CrosshairDynamic && info != null ? info.spread : 0f;
+        float gap = GameSettings.CrosshairGap + spread * crosshairSpread;
 
-        Place(crosshairUp, new Vector2(0f, gap), !aiming);
-        Place(crosshairDown, new Vector2(0f, -gap), !aiming);
-        Place(crosshairLeft, new Vector2(-gap, 0f), !aiming);
-        Place(crosshairRight, new Vector2(gap, 0f), !aiming);
+        float length = GameSettings.CrosshairSize;
+        float thickness = GameSettings.CrosshairThickness;
+        Color colour = GameSettings.CrosshairColour;
+
+        Tick(crosshairUp, new Vector2(0f, gap + length * 0.5f),
+             new Vector2(thickness, length), colour, !aiming);
+        Tick(crosshairDown, new Vector2(0f, -gap - length * 0.5f),
+             new Vector2(thickness, length), colour, !aiming);
+        Tick(crosshairLeft, new Vector2(-gap - length * 0.5f, 0f),
+             new Vector2(length, thickness), colour, !aiming);
+        Tick(crosshairRight, new Vector2(gap + length * 0.5f, 0f),
+             new Vector2(length, thickness), colour, !aiming);
+
+        if (crosshairDot != null)
+        {
+            crosshairDot.gameObject.SetActive(GameSettings.CrosshairDot && !aiming);
+            crosshairDot.rectTransform.anchoredPosition = Vector2.zero;
+            crosshairDot.rectTransform.sizeDelta = new Vector2(thickness, thickness);
+            crosshairDot.color = colour;
+            Outline(crosshairDot);
+        }
 
         if (hitMarker == null)
             return;
@@ -397,13 +422,56 @@ public class GameHud : MonoBehaviour
         hitMarker.color = new Color(c.r, c.g, c.b, hitFlash);
     }
 
-    static void Place(RectTransform tick, Vector2 position, bool visible)
+    /// <summary>
+    /// One arm of the crosshair, positioned, sized and coloured from the settings.
+    ///
+    /// Position is the outer edge plus half the length, because the rects are centre pivoted -
+    /// the gap is meant to be the distance from the middle of the screen to where the mark
+    /// starts, not to where its centre happens to land, and getting that wrong makes the gap
+    /// slider do something subtly different from what it says.
+    /// </summary>
+    static void Tick(RectTransform tick, Vector2 position, Vector2 size, Color colour, bool visible)
     {
         if (tick == null)
             return;
 
         tick.gameObject.SetActive(visible);
         tick.anchoredPosition = position;
+        tick.sizeDelta = size;
+
+        Image image = tick.GetComponent<Image>();
+
+        if (image == null)
+            return;
+
+        image.color = colour;
+        Outline(image);
+    }
+
+    /// <summary>
+    /// A dark edge round the crosshair, so it stays visible against a bright wall.
+    ///
+    /// uGUI's own Outline component rather than a second set of images behind the first: it
+    /// duplicates the graphic's mesh with an offset, which needs no extra objects and therefore
+    /// no change to a hierarchy people are meant to be editing by hand.
+    /// </summary>
+    static void Outline(Image image)
+    {
+        UnityEngine.UI.Outline edge = image.GetComponent<UnityEngine.UI.Outline>();
+
+        if (GameSettings.CrosshairOutline)
+        {
+            if (edge == null)
+                edge = image.gameObject.AddComponent<UnityEngine.UI.Outline>();
+
+            edge.enabled = true;
+            edge.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            edge.effectDistance = new Vector2(1.5f, -1.5f);
+        }
+        else if (edge != null)
+        {
+            edge.enabled = false;
+        }
     }
 
     /// <summary>

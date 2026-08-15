@@ -62,9 +62,8 @@ public class Scoreboard : MonoBehaviourPunCallbacks
         if (canvasGroup == null)
             return;
 
-        if (Input.GetKeyDown(KeyCode.Tab))
-            canvasGroup.alpha = 1;
-        else if (Input.GetKeyUp(KeyCode.Tab))
-            canvasGroup.alpha = 0;
+        // Read every frame rather than on the key events, because rebinding the scoreboard
+        // while holding the old key would otherwise leave it stuck open forever.
+        canvasGroup.alpha = KeyBinds.Held(KeyBinds.Action.Scoreboard) ? 1f : 0f;
     }
 }

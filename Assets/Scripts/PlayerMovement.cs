@@ -93,17 +93,17 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (KeyBinds.Pressed(KeyBinds.Action.Jump))
             jumpPressedAt = Time.time;
 
         bool wantsJump = autoBhop
-            ? Input.GetKey(KeyCode.Space)
+            ? KeyBinds.Held(KeyBinds.Action.Jump)
             : Time.time - jumpPressedAt <= jumpBufferTime;
 
         grounded = controller.isGrounded;
 
         Vector3 wishDir = WishDirection();
-        float wishSpeed = Input.GetKey(KeyCode.LeftShift) ? walkSpeed : maxGroundSpeed;
+        float wishSpeed = KeyBinds.Held(KeyBinds.Action.Walk) ? walkSpeed : maxGroundSpeed;
 
         if (grounded)
             GroundMove(wishDir, wishSpeed, wantsJump, dt);
@@ -115,8 +115,11 @@ public class PlayerMovement : MonoBehaviour
 
     Vector3 WishDirection()
     {
-        float x = Input.GetAxisRaw("Horizontal");
-        float z = Input.GetAxisRaw("Vertical");
+        // From the four bound keys rather than the Input Manager's axes, which can only be
+        // changed in a project settings window - not by the person playing.
+        Vector2 move = KeyBinds.MoveAxis();
+        float x = move.x;
+        float z = move.y;
 
         // Not normalised across both axes beyond magnitude 1 - diagonal shouldn't be faster,
         // but the direction itself is what matters to Accelerate.
