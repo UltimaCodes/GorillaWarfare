@@ -42,6 +42,9 @@ public class CombatHud : MonoBehaviour
     string healthText = "100";
     int shownHealth = -1;
 
+    Texture2D scopeMask;
+    int scopeSize;
+
     string ammoText = string.Empty;
     string spareText = string.Empty;
     string weaponText = string.Empty;
@@ -112,6 +115,19 @@ public class CombatHud : MonoBehaviour
         // kick twice and put the reticle above where the bullets actually went. You compensate
         // by pulling down against the view, not by chasing a moving reticle.
 
+        // Nothing while aiming. A hip crosshair drawn over a scoped view is telling you about
+        // a spread you no longer have, in a place the barrel isn't pointing.
+        bool aiming = player.IsAiming;
+
+        if (aiming)
+        {
+            DrawScope(cx, cy);
+            DrawAmmo(gun);
+            DrawHealth();
+            GUI.color = Color.white;
+            return;
+        }
+
         // Spread opens the gap, so an inaccurate weapon looks inaccurate.
         float spread = gun != null && gun.Info != null ? gun.Info.spread : 0f;
         float g = gap + spread * spreadScale * 0.5f;
@@ -139,39 +155,7 @@ public class CombatHud : MonoBehaviour
 
         DrawHealth();
 
-        // Ammo, bottom right: big number is what's in the banana, small one underneath is how
-        // many spare bananas you're carrying.
-        if (gun != null && gun.Info != null && !gun.Info.melee)
-        {
-            if (ammoStyle == null)
-            {
-                ammoStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
-                spareStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
-            }
-
-            float right = Screen.width - 40f;
-            float bottom = Screen.height - 30f;
-
-            // Every one of these was a fresh string on every OnGUI pass, and OnGUI runs at
-            // least twice a frame. They only change when you fire, reload or switch, so they
-            // are rebuilt when they change and reused the rest of the time.
-            CacheAmmoText(gun);
-
-            ammoStyle.fontSize = 52;
-            GUI.color = gun.Reloading ? reloadingColour
-                      : gun.Ammo == 0 ? dryColour
-                      : ammoColour;
-            GUI.Label(new Rect(0f, 0f, right, bottom), ammoText, ammoStyle);
-
-            // Spare bananas, smaller and dimmer, below and right of the main number.
-            spareStyle.fontSize = 22;
-            GUI.color = gun.SpareMagazines > 0 ? spareColour : dryColour;
-            GUI.Label(new Rect(0f, 0f, right, bottom + 26f), spareText, spareStyle);
-
-            spareStyle.fontSize = 16;
-            GUI.color = nameColour;
-            GUI.Label(new Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
-        }
+        DrawAmmo(gun);
 
         GUI.color = Color.white;
     }
@@ -229,6 +213,118 @@ public class CombatHud : MonoBehaviour
         GUI.Label(new Rect(left, 0f, 300f, bottom - blockHeight - 6f), healthText, healthStyle);
 
         GUI.color = Color.white;
+    }
+
+    // The scoped view: everything outside a circle is black, with hairlines across it.
+    //
+    // The circle is a generated texture rather than a drawn shape, because IMGUI has no way to
+    // fill one - and a black square with a hole in it is exactly what a scope is anyway. It's
+    // built once at the size it will be drawn, so the edge stays crisp instead of being scaled.
+    void DrawScope(float cx, float cy)
+    {
+        float diameter = Screen.height;
+
+        if (scopeMask == null || scopeSize != Mathf.RoundToInt(diameter))
+        {
+            scopeSize = Mathf.RoundToInt(diameter);
+            scopeMask = BuildScopeMask(Mathf.Min(scopeSize, 1024));
+        }
+
+        GUI.color = Color.white;
+
+        float left = cx - diameter * 0.5f;
+        GUI.DrawTexture(new UnityEngine.Rect(left, 0f, diameter, diameter), scopeMask);
+
+        // The circle is as tall as the screen, so anything wider than it is blacked out.
+        GUI.color = Color.black;
+        Rect(0f, 0f, left, Screen.height);
+        Rect(left + diameter, 0f, Screen.width - (left + diameter), Screen.height);
+
+        // Hairlines, all the way across, with a gap in the middle so they don't cover what you
+        // are shooting at.
+        GUI.color = new Color(0f, 0f, 0f, 0.85f);
+        float gapHalf = 12f;
+        float reach = diameter * 0.5f;
+
+        Rect(cx - reach, cy - 0.5f, reach - gapHalf, 1f);
+        Rect(cx + gapHalf, cy - 0.5f, reach - gapHalf, 1f);
+        Rect(cx - 0.5f, cy - reach, 1f, reach - gapHalf);
+        Rect(cx - 0.5f, cy + gapHalf, 1f, reach - gapHalf);
+
+        GUI.color = Color.white;
+    }
+
+    /// <summary>
+    /// Opaque black everywhere except a circle in the middle, with a soft edge and a dark rim.
+    ///
+    /// Public so the play mode probe can check it. The scope can't be photographed composited -
+    /// IMGUI doesn't appear in a camera render - but the mask on its own is checkable, and a
+    /// scope you can't see out of is the sort of thing worth catching automatically.
+    /// </summary>
+    public static Texture2D BuildScopeMask(int size)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "~scope" };
+
+        float half = size * 0.5f;
+        float radius = half * 0.985f;
+
+        Color[] pixels = new Color[size * size];
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half));
+
+                // One pixel of feather, or the rim crawls with aliasing every time you move.
+                float outside = Mathf.Clamp01(distance - radius + 1f);
+
+                // A soft darkening just inside the rim, which is what makes it read as glass
+                // rather than as a hole cut in a piece of card.
+                float vignette = Mathf.Clamp01((distance - radius * 0.82f) / (radius * 0.18f)) * 0.45f;
+
+                pixels[y * size + x] = new Color(0f, 0f, 0f, Mathf.Max(outside, vignette));
+            }
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply();
+        texture.wrapMode = TextureWrapMode.Clamp;
+        return texture;
+    }
+
+    // Ammo, bottom right: big number is what's in the banana, small one underneath is how
+    // many spare bananas you're carrying. Drawn from both the hip and the scope, because
+    // running dry mid scope is exactly when you need to know.
+    void DrawAmmo(SingleShotGun gun)
+    {
+        if (gun == null || gun.Info == null || gun.Info.melee)
+            return;
+
+        if (ammoStyle == null)
+        {
+            ammoStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
+            spareStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
+        }
+
+        float right = Screen.width - 40f;
+        float bottom = Screen.height - 30f;
+
+        CacheAmmoText(gun);
+
+        ammoStyle.fontSize = 52;
+        GUI.color = gun.Reloading ? reloadingColour
+                  : gun.Ammo == 0 ? dryColour
+                  : ammoColour;
+        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom), ammoText, ammoStyle);
+
+        spareStyle.fontSize = 22;
+        GUI.color = gun.SpareMagazines > 0 ? spareColour : dryColour;
+        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom + 26f), spareText, spareStyle);
+
+        spareStyle.fontSize = 16;
+        GUI.color = nameColour;
+        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
     }
 
     void Rect(float x, float y, float w, float h)

@@ -23,6 +23,9 @@ MonoBehaviour:
   pelletsPerShot: 1
   melee: 0
   twoHanded: 1
+  canAim: 1
+  aimFov: 32
+  aimSpreadScale: 0.15
   magazineSize: 5
   spareMagazines: 4
   reloadTime: 3

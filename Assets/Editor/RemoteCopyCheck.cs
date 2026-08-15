@@ -38,7 +38,7 @@ public static class RemoteCopyCheck
 
         Object.DestroyImmediate(instance);
 
-        CheckLoadoutClearingSparesTheArms();
+        CheckLoadoutOnlyClearsWeapons();
         CheckLoadoutFallback();
         CheckLadderIsBuildable();
 
@@ -123,26 +123,29 @@ public static class RemoteCopyCheck
         Notes.Add("EquipItem survives -1, 0, 3 and 99 against an unbuilt loadout");
     }
 
-    // The first person arms live in the same holder the loadout builds into. Clearing it
-    // wholesale destroyed them one frame after spawn, which is why the hands were never
-    // visible however carefully they were positioned.
-    static void CheckLoadoutClearingSparesTheArms()
+    // Building a loadout must only clear weapons out of the holder, not empty it.
+    //
+    // This was written when the first person arms lived in that holder and were being destroyed
+    // one frame after being built. The arms are gone, but the rule outlived them: anything else
+    // parented there - a sight, an aim pivot, an effect - would be wiped the same way, and the
+    // failure looks like the object simply never existed.
+    static void CheckLoadoutOnlyClearsWeapons()
     {
         GameObject host = new GameObject("loadout host");
         GameObject holder = new GameObject("ItemHolder");
         holder.transform.SetParent(host.transform, false);
 
-        GameObject arms = new GameObject("ViewArms");
-        arms.transform.SetParent(holder.transform, false);
+        GameObject bystander = new GameObject("not a weapon");
+        bystander.transform.SetParent(holder.transform, false);
 
         WeaponLoadout loadout = host.AddComponent<WeaponLoadout>();
         loadout.Build(holder.transform, null, WeaponLoadout.AllWeapons, false);
 
-        bool armsSurvived = arms != null && arms.transform.parent == holder.transform;
-        Notes.Add($"arms survive a loadout build: {armsSurvived}");
+        bool survived = bystander != null && bystander.transform.parent == holder.transform;
+        Notes.Add($"non weapon children survive a loadout build: {survived}");
 
-        if (!armsSurvived)
-            Failures.Add("building a loadout destroys the view arms - the hands will vanish one frame after spawning");
+        if (!survived)
+            Failures.Add("building a loadout empties the whole holder - anything else parented there dies with it");
 
         int weapons = 0;
         foreach (Transform child in holder.transform)

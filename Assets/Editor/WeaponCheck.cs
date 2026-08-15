@@ -330,11 +330,6 @@ public static class WeaponCheck
                 Check(sb, meshOnScreen > 0.45f, "most of the banana is on screen",
                       $"{meshOnScreen * 100f:F0}% of its bounds");
 
-                Vector3 armOff = so2.FindProperty("viewArmsOffset").vector3Value;
-                Vector3 armRot = so2.FindProperty("viewArmsRotation").vector3Value;
-                float handsOnScreen = FractionOnScreen(camera, viewHolder, "Models/Weapons/ViewArms", armOff, armRot);
-                Check(sb, handsOnScreen > 0.20f, "hands reach into frame",
-                      $"{handsOnScreen * 100f:F0}% of the arms visible");
             }
             Object.DestroyImmediate(inst);
         }
@@ -384,11 +379,6 @@ public static class WeaponCheck
                   mat == null ? "no material" : mat.mainTexture != null ? mat.mainTexture.name : "flat colour");
         }
 
-        // ---- view arms ----
-        GameObject arms = Resources.Load<GameObject>("Models/Weapons/ViewArms");
-        Check(sb, arms != null, "view arms model", arms == null ? "missing" : "loaded");
-        Material armMat = Resources.Load<Material>("Models/Weapons/ViewArmsMat");
-        Check(sb, armMat != null, "view arms material", armMat == null ? "missing" : armMat.name);
 
         // ---- recoil is no longer forgiving ----
         GunInfo rf = Resources.Load<GunInfo>("Guns/Rifle");
@@ -452,7 +442,10 @@ public static class WeaponCheck
         }
         if (lengths.Count == 5)
         {
-            Check(sb, lengths["Sniper"] > lengths["Rifle"] * 1.8f, "sniper is obnoxiously long",
+            // Was 1.8x. Big Mike came down from 1.45m to 1.18m because at full length it cut
+            // across the crosshair, which is a real cost for a joke about a long banana. It has
+            // to stay clearly the longest thing in the game; it doesn't have to be unusable.
+            Check(sb, lengths["Sniper"] > lengths["Rifle"] * 1.5f, "sniper is obnoxiously long",
                   $"{lengths["Sniper"]:F2}m vs rifle {lengths["Rifle"]:F2}m");
             Check(sb, lengths["Rifle"] > lengths["Pistol"] * 1.8f, "rifle is a longer banana",
                   $"{lengths["Rifle"]:F2}m vs pistol {lengths["Pistol"]:F2}m");

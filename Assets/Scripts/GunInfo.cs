@@ -33,6 +33,17 @@ public class GunInfo : ItemInfo
              + "second hand further up. Drives the arm pose on the copy of you other people see.")]
     public bool twoHanded = true;
 
+    [Header("Aim")]
+    [Tooltip("Right click pulls the weapon up to eye level and narrows the view.")]
+    public bool canAim;
+
+    [Tooltip("Field of view while aiming. The lower it goes the more it magnifies, and mouse "
+             + "sensitivity is scaled by the same ratio so aiming doesn't also make you twitchy.")]
+    [Range(10f, 60f)] public float aimFov = 26f;
+
+    [Tooltip("Spread while aiming, as a fraction of the hip fired figure.")]
+    [Range(0f, 1f)] public float aimSpreadScale = 0.15f;
+
     [Header("Ammo")]
     [Tooltip("Shots per banana.")]
     public int magazineSize = 30;

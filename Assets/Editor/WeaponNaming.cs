@@ -13,24 +13,24 @@ using UnityEngine;
 // once, and so re-running it puts anything back that gets nudged.
 public static class WeaponNaming
 {
-    // key, name on screen, needs both hands
-    static readonly (string key, string name, bool twoHanded)[] Weapons =
+    // key, name on screen, needs both hands, aims down sights
+    static readonly (string key, string name, bool twoHanded, bool canAim)[] Weapons =
     {
         // The supermarket banana. Ordinary, dependable, the one everyone starts with.
-        ("Pistol",  "Cavendish",    false),
+        ("Pistol",  "Cavendish",    false, false),
 
         // Two bananas taped side by side, and a banana split is two halves in one dish.
-        ("Shotgun", "The Split",     true),
+        ("Shotgun", "The Split",     true,  false),
 
         // A bunch is a lot of bananas at once, which is also what this does.
-        ("Rifle",   "The Bunch",     true),
+        ("Rifle",   "The Bunch",     true,  false),
 
         // Gros Michel, the cultivar that was wiped out in the fifties, known as Big Mike. It was
         // also longer than a Cavendish, which suits the absurd one.
-        ("Sniper",  "Big Mike",      true),
+        ("Sniper",  "Big Mike",      true,  true),
 
         // What's left after you eat one, and what everyone does about it.
-        ("Peel",    "Slip Hazard",  false),
+        ("Peel",    "Slip Hazard",  false, false),
     };
 
     [MenuItem("Tools/Gorilla Warfare/Name the weapons")]
@@ -39,7 +39,7 @@ public static class WeaponNaming
         int changed = 0;
         int missing = 0;
 
-        foreach ((string key, string name, bool twoHanded) in Weapons)
+        foreach ((string key, string name, bool twoHanded, bool canAim) in Weapons)
         {
             string path = $"Assets/Resources/Guns/{key}.asset";
             GunInfo info = AssetDatabase.LoadAssetAtPath<GunInfo>(path);
@@ -51,10 +51,11 @@ public static class WeaponNaming
                 continue;
             }
 
-            bool dirty = info.itemName != name || info.twoHanded != twoHanded;
+            bool dirty = info.itemName != name || info.twoHanded != twoHanded || info.canAim != canAim;
 
             info.itemName = name;
             info.twoHanded = twoHanded;
+            info.canAim = canAim;
 
             if (dirty)
             {
@@ -62,7 +63,8 @@ public static class WeaponNaming
                 changed++;
             }
 
-            Debug.Log($"[names] {key,-8} -> {name,-14} {(twoHanded ? "two handed" : "one handed")}");
+            Debug.Log($"[names] {key,-8} -> {name,-14} {(twoHanded ? "two handed" : "one handed")}"
+                      + (canAim ? $", aims at {info.aimFov:F0} fov" : ""));
         }
 
         AssetDatabase.SaveAssets();
