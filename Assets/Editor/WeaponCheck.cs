@@ -302,6 +302,28 @@ public static class WeaponCheck
                 Check(sb, vp.z > 0f && vp.x > 0f && vp.x < 1f && vp.y > 0f && vp.y < 1f,
                       "weapon lands inside the viewport",
                       $"viewport ({vp.x:F2}, {vp.y:F2}, {vp.z:F2})");
+
+                // Not too near the bottom edge either. Last time everything technically had a
+                // positive viewport y and was still off the bottom of the screen in practice.
+                Check(sb, vp.y > 0.06f, "weapon is clear of the bottom edge", $"viewport y {vp.y:F2}");
+
+                // The hands are the bit he actually could not see, so check them separately.
+                SerializedObject so3 = new SerializedObject(inst.GetComponent<PlayerController>());
+                Vector3 armOff = so3.FindProperty("viewArmsOffset").vector3Value;
+                Vector3 armWorld = viewHolder.TransformPoint(armOff);
+                Vector3 avp = camera.WorldToViewportPoint(armWorld);
+                Check(sb, avp.z > camera.nearClipPlane, "hands are in front of the camera",
+                      $"{avp.z:F2}m forward");
+                Check(sb, avp.y > 0.02f && avp.y < 0.6f, "hands are on screen, low",
+                      $"viewport y {avp.y:F2}");
+                Check(sb, avp.x > 0.4f && avp.x < 1f, "hands are on the right",
+                      $"viewport x {avp.x:F2}");
+
+                // Weapon must be angled, not pointing straight down the camera axis, or a long
+                // banana is seen end-on and reads as a tube.
+                Vector3 rot = so3.FindProperty("weaponViewRotation").vector3Value;
+                Check(sb, Mathf.Abs(rot.y) > 5f, "weapon is angled across the view",
+                      $"yaw {rot.y:F0} degrees");
             }
             Object.DestroyImmediate(inst);
         }
