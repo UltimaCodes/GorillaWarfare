@@ -23,11 +23,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // degrees down, which is the bottom edge of a 60 degree FOV. That's why the hands were
     // invisible: they were rendering just off the bottom of the screen.
     // This sits the weapon ~17 degrees below and ~12 right of centre, well inside the frame.
-    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.18f, 0.24f, 0.85f);
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.2f, 0.26f, 0.8f);
     // Angled across the view rather than pointing straight down the camera axis. Aimed
     // straight ahead you see a long thin banana end-on, which reads as a tube - you need the
     // yaw to show its curve and silhouette, which is how CS frames a rifle.
-    [SerializeField] Vector3 weaponViewRotation = new Vector3(-4f, -14f, 7f);
+    [SerializeField] Vector3 weaponViewRotation = new Vector3(-4f, -14f, 8f);
 
     [SerializeField] float aimSpeed = 12f;
 
@@ -88,7 +88,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     public PhotonView View => PV;
 
     /// What the HUD needs to draw itself.
-    public Vector2 RecoilOffset => recoilOffset;
     public SingleShotGun ActiveGun =>
         items != null && itemIndex >= 0 && itemIndex < items.Length ? items[itemIndex] as SingleShotGun : null;
 
@@ -512,8 +511,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// </param>
     void UpdateAim(bool held)
     {
-        GunInfo info = ActiveGun != null ? ActiveGun.Info : null;
-        bool wants = info != null && info.canAim && held && !ActiveGun.Reloading;
+        // Gun game swaps your weapon out from under you by rebuilding the loadout, and Destroy
+        // is deferred, so there is a window where you are holding nothing at all. Everything
+        // below has to survive that.
+        SingleShotGun gun = ActiveGun;
+        GunInfo info = gun != null ? gun.Info : null;
+        bool wants = info != null && info.canAim && held && !gun.Reloading;
 
         IsAiming = wants;
 
@@ -537,7 +540,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // and the weapon is in it, so it grows exactly as fast as the world does. Engines that
         // keep the model on screen while scoped render it through a second camera at its own
         // fixed field of view. Not drawing it is the same answer for none of the work.
-        ActiveGun.SetVisible(!wants);
+        if (gun != null)
+            gun.SetVisible(!wants);
 
         // Back where it belongs, since aiming no longer moves it.
         itemHolder.localPosition = Vector3.Lerp(itemHolder.localPosition, weaponViewOffset, t);

@@ -116,9 +116,6 @@ public class MatchState : MonoBehaviourPunCallbacks
         }
     }
 
-    /// True while players should be able to move and shoot.
-    public static bool InPlay => Phase == MatchPhase.Live;
-
     /// What this deathmatch rolled. Readable by anyone, so the warmup screen can show it and a
     /// new master can keep handing out the same set.
     public static string[] RolledWeapons

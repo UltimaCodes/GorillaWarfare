@@ -19,13 +19,13 @@ MonoBehaviour:
   falloffFloor: 1
   fireRate: 0.8
   automatic: 0
-  spread: 0
+  spread: 2.6
   pelletsPerShot: 1
   melee: 0
   twoHanded: 1
   canAim: 1
   aimFov: 32
-  aimSpreadScale: 0.15
+  aimSpreadScale: 0.03
   magazineSize: 5
   spareMagazines: 4
   reloadTime: 3
