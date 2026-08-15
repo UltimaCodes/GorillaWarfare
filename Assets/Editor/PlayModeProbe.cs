@@ -156,6 +156,9 @@ public class ProbeRunner : MonoBehaviour
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
+        // ---- joining and leaving ----
+        yield return CheckJoinAndLeaveMessages();
+
         // ---- hitstop ----
         yield return CheckHitstopRestores();
 
@@ -363,6 +366,46 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
+    /// <summary>
+    /// Somebody arriving or leaving has to say so.
+    ///
+    /// Photon fires these callbacks and nothing was listening, so people vanished mid-fight
+    /// with no explanation - which reads as the game being broken rather than as someone
+    /// closing it. Offline mode only ever has one player, so the callbacks never fire on their
+    /// own here and they're driven directly instead.
+    /// </summary>
+    IEnumerator CheckJoinAndLeaveMessages()
+    {
+        MatchState state = MatchState.Instance;
+        if (state == null)
+        {
+            Check(false, "MatchState is listening", "no instance");
+            yield break;
+        }
+
+        int before = MatchState.Feed.Count;
+
+        state.OnPlayerEnteredRoom(PhotonNetwork.LocalPlayer);
+        yield return null;
+
+        bool joined = MatchState.Feed.Count > before
+                      && MatchState.Feed[MatchState.Feed.Count - 1].kind == MatchState.FeedKind.Join;
+
+        Check(joined, "arriving posts a message",
+              joined ? MatchState.Feed[MatchState.Feed.Count - 1].actor : "nothing was posted");
+
+        before = MatchState.Feed.Count;
+
+        state.OnPlayerLeftRoom(PhotonNetwork.LocalPlayer);
+        yield return null;
+
+        bool left = MatchState.Feed.Count > before
+                    && MatchState.Feed[MatchState.Feed.Count - 1].kind == MatchState.FeedKind.Leave;
+
+        Check(left, "leaving posts a message",
+              left ? MatchState.Feed[MatchState.Feed.Count - 1].actor : "nothing was posted");
+    }
+
     /// <summary>
     /// The freeze has to end.
     ///
@@ -733,6 +776,16 @@ public class ProbeRunner : MonoBehaviour
 
         Check(MatchState.Feed.Count > feedBefore, "the kill feed heard about it",
               $"{MatchState.Feed.Count - feedBefore} new entries");
+
+        if (MatchState.Feed.Count > 0)
+        {
+            MatchState.FeedEntry last = MatchState.Feed[MatchState.Feed.Count - 1];
+
+            Check(last.kind == MatchState.FeedKind.Kill, "it is recorded as a kill", last.kind.ToString());
+            Check(!string.IsNullOrEmpty(last.subject), "the feed names the victim", last.subject);
+            Check(last.headshot, "the feed carries the headshot flag", "headshot");
+            Check(last.involvesYou, "your own kills are marked", "involvesYou");
+        }
 
         Check(Object.FindFirstObjectByType<Camera>() != null, "something is still rendering",
               "a camera survives the controller");

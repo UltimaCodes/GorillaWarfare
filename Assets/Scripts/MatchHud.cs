@@ -24,12 +24,16 @@ public class MatchHud : MonoBehaviour
     static readonly Color Urgent = new Color(1f, 0.25f, 0.15f);
     static readonly Color Kill = new Color(1f, 0.4f, 0.1f);
     static readonly Color Dim = new Color(1f, 1f, 1f, 0.55f);
+    static readonly Color Joined = new Color(0.45f, 1f, 0.5f);
+    static readonly Color Left = new Color(0.65f, 0.65f, 0.7f);
+    static readonly Color Head = new Color(1f, 0.9f, 0.2f);
 
     GUIStyle huge;
     GUIStyle label;
     GUIStyle small;
     GUIStyle row;
     GUIStyle corner;
+    GUIStyle feedLeft;
     Texture2D pixel;
 
     void EnsureStyles()
@@ -67,6 +71,9 @@ public class MatchHud : MonoBehaviour
 
         // Built once. OnGUI runs at least twice a frame - layout then repaint - so a style
         // constructed inside a draw call is two allocations per frame that never stop.
+        // Left aligned, for laying a kill out piece by piece from the right hand edge.
+        feedLeft = new GUIStyle(small) { alignment = TextAnchor.UpperLeft };
+
         row = new GUIStyle(label) { alignment = TextAnchor.UpperCenter, fontSize = 20 };
         corner = new GUIStyle(label) { alignment = TextAnchor.LowerLeft, fontSize = 18 };
     }
@@ -116,29 +123,87 @@ public class MatchHud : MonoBehaviour
 
         for (int i = MatchState.Feed.Count - 1; i >= 0 && drawn < 6; i--)
         {
-            MatchState.KillEvent entry = MatchState.Feed[i];
+            MatchState.FeedEntry entry = MatchState.Feed[i];
 
-            float age = Time.time - entry.at;
+            // Unscaled to match how entries are stamped - hitstop is usually running when a
+            // kill lands, and on scaled time the line would hang there frozen.
+            float age = Time.unscaledTime - entry.at;
             if (age > feedEntrySeconds)
                 continue;
 
             float fade = Mathf.Clamp01((feedEntrySeconds - age) / 1.5f);
 
-            string line = string.IsNullOrEmpty(entry.killer)
-                ? $"{entry.victim} died"
-                : $"{entry.killer}  «{WeaponLoadout.DisplayName(entry.weapon)}»  {entry.victim}";
-
-            if (entry.headshot)
-                line += "  HEAD";
-
-            GUI.color = new Color(Kill.r, Kill.g, Kill.b, fade);
-            GUI.Label(new Rect(0f, y, Screen.width - 20f, 24f), line, small);
+            DrawFeedLine(entry, y, fade);
 
             y += 22f;
             drawn++;
         }
 
         GUI.color = Color.white;
+    }
+
+    void DrawFeedLine(MatchState.FeedEntry entry, float y, float fade)
+    {
+        float right = Screen.width - 20f;
+
+        switch (entry.kind)
+        {
+            case MatchState.FeedKind.Join:
+                GUI.color = new Color(Joined.r, Joined.g, Joined.b, fade);
+                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor}  joined", small);
+                return;
+
+            case MatchState.FeedKind.Leave:
+                GUI.color = new Color(Left.r, Left.g, Left.b, fade);
+                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor}  left", small);
+                return;
+        }
+
+        // A kill is three separate things - who, with what, and to whom - so it's drawn in
+        // three pieces rather than one string. The weapon sits in its own colour because it's
+        // the part you actually scan for, and the killer and victim are laid out from the
+        // right so the names line up down the feed instead of jittering with their length.
+        string victim = entry.subject;
+        string weapon = WeaponLoadout.DisplayName(entry.weapon);
+        bool suicide = string.IsNullOrEmpty(entry.actor);
+
+        // Anything you were part of is brighter. In a room of eight, the feed is mostly other
+        // people's business, and your own kills should not have to be hunted for.
+        float weight = entry.involvesYou ? 1f : 0.68f;
+
+        float x = right;
+
+        x -= small.CalcSize(new GUIContent(victim)).x;
+        GUI.color = new Color(1f, 1f, 1f, fade * weight);
+        GUI.Label(new Rect(x, y, 400f, 24f), victim, feedLeft);
+
+        if (entry.headshot)
+        {
+            const string mark = "HEAD ";
+            x -= small.CalcSize(new GUIContent(mark)).x;
+            GUI.color = new Color(Head.r, Head.g, Head.b, fade * weight);
+            GUI.Label(new Rect(x, y, 400f, 24f), mark, feedLeft);
+        }
+
+        if (!suicide)
+        {
+            string tag = $" {weapon} ";
+            x -= small.CalcSize(new GUIContent(tag)).x;
+            GUI.color = new Color(Kill.r, Kill.g, Kill.b, fade);
+            GUI.Label(new Rect(x, y, 400f, 24f), tag, feedLeft);
+
+            x -= small.CalcSize(new GUIContent(entry.actor)).x;
+            GUI.color = new Color(1f, 1f, 1f, fade * weight);
+            GUI.Label(new Rect(x, y, 400f, 24f), entry.actor, feedLeft);
+        }
+        else
+        {
+            // Fell off the map, or shot themselves. There is no killer to name.
+            const string tag = "died ";
+            x -= small.CalcSize(new GUIContent(tag)).x;
+            GUI.color = new Color(Left.r, Left.g, Left.b, fade);
+            GUI.Label(new Rect(x, y, 400f, 24f), tag, feedLeft);
+        }
     }
 
     void DrawPhaseMessage()

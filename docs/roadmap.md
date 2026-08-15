@@ -238,9 +238,17 @@ The big aesthetic one. See the philosophy section above.
       sliding. The old screen space bar is out of the prefab
 - [x] Loadout reveal during warmup — names your weapons one at a time before the match goes live
 - [ ] Damage numbers
-- [ ] **Kill feed** — who killed who with what, top corner, fading entries
-- [ ] **Join / leave messages** — "X joined", "X left". Photon already fires
-      OnPlayerEnteredRoom and OnPlayerLeftRoom, so the data is there and unused.
+- [x] **Kill feed** — who killed who with what, top corner, fading entries. Laid out from the
+      right so names line up down the feed instead of jittering with their length, and anything
+      you were part of is drawn brighter — in a room of eight the feed is mostly other people's
+      business and your own kills shouldn't have to be hunted for.
+- [x] **Join / leave messages** — Photon had always fired the callbacks with nothing listening,
+      so people vanished mid-fight with no explanation, which reads as a bug rather than as
+      someone closing the game.
+
+Kills, joins and leaves share one list rather than having one each. They compete for the same
+few lines of screen and the only thing deciding what you see is what happened most recently;
+two feeds would either overlap or need a third thing to arbitrate.
 - [ ] **Settings**, with:
   - [ ] Crosshair — shape, size, thickness, gap, colour, dot, outline
   - [ ] Graphics — resolution, fullscreen, quality, FOV, and room for shaders later

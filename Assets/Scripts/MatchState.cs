@@ -60,16 +60,52 @@ public class MatchState : MonoBehaviourPunCallbacks
 
     public static MatchState Instance { get; private set; }
 
-    /// One entry per kill, newest last. The HUD draws it; nothing else should mutate it.
-    public static readonly List<KillEvent> Feed = new List<KillEvent>();
+    /// Newest last. The HUD draws it; nothing else should mutate it.
+    public static readonly List<FeedEntry> Feed = new List<FeedEntry>();
 
-    public struct KillEvent
+    public enum FeedKind
     {
-        public string killer;
-        public string victim;
+        Kill,
+        Join,
+        Leave,
+    }
+
+    /// <summary>
+    /// One line in the corner of the screen.
+    ///
+    /// Kills, joins and leaves share a list rather than having one each, because they compete
+    /// for the same few lines of screen and the only thing that decides what you see is which
+    /// happened most recently. Two separate feeds would either overlap or need a third thing to
+    /// arbitrate between them.
+    /// </summary>
+    public struct FeedEntry
+    {
+        public FeedKind kind;
+
+        /// Whoever did it - the killer, or the person arriving or leaving.
+        public string actor;
+
+        /// Who it was done to. Kills only.
+        public string subject;
+
         public string weapon;
         public bool headshot;
+
+        /// True when the local player is either end of it, so the HUD can pick it out.
+        public bool involvesYou;
+
         public float at;
+    }
+
+    static void Push(FeedEntry entry)
+    {
+        // Unscaled, because hitstop drags scaled time to a crawl at exactly the moment a kill
+        // is added - the entry would sit there not ageing while the world stuttered.
+        entry.at = Time.unscaledTime;
+        Feed.Add(entry);
+
+        if (Feed.Count > 32)
+            Feed.RemoveRange(0, Feed.Count - 32);
     }
 
     // The master's own tally. Custom properties do not update locally until the server echoes
@@ -199,8 +235,21 @@ public class MatchState : MonoBehaviourPunCallbacks
     // rolled - not whatever they would have picked for themselves.
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
+        // Everyone posts the message; only the master hands out the weapons.
+        Push(new FeedEntry { kind = FeedKind.Join, actor = NameOf(newPlayer) });
+
         if (PhotonNetwork.IsMasterClient && Phase != MatchPhase.Over)
             GiveLoadout(newPlayer);
+    }
+
+    /// <summary>
+    /// Someone left. Photon has always fired this and nothing was listening, so people
+    /// disappeared mid-fight with no explanation - which reads as a bug in the game rather than
+    /// as somebody closing it.
+    /// </summary>
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        Push(new FeedEntry { kind = FeedKind.Leave, actor = NameOf(otherPlayer) });
     }
 
     // The phase we last asked the server for. Room properties do not update locally until the
@@ -334,21 +383,21 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// </summary>
     public static void ReportKill(Player killer, Player victim, string weapon, bool headshot)
     {
-        Feed.Add(new KillEvent
+        Push(new FeedEntry
         {
-            killer = killer != null ? NameOf(killer) : string.Empty,
-            victim = NameOf(victim),
+            kind = FeedKind.Kill,
+            actor = killer != null ? NameOf(killer) : string.Empty,
+            subject = NameOf(victim),
             weapon = weapon,
             headshot = headshot,
-            at = Time.time,
+            involvesYou = IsLocal(killer) || IsLocal(victim),
         });
-
-        if (Feed.Count > 32)
-            Feed.RemoveRange(0, Feed.Count - 32);
 
         if (Instance != null && PhotonNetwork.IsMasterClient)
             Instance.ScoreKill(killer, victim, weapon);
     }
+
+    static bool IsLocal(Player player) => player != null && player.IsLocal;
 
     void ScoreKill(Player killer, Player victim, string weapon)
     {
