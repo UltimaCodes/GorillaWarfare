@@ -91,6 +91,10 @@ public class MatchState : MonoBehaviourPunCallbacks
         public string weapon;
         public bool headshot;
 
+        /// Which kill feed line to use. Rolled by the victim and replicated, so everyone reads
+        /// the same sentence.
+        public byte flavour;
+
         /// True when the local player is either end of it, so the HUD can pick it out.
         public bool involvesYou;
 
@@ -381,7 +385,8 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// Called on every client from the victim's death RPC. Only the master acts on it; everyone
     /// runs the feed side so the message appears at the same moment for all of them.
     /// </summary>
-    public static void ReportKill(Player killer, Player victim, string weapon, bool headshot)
+    public static void ReportKill(Player killer, Player victim, string weapon, bool headshot,
+                                 byte flavour = 0)
     {
         Push(new FeedEntry
         {
@@ -390,6 +395,7 @@ public class MatchState : MonoBehaviourPunCallbacks
             subject = NameOf(victim),
             weapon = weapon,
             headshot = headshot,
+            flavour = flavour,
             involvesYou = IsLocal(killer) || IsLocal(victim),
         });
 

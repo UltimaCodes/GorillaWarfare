@@ -150,60 +150,29 @@ public class MatchHud : MonoBehaviour
         {
             case MatchState.FeedKind.Join:
                 GUI.color = new Color(Joined.r, Joined.g, Joined.b, fade);
-                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor}  joined", small);
+                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor} showed up", small);
                 return;
 
             case MatchState.FeedKind.Leave:
                 GUI.color = new Color(Left.r, Left.g, Left.b, fade);
-                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor}  left", small);
+                GUI.Label(new Rect(0f, y, right, 24f), $"{entry.actor} had enough", small);
                 return;
         }
 
-        // A kill is three separate things - who, with what, and to whom - so it's drawn in
-        // three pieces rather than one string. The weapon sits in its own colour because it's
-        // the part you actually scan for, and the killer and victim are laid out from the
-        // right so the names line up down the feed instead of jittering with their length.
-        string victim = entry.subject;
-        string weapon = WeaponLoadout.DisplayName(entry.weapon);
-        bool suicide = string.IsNullOrEmpty(entry.actor);
+        // One sentence rather than three columns. It reads faster than a name-weapon-name
+        // layout and it's the difference between a log and something people actually look at.
+        string line = KillFeedLines.For(entry.actor, entry.subject, entry.weapon,
+                                        entry.headshot, entry.flavour);
 
-        // Anything you were part of is brighter. In a room of eight, the feed is mostly other
+        // Anything you were part of is brighter. In a room of eight the feed is mostly other
         // people's business, and your own kills should not have to be hunted for.
-        float weight = entry.involvesYou ? 1f : 0.68f;
+        float weight = entry.involvesYou ? 1f : 0.62f;
 
-        float x = right;
+        GUI.color = entry.involvesYou
+            ? new Color(Kill.r, Kill.g, Kill.b, fade)
+            : new Color(1f, 1f, 1f, fade * weight);
 
-        x -= small.CalcSize(new GUIContent(victim)).x;
-        GUI.color = new Color(1f, 1f, 1f, fade * weight);
-        GUI.Label(new Rect(x, y, 400f, 24f), victim, feedLeft);
-
-        if (entry.headshot)
-        {
-            const string mark = "HEAD ";
-            x -= small.CalcSize(new GUIContent(mark)).x;
-            GUI.color = new Color(Head.r, Head.g, Head.b, fade * weight);
-            GUI.Label(new Rect(x, y, 400f, 24f), mark, feedLeft);
-        }
-
-        if (!suicide)
-        {
-            string tag = $" {weapon} ";
-            x -= small.CalcSize(new GUIContent(tag)).x;
-            GUI.color = new Color(Kill.r, Kill.g, Kill.b, fade);
-            GUI.Label(new Rect(x, y, 400f, 24f), tag, feedLeft);
-
-            x -= small.CalcSize(new GUIContent(entry.actor)).x;
-            GUI.color = new Color(1f, 1f, 1f, fade * weight);
-            GUI.Label(new Rect(x, y, 400f, 24f), entry.actor, feedLeft);
-        }
-        else
-        {
-            // Fell off the map, or shot themselves. There is no killer to name.
-            const string tag = "died ";
-            x -= small.CalcSize(new GUIContent(tag)).x;
-            GUI.color = new Color(Left.r, Left.g, Left.b, fade);
-            GUI.Label(new Rect(x, y, 400f, 24f), tag, feedLeft);
-        }
+        GUI.Label(new Rect(0f, y, right, 24f), line, small);
     }
 
     void DrawPhaseMessage()

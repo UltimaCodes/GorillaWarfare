@@ -85,7 +85,7 @@ public class CombatHud : MonoBehaviour
         if (gun.SpareMagazines != shownSpares)
         {
             shownSpares = gun.SpareMagazines;
-            spareText = $"x{shownSpares}";
+            spareText = shownSpares.ToString();
         }
 
         if (!ReferenceEquals(gun.name, shownWeapon))
@@ -285,12 +285,14 @@ public class CombatHud : MonoBehaviour
         GUI.color = Color.white;
     }
 
-    // Health, bottom left. Blocks rather than a bar, because a smooth fill is a value you read
-    // and a row of blocks is a quantity you see - and losing one is an event.
+    // Health, bottom left: a bar, with the number above it.
     //
-    // Cruelty Squad's UI is hostile on purpose: flat saturated colour, hard edges, no gradients,
-    // nothing tastefully translucent. The number is oversized because it is the only thing on
-    // screen that decides whether you are about to die.
+    // Was ten discrete blocks. That reads as a quantity but not as a level - you could see you
+    // had lost some without seeing how close the next shot was to finishing you. A continuous
+    // bar answers that at a glance and the number answers it exactly.
+    //
+    // Scaled to the overshield ceiling rather than to normal health, so a shielded player's bar
+    // genuinely runs past where a full one stops instead of both just looking full.
     void DrawHealth()
     {
         if (healthStyle == null)
@@ -299,55 +301,9 @@ public class CombatHud : MonoBehaviour
             {
                 alignment = TextAnchor.LowerLeft,
                 fontStyle = FontStyle.Bold,
-                fontSize = 54,
+                fontSize = 52,
             };
         }
-
-        float fraction = player.HealthFraction;
-        int points = player.HealthPoints;
-
-        if (points != shownHealth)
-        {
-            shownHealth = points;
-            healthText = points.ToString();
-        }
-
-        // Acid green down to a violent red. No blending through orange - it steps, so a colour
-        // change means something happened.
-        Color colour = fraction > 0.6f ? healthyColour
-                     : fraction > 0.3f ? hurtColour
-                     : criticalColour;
-
-        float left = 34f;
-        float bottom = Screen.height - 34f;
-
-        const int blocks = 10;
-        const float blockWidth = 22f;
-        const float blockHeight = 14f;
-        const float gapWidth = 4f;
-
-        int lit = Mathf.CeilToInt(fraction * blocks);
-
-        for (int i = 0; i < blocks; i++)
-        {
-            GUI.color = i < lit ? colour : emptyColour;
-            Rect(left + i * (blockWidth + gapWidth), bottom - blockHeight, blockWidth, blockHeight);
-        }
-
-        // Overshield sits as a thin bar above the blocks in its own colour, so it never gets
-        // confused for ordinary health - it's a bonus and it's the first thing to go.
-        if (player.Overshield > 0f)
-        {
-            float over = player.Overshield / Mathf.Max(1f, player.MaxHealth * 0.2f);
-            float width = Mathf.Clamp01(over) * (blocks * (blockWidth + gapWidth) - gapWidth);
-
-            GUI.color = shieldColour;
-            Rect(left, bottom - blockHeight - 7f, width, 4f);
-        }
-
-        // Flashes green as it comes back, so a heal reads as an event.
-        GUI.color = healFlash > 0f ? Color.Lerp(colour, healColour, healFlash) : colour;
-        GUI.Label(new Rect(left, 0f, 300f, bottom - blockHeight - 6f), healthText, healthStyle);
 
         if (streakStyle == null)
         {
@@ -359,19 +315,64 @@ public class CombatHud : MonoBehaviour
             };
         }
 
+        float max = Mathf.Max(1f, player.MaxHealth);
+        float ceiling = Mathf.Max(max, player.OvershieldCeiling);
+
+        int points = player.HealthPoints;
+        if (points != shownHealth)
+        {
+            shownHealth = points;
+            healthText = points.ToString();
+        }
+
+        float fraction = Mathf.Clamp01(points / max);
+
+        // Steps rather than a blend, so a colour change means something happened.
+        Color colour = fraction > 0.6f ? healthyColour
+                     : fraction > 0.3f ? hurtColour
+                     : criticalColour;
+
+        Color shown = healFlash > 0f ? Color.Lerp(colour, healColour, healFlash) : colour;
+
+        const float barWidth = 300f;
+        const float barHeight = 20f;
+
+        float left = 40f;
+        float bottom = Screen.height - 44f;
+        float top = bottom - barHeight;
+
+        GUI.color = emptyColour;
+        Rect(left, top, barWidth, barHeight);
+
+        float normal = Mathf.Min(points, max) / ceiling * barWidth;
+        GUI.color = shown;
+        Rect(left, top, normal, barHeight);
+
+        if (player.Overshield > 0f)
+        {
+            GUI.color = shieldColour;
+            Rect(left + normal, top, player.Overshield / ceiling * barWidth, barHeight);
+        }
+
+        // A notch where normal health ends, so overshield reads as a bonus rather than as the
+        // bar just being longer today.
+        GUI.color = new Color(0f, 0f, 0f, 0.65f);
+        Rect(left + max / ceiling * barWidth - 1f, top - 2f, 2f, barHeight + 4f);
+
+        GUI.color = shown;
+        GUI.Label(new Rect(left, 0f, 320f, top - 4f), healthText, healthStyle);
+
         if (healFlash > 0f)
         {
             GUI.color = new Color(healColour.r, healColour.g, healColour.b, healFlash);
-            GUI.Label(new Rect(left + 130f, 0f, 200f, bottom - blockHeight - 24f),
-                      $"+{healAmount}", streakStyle);
+            GUI.Label(new Rect(left + 112f, 0f, 200f, top - 14f), $"+{healAmount}", streakStyle);
         }
 
         // Only once it's worth mentioning - a "streak" of one is just a kill.
         if (player.Killstreak > 1)
         {
             GUI.color = streakColour;
-            GUI.Label(new Rect(left, 0f, 300f, bottom + 24f),
-                      $"{player.Killstreak} IN A ROW", streakStyle);
+            GUI.Label(new Rect(left, 0f, 300f, bottom + 26f), $"{player.Killstreak} IN A ROW", streakStyle);
         }
 
         GUI.color = Color.white;
@@ -455,9 +456,11 @@ public class CombatHud : MonoBehaviour
         return texture;
     }
 
-    // Ammo, bottom right: big number is what's in the banana, small one underneath is how
-    // many spare bananas you're carrying. Drawn from both the hip and the scope, because
-    // running dry mid scope is exactly when you need to know.
+    // Ammo, bottom right. Weapon name on top, the number in the banana big underneath, and how
+    // many spare bananas you have tucked under its right shoulder.
+    //
+    // The spare count is bare - "2", not "x2". The x reads as multiplication next to a number
+    // that size, and there is nothing else it could be counting.
     void DrawAmmo(SingleShotGun gun)
     {
         if (gun == null || gun.Info == null || gun.Info.melee)
@@ -469,24 +472,26 @@ public class CombatHud : MonoBehaviour
             spareStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontStyle = FontStyle.Bold };
         }
 
-        float right = Screen.width - 40f;
-        float bottom = Screen.height - 30f;
-
         CacheAmmoText(gun);
 
-        ammoStyle.fontSize = 52;
+        float right = Screen.width - 46f;
+        float bottom = Screen.height - 44f;
+
+        spareStyle.fontSize = 17;
+        GUI.color = nameColour;
+        GUI.Label(new Rect(0f, 0f, right, bottom - 64f), weaponText, spareStyle);
+
+        ammoStyle.fontSize = 64;
         GUI.color = gun.Reloading ? reloadingColour
                   : gun.Ammo == 0 ? dryColour
                   : ammoColour;
-        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom), ammoText, ammoStyle);
+        GUI.Label(new Rect(0f, 0f, right, bottom), ammoText, ammoStyle);
 
-        spareStyle.fontSize = 22;
+        spareStyle.fontSize = 24;
         GUI.color = gun.SpareMagazines > 0 ? spareColour : dryColour;
-        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom + 26f), spareText, spareStyle);
+        GUI.Label(new Rect(0f, 0f, right + 32f, bottom + 28f), spareText, spareStyle);
 
-        spareStyle.fontSize = 16;
-        GUI.color = nameColour;
-        GUI.Label(new UnityEngine.Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
+        GUI.color = Color.white;
     }
 
     // Each number rises and fades from where the shot landed. Projected every frame rather
