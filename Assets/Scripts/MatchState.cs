@@ -250,8 +250,20 @@ public class MatchState : MonoBehaviourPunCallbacks
         // Everyone posts the message; only the master hands out the weapons.
         Push(new FeedEntry { kind = FeedKind.Join, actor = NameOf(newPlayer) });
 
-        if (PhotonNetwork.IsMasterClient && Phase != MatchPhase.Over)
-            GiveLoadout(newPlayer);
+        if (!PhotonNetwork.IsMasterClient)
+            return;
+
+        // PUN never clears player properties, not even between rooms - they follow you into the
+        // next game you join. Somebody who finished a gun game four rungs up therefore arrived
+        // holding the sniper, and the master, reading that same stale property, agreed with it.
+        // Wipe first, then work out what they should be carrying.
+        newPlayer.SetCustomProperties(new Hashtable { { RungKey, 0 }, { RungKillsKey, 0 } });
+        rungs[newPlayer.ActorNumber] = 0;
+        rungKills[newPlayer.ActorNumber] = 0;
+
+        // No phase guard any more. Skipping this while the scoreboard was up meant anyone who
+        // joined between matches stood around with nothing in their hands until the next warmup.
+        GiveLoadout(newPlayer);
     }
 
     /// <summary>
@@ -382,9 +394,32 @@ public class MatchState : MonoBehaviourPunCallbacks
     public static string[] WeaponsFor(Player player)
     {
         if (Mode == MatchMode.GunGame)
-            return Rules.LoadoutForRung(RoomManager.GetStat(player, RungKey), WeaponLoadout.GunGameLadder);
+            return Rules.LoadoutForRung(RungFor(player), WeaponLoadout.GunGameLadder);
 
         return WeaponLoadout.RandomSelection(1);
+    }
+
+    /// <summary>
+    /// Which rung a player is on, asked in the one place it gets asked while the answer is
+    /// changing underneath you.
+    ///
+    /// The master's own tally beats the replicated property, and that distinction is the whole
+    /// bug: SetCustomProperties sends an op and waits for the server to echo it, so the moment
+    /// after the master pushes your new rung the property still reads the rung you just left.
+    /// Handing out a weapon from that value gave you the gun you already had. It looked like
+    /// nothing happened when you climbed - and then you'd die, respawn, and finally get the new
+    /// weapon, because by then the echo had landed.
+    ///
+    /// Only trusted on the master, which is the only client that maintains the tally. Everybody
+    /// else reads the replicated value, which for them is the only truth there is.
+    /// </summary>
+    public static int RungFor(Player player)
+    {
+        if (PhotonNetwork.IsMasterClient && Instance != null && player != null
+            && Instance.rungs.TryGetValue(player.ActorNumber, out int rung))
+            return rung;
+
+        return RoomManager.GetStat(player, RungKey);
     }
 
     void GiveLoadout(Player player)
@@ -428,6 +463,16 @@ public class MatchState : MonoBehaviourPunCallbacks
         {
             deaths[victim.ActorNumber] = Bump(deaths, victim.ActorNumber);
             victim.SetCustomProperties(new Hashtable { { RoomManager.DeathsKey, deaths[victim.ActorNumber] } });
+
+            // A different gun every life, which is the whole shape of deathmatch here - you
+            // don't pick your weapon, dying is how you get another one. Rolled by the master
+            // rather than by the player, so there is exactly one client deciding what anybody
+            // carries. Two writers to the same property is a race, and the race was being lost
+            // by whoever had just joined.
+            //
+            // Above the suicide check on purpose: falling off the map is still a life ended.
+            if (Mode == MatchMode.Deathmatch)
+                GiveLoadout(victim);
         }
 
         // Falling off the map, or shooting yourself, is a death and nothing else.

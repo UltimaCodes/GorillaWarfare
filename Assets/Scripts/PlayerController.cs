@@ -288,14 +288,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             AttachWeaponsToHand();
         }
 
-        // Ask for this spawn's weapon before building anything.
-        //
-        // In deathmatch that's a fresh roll every time you die, which is the whole point - you
-        // don't pick your gun, you get given one, and dying is how you get a different one. In
-        // gun game it's whatever rung you're on, which the master also sets when you climb;
-        // both work it out the same way so they can't disagree.
-        if (PV.IsMine && PhotonNetwork.InRoom)
-            PublishLoadout(MatchState.WeaponsFor(PhotonNetwork.LocalPlayer));
+        // No rolling your own weapon here any more. The master issues every loadout - on join,
+        // on climbing a rung, and on dying in deathmatch - so there is one client deciding what
+        // anybody carries. Publishing from here as well meant two writers to one property, and
+        // a late joiner's spawn would land on top of the loadout the master had just sent them.
 
         // Both copies. Everyone needs the models - it is how you tell what someone is holding -
         // and only the owner's are allowed to fire. This used to run for the owner alone, so
@@ -441,6 +437,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (changedProps.ContainsKey(ItemIndexKey) && !PV.IsMine)
             EquipItem((int)changedProps[ItemIndexKey]);
+
+        // Climbing a rung swaps the gun out of your hands with no warning. Without something
+        // saying so it reads as the game taking your weapon away, which is roughly the opposite
+        // of what just happened.
+        if (PV.IsMine && Hud != null && changedProps.ContainsKey(MatchState.RungKey)
+            && MatchState.Mode == MatchMode.GunGame)
+        {
+            int rung = MatchState.LadderRung(PV.Owner);
+            Hud.ShowRungUp(rung, WeaponLoadout.DisplayName(
+                MatchState.Rules.LoadoutForRung(rung, WeaponLoadout.GunGameLadder)[0]));
+        }
     }
 
 

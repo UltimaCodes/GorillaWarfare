@@ -405,6 +405,31 @@ public static class WeaponCheck
         Check(sb, !hudSrc.Contains("recoil"), "crosshair stays at screen centre",
               "recoil already rotates the camera, so shots leave from centre");
 
+        // ---- who is allowed to hand out weapons ----
+        //
+        // None of this is reachable from a test. Photon's offline mode updates the local
+        // property cache immediately, and the bug these guard against only exists because the
+        // online path doesn't - it sends an op and waits for the server to echo. So a probe run
+        // offline passes either way, and the only thing that can hold the rule down is the
+        // source itself.
+        string matchSrc = System.IO.File.ReadAllText("Assets/Scripts/MatchState.cs");
+
+        Check(sb, matchSrc.Contains("Rules.LoadoutForRung(RungFor(player)"),
+              "the ladder weapon comes from the master's own tally",
+              "reading the replicated rung hands out the weapon you already had, because "
+              + "SetCustomProperties has not echoed yet");
+
+        string playerSrc = System.IO.File.ReadAllText("Assets/Scripts/PlayerController.cs");
+
+        Check(sb, !playerSrc.Contains("PublishLoadout(MatchState.WeaponsFor"),
+              "only the master issues loadouts",
+              "two writers to one property is a race, and a late joiner loses it");
+
+        Check(sb, System.IO.File.ReadAllText("Assets/Scripts/WeaponLoadout.cs")
+                        .Contains("if (built.Count == 0)"),
+              "an unresolved loadout still leaves you armed",
+              "joining a match with empty hands is the worst way to find out about a bug");
+
         // ---- ripeness ----
         sb.AppendLine("[gun] ---------- ripeness ----------");
         GunInfo rifleInfo = Resources.Load<GunInfo>("Guns/Rifle");

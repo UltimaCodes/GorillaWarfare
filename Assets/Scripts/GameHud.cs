@@ -200,6 +200,29 @@ public class GameHud : MonoBehaviour
             centreSubtitle.text = streak > 1 ? $"{streak} IN A ROW" : string.Empty;
     }
 
+    /// <summary>
+    /// You climbed a rung and the gun changed in your hands.
+    ///
+    /// Gun game swaps your weapon with no warning, and without something saying so it reads as
+    /// the game confiscating what you were holding - roughly the opposite of what just
+    /// happened. Named rather than numbered for the same reason the multikills are: "THE BUNCH"
+    /// tells you what you're now holding, "rung 3" tells you nothing you can act on.
+    ///
+    /// Rides on the kill callout's timer rather than having its own, because it fires at
+    /// exactly the moment a kill callout would and two messages fighting over the middle of the
+    /// screen is what made this confusing in the first place.
+    /// </summary>
+    public void ShowRungUp(int rung, string weapon)
+    {
+        killFlash = 1f;
+
+        if (centreTitle != null)
+            centreTitle.text = $"RUNG {rung + 1}";
+
+        if (centreSubtitle != null)
+            centreSubtitle.text = weapon.ToUpper();
+    }
+
     public void ShowDamage(Vector3 worldPoint, float amount, bool headshot)
     {
         DamageLabel label = FreeDamageLabel();
@@ -460,8 +483,22 @@ public class GameHud : MonoBehaviour
         int done = MatchState.LadderKills(PhotonNetwork.LocalPlayer);
         int needed = MatchState.KillsToAdvance;
 
+        string[] ladderKeys = WeaponLoadout.GunGameLadder;
+        int top = ladderKeys.Length - 1;
+
         if (ladderLabel != null)
-            ladderLabel.text = $"RUNG {rung + 1} / {WeaponLoadout.GunGameLadder.Length}";
+        {
+            // What you're holding and what you're working towards, by name. A bare "RUNG 2 / 5"
+            // says how far along you are and nothing about where you're going, which is most of
+            // why the mode read as arbitrary - weapons kept changing and the number that was
+            // supposed to explain it never named any of them.
+            string holding = WeaponLoadout.DisplayName(ladderKeys[Mathf.Clamp(rung, 0, top)]).ToUpper();
+            string next = rung < top
+                ? WeaponLoadout.DisplayName(ladderKeys[rung + 1]).ToUpper()
+                : "THE WIN";
+
+            ladderLabel.text = $"{rung + 1}/{ladderKeys.Length}   {holding}   >   {next}";
+        }
 
         // Pips rather than a number, because mid-fight you glance at this and can't read.
         for (int i = 0; i < ladderPips.Length; i++)

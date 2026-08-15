@@ -166,6 +166,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- the HUD is showing what the game thinks is true ----
         yield return CheckHudReadsTheGame(player);
 
+        // ---- a loadout that resolves to nothing still arms you ----
+        yield return CheckEmptyLoadoutFallsBack(player);
+
         // ---- hitstop ----
         yield return CheckHitstopRestores();
 
@@ -1077,6 +1080,51 @@ public class ProbeRunner : MonoBehaviour
 
             Check(drawn, "a damage number reaches the screen", drawn ? "24" : "nothing visible");
         }
+    }
+
+    /// <summary>
+    /// Somebody joins holding a loadout that names weapons which no longer exist.
+    ///
+    /// This is not hypothetical: PUN never clears player custom properties, not even between
+    /// rooms, so a loadout written by an older build follows you into a newer one. Every name in
+    /// it fails to load, nothing gets built, and you spawn into a live match with empty hands -
+    /// which is exactly what Ryaan hit. The names below are deliberately rubbish.
+    /// </summary>
+    IEnumerator CheckEmptyLoadoutFallsBack(PlayerController player)
+    {
+        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable
+        {
+            { PlayerController.LoadoutKey, "M1911,AK74" },
+        });
+
+        yield return Until(() => PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer).Length == 2,
+                           "take a loadout from a build that no longer exists");
+
+        // Two frames: one for the property callback to rebuild, one for the objects to settle.
+        yield return null;
+        yield return null;
+
+        int armed = 0;
+
+        foreach (SingleShotGun gun in player.GetComponentsInChildren<SingleShotGun>(true))
+            armed++;
+
+        Check(armed > 0, "a dead loadout still leaves you armed", $"{armed} weapons built");
+
+        SingleShotGun holding = player.ActiveGun;
+        Check(holding != null && holding.name == WeaponLoadout.Fallback,
+              "and what you get is the fallback",
+              holding == null ? "nothing equipped" : holding.name);
+
+        // Put it back, or every check after this one is measuring the fallback.
+        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable
+        {
+            { PlayerController.LoadoutKey, MatchState.Rules.Serialise(
+                MatchState.WeaponsFor(PhotonNetwork.LocalPlayer)) },
+        });
+
+        yield return null;
+        yield return null;
     }
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't

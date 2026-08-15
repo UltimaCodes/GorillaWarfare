@@ -76,7 +76,7 @@ public class ModeSelector : MonoBehaviour
         {
             description.text = mode == MatchMode.GunGame
                 ? "climb the ladder, two kills a rung, win on the peel"
-                : "three random bananas, most kills on the clock";
+                : "a random banana every life, most kills on the clock";
         }
 
         // Anyone who isn't the host sees what was picked rather than a button that refuses to

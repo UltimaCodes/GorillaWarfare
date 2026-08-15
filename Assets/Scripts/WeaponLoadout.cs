@@ -13,6 +13,11 @@ public class WeaponLoadout : MonoBehaviour
 {
     public const string GunResourcePath = "Guns/";
 
+    /// What you get when a loadout resolves to nothing at all. The pistol, because it's the
+    /// weapon the game already assumes everyone can use - it's rung one of the ladder and the
+    /// thing a fresh player starts with.
+    public const string Fallback = "Pistol";
+
     /// Every weapon in the game, in power order. Gun game walks this list; deathmatch samples it.
     public static readonly string[] AllWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper" };
 
@@ -55,6 +60,27 @@ public class WeaponLoadout : MonoBehaviour
     /// False for the copies of a player that other people see. Those still need the models -
     /// that's how anyone can tell what you're holding - but they must never trace a shot.
     /// </param>
+    void Spawn(Transform holder, Camera cam, bool owned, string name)
+    {
+        GunInfo info = Resources.Load<GunInfo>(GunResourcePath + name);
+
+        if (info == null)
+        {
+            Debug.LogError($"[loadout] no gun asset at Resources/{GunResourcePath}{name}", this);
+            return;
+        }
+
+        // Name matters: the fire RPC finds the weapon by it, and the audio bank and banana
+        // model are both looked up from it.
+        GameObject go = new GameObject(name);
+        go.transform.SetParent(holder, false);
+
+        SingleShotGun gun = go.AddComponent<SingleShotGun>();
+        gun.Configure(info, cam, owned);
+
+        built.Add(gun);
+    }
+
     public List<SingleShotGun> Build(Transform holder, Camera cam, IEnumerable<string> weaponNames, bool owned)
     {
         built.Clear();
@@ -76,23 +102,18 @@ public class WeaponLoadout : MonoBehaviour
         }
 
         foreach (string name in weaponNames)
+            Spawn(holder, cam, owned, name);
+
+        // Nobody stands there empty handed. Whatever went wrong upstream - a loadout property
+        // carried in from another room, a weapon renamed out from under a saved one, a mode
+        // that never issued you anything - the symptom is joining a match with nothing to
+        // shoot with, and that is the worst possible way to find out about a bug.
+        if (built.Count == 0)
         {
-            GunInfo info = Resources.Load<GunInfo>(GunResourcePath + name);
-            if (info == null)
-            {
-                Debug.LogError($"[loadout] no gun asset at Resources/{GunResourcePath}{name}", this);
-                continue;
-            }
+            Debug.LogError($"[loadout] nothing resolved from [{string.Join(", ", weaponNames)}], "
+                           + $"falling back to {Fallback}", this);
 
-            // Name matters: the fire RPC finds the weapon by it, and the audio bank and banana
-            // model are both looked up from it.
-            GameObject go = new GameObject(name);
-            go.transform.SetParent(holder, false);
-
-            SingleShotGun gun = go.AddComponent<SingleShotGun>();
-            gun.Configure(info, cam, owned);
-
-            built.Add(gun);
+            Spawn(holder, cam, owned, Fallback);
         }
 
         // Only the first is drawn; the rest wait to be switched to.
