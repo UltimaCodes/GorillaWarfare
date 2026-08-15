@@ -85,7 +85,19 @@ exactly that: pistol was doing 221 dps against the rifle's 210.
 Current: pistol 34 damage at 5/s semi (3 shots to kill, accurate, 12 round mag), rifle 21 at 10/s
 auto (5 shots to kill, sprays, 30 round mag).
 
-**Done when:** you can carry several distinct banana weapons that feel different to fire.
+### M2 landed
+
+Five weapons with separate roles, shapes and colours. Deterministic recoil you can learn.
+Ammo, reloading, fire rate. Hitboxes with headshots at x2. Damage falloff. Per weapon sounds.
+Muzzle flash, sway, view arms, and a HUD with a reactive crosshair and hitmarker.
+
+Moved out rather than dropped:
+- two handed poses on remote players -> M7, it's a rig job
+- melee swing arc and animation -> M7, same
+- death and menu confirm sounds -> M4, they're still the sci-fi placeholders
+- hitbox alignment against the actual mesh -> needs eyes on it, see Unverified below
+
+**Done when:** ~~you can carry several distinct banana weapons that feel different to fire.~~ DONE
 
 ---
 
@@ -118,7 +130,10 @@ anyone touching anything.
 
 ## M4 — Audio
 
-- [ ] Replace the death sound (still a sci-fi explosion) and the menu confirm (still sci-fi)
+- [ ] Replace the death sound - still the sci-fi explosion from the Kenney pack
+- [ ] Replace the menu confirm - same problem
+- [ ] Melee needs its own swing/whoosh, currently borrows a punch sample
+- [ ] Reload sound - it borrows a UI click right now, which is wrong
 - [ ] Hit confirmation sound — the single best piece of feedback in a shooter
 - [ ] Kill sound, distinct from hit
 - [ ] Music: menu and combat
@@ -132,8 +147,11 @@ The big aesthetic one. See the philosophy section above.
 
 - [ ] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction
 - [ ] Lobby and room browser restyled to match
-- [ ] In-game HUD: health, ammo, timer, scores
-- [ ] Hitmarkers, damage numbers
+- [ ] In-game HUD: health, ammo, timer, scores. **A temporary IMGUI one exists**
+      (`CombatHud.cs`) with ammo, hitmarker and a reactive crosshair - it works but it's
+      programmer art and gets replaced wholesale here.
+- [x] Hitmarkers (headshots read differently)
+- [ ] Damage numbers
 - [ ] **Kill feed** — who killed who with what, top corner, fading entries
 - [ ] **Join / leave messages** — "X joined", "X left". Photon already fires
       OnPlayerEnteredRoom and OnPlayerLeftRoom, so the data is there and unused.
@@ -168,6 +186,13 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
 - [ ] Screenshake and hitstop
+- [ ] **Two handed weapon poses.** Rifle and sniper are shaped two handed but MonkeyRig poses
+      both arms identically, so there's no left hand on a foregrip. Only visible on remote
+      players - you never see your own arms - so it's cosmetic, but it's the obvious tell.
+- [ ] **Melee swing.** The Peel is a 2.4m hitscan with no arc and no animation, so it reads as
+      an invisible short gun rather than a swing.
+- [ ] **Check hitbox alignment against the mesh.** They're spheres at bone origins and have
+      never been looked at next to the actual gorilla, so they may not match its shape.
 
 ---
 
@@ -184,6 +209,14 @@ Separate from M0 because it needs a person playing it, not a fix.
       down. That's inverted from the old build and you haven't tried it yet, so it may just feel
       wrong.
 - [x] Auto-bhop off. Holding space to keep speed for free was most of the skill gone.
+
+## Unverified
+
+Things the checks can't reach, so they need a person:
+
+- whether the recoil, gait and weapon framing feel right
+- whether the hitboxes line up with the gorilla visually
+- whether the bananas read as their weapons at a glance
 
 ## Known limitations
 
