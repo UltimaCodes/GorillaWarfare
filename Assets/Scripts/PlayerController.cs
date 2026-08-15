@@ -16,6 +16,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     [SerializeField] Image healthbarImage;
     [SerializeField] GameObject ui;
 
+    // The camera sits at (0, 0.5, 0.303) inside CameraHolder while ItemHolder is at its origin,
+    // so a weapon spawned at zero lands below and behind the camera, inside the near clip plane.
+    // That's why nobody could see their own gun. This puts it down and to the right of the eye,
+    // which is where a first person weapon lives.
+    [Header("First person weapon placement")]
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.22f, 0.30f, 0.78f);
+    [SerializeField] Vector3 weaponViewRotation = new Vector3(0f, 0f, 0f);
+
     [Header("Third person weapon placement")]
     [SerializeField] Vector3 weaponHandOffset = new Vector3(0.02f, 0f, 0.06f);
     [SerializeField] Vector3 weaponHandRotation = new Vector3(0f, 0f, 0f);
@@ -86,6 +94,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             LocalCamera = GetComponentInChildren<Camera>();
             gameObject.AddComponent<PlayerMovement>();
+            PlaceViewModel();
             BuildLoadout();
 
             // Sway goes on the item holder rather than the camera, so it moves the weapon
@@ -243,6 +252,29 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             rig.LookPitch = verticalLookRotation;
     }
 
+    /// Moves the item holder into view for the owner. Without this the weapon sits at the
+    /// holder's origin, which is behind the camera.
+    void PlaceViewModel()
+    {
+        Transform holder = FindItemHolder();
+        if (holder == null)
+            return;
+
+        holder.localPosition = weaponViewOffset;
+        holder.localRotation = Quaternion.Euler(weaponViewRotation);
+    }
+
+    Transform FindItemHolder()
+    {
+        foreach (Transform t in GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == "ItemHolder")
+                return t;
+        }
+
+        return null;
+    }
+
     // Only for remote copies. The owner keeps their weapon on the camera, because that's what
     // makes a first person gun feel attached to the view rather than to a character.
     void AttachWeaponsToHand()
@@ -250,28 +282,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (rig == null || rig.RightHand == null)
             return;
 
-        foreach (Transform t in GetComponentsInChildren<Transform>(true))
-        {
-            if (t.name != "ItemHolder")
-                continue;
+        Transform holder = FindItemHolder();
+        if (holder == null)
+            return;
 
-            t.SetParent(rig.RightHand, false);
-            t.localPosition = weaponHandOffset;
-            t.localRotation = Quaternion.Euler(weaponHandRotation);
-            break;
-        }
+        holder.SetParent(rig.RightHand, false);
+        holder.localPosition = weaponHandOffset;
+        holder.localRotation = Quaternion.Euler(weaponHandRotation);
     }
 
     // Which weapons this player carries. A gamemode can hand a different list in later; for
     // now everyone gets everything.
     void BuildLoadout()
     {
-        Transform holder = null;
-        foreach (Transform t in GetComponentsInChildren<Transform>(true))
-        {
-            if (t.name == "ItemHolder") { holder = t; break; }
-        }
-
+        Transform holder = FindItemHolder();
         if (holder == null)
         {
             Debug.LogError("No ItemHolder on the player - cannot build a loadout.", this);

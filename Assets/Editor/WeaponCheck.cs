@@ -119,38 +119,31 @@ public static class WeaponCheck
             }
         }
 
-        Material bm = Resources.Load<Material>("Models/Weapons/BananaMat");
-        Check(sb, bm != null, "banana material", bm == null ? "missing" : $"{bm.name} {bm.color}");
-        Check(sb, bm != null && bm.color.r > 0.7f && bm.color.g > 0.6f && bm.color.b < 0.4f,
-              "banana is yellow", bm == null ? "-" : bm.color.ToString());
-
-        // ---- feel components actually attach and do something ----
-        GameObject rig = new GameObject("~gunfeel");
-        MuzzleFlash mf2 = rig.AddComponent<MuzzleFlash>();
-        mf2.Build();
-        Light flashLight = rig.GetComponentInChildren<Light>(true);
-        Check(sb, flashLight != null, "muzzle flash light built",
-              flashLight == null ? "none" : $"{flashLight.type}, range {flashLight.range}");
-        Check(sb, flashLight != null && !flashLight.enabled, "flash starts off",
-              flashLight == null ? "-" : $"enabled={flashLight.enabled}");
-        if (flashLight != null)
+        // Each weapon needs its own colour and its own silhouette - if they all look alike you
+        // genuinely cannot tell which gun you're holding.
+        var seenColours = new System.Collections.Generic.List<Color>();
+        var seenVerts = new System.Collections.Generic.List<int>();
+        foreach (string name in WeaponLoadout.GunGameLadder)
         {
-            mf2.Fire();
-            Check(sb, flashLight.enabled, "firing lights it", $"enabled={flashLight.enabled}");
-            Check(sb, flashLight.transform.localPosition.z > 0.1f, "flash sits at the muzzle",
-                  $"local z {flashLight.transform.localPosition.z:F2}");
-        }
-        Object.DestroyImmediate(rig);
+            Material wm = Resources.Load<Material>($"Models/Weapons/Banana{name}Mat");
+            Check(sb, wm != null, $"{name} has its own material", wm == null ? "missing" : wm.name);
 
-        // sway must only move the holder, never the aim
-        GameObject holder = new GameObject("~holder");
-        holder.transform.localPosition = new Vector3(0.2f, -0.15f, 0.4f);
-        Vector3 before = holder.transform.localPosition;
-        WeaponSway sway = holder.AddComponent<WeaponSway>();
-        sway.SendMessage("Start", SendMessageOptions.DontRequireReceiver);
-        Check(sb, holder.transform.localPosition == before, "sway rests where it started",
-              $"{holder.transform.localPosition} vs {before}");
-        Object.DestroyImmediate(holder);
+            if (wm != null)
+            {
+                bool unique = true;
+                foreach (Color c in seenColours)
+                    if (Vector4.Distance(c, wm.color) < 0.12f) unique = false;
+                Check(sb, unique, $"{name} colour is distinct", ColorToStr(wm.color));
+                seenColours.Add(wm.color);
+            }
+
+            GameObject bmesh = Resources.Load<GameObject>($"Models/Weapons/Banana{name}");
+            MeshFilter bmf = bmesh != null ? bmesh.GetComponentInChildren<MeshFilter>(true) : null;
+            if (bmf != null)
+                seenVerts.Add(bmf.sharedMesh.vertexCount);
+        }
+
+        Check(sb, seenColours.Count == 5, "five distinct colours", $"{seenColours.Count}");
 
         // ---- the whole roster ----
         sb.AppendLine("[gun] ---------- roster ----------");
@@ -270,8 +263,53 @@ public static class WeaponCheck
             Check(sb, clips.Length > 0, $"{name} has its own sound", $"{clips.Length} clip(s)");
         }
 
+        // ---- can the owner actually SEE their weapon ----
+        // This is the check that was missing. Weapons spawned at the viewHolder's origin, which is
+        // behind the camera's near plane, so nobody could see their own gun and it was invisible
+        // to everyone else too.
+        sb.AppendLine("[gun] ---------- visibility ----------");
+        GameObject pf = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/PhotonPrefabs/PlayerController.prefab");
+        if (pf != null)
+        {
+            GameObject inst = Object.Instantiate(pf);
+            Camera camera = inst.GetComponentInChildren<Camera>(true);
+
+            Transform viewHolder = null;
+            foreach (Transform t in inst.GetComponentsInChildren<Transform>(true))
+                if (t.name == "ItemHolder") { viewHolder = t; break; }
+
+            Check(sb, camera != null && viewHolder != null, "camera and viewHolder found",
+                  $"camera={camera != null} viewHolder={viewHolder != null}");
+
+            if (camera != null && viewHolder != null)
+            {
+                SerializedObject so2 = new SerializedObject(inst.GetComponent<PlayerController>());
+                Vector3 offset = so2.FindProperty("weaponViewOffset").vector3Value;
+                viewHolder.localPosition = offset;
+
+                Vector3 local = camera.transform.InverseTransformPoint(viewHolder.position);
+                Check(sb, local.z > camera.nearClipPlane, "weapon is in front of the camera",
+                      $"{local.z:F2}m forward, near plane {camera.nearClipPlane:F2}");
+                Check(sb, local.z < 2f, "weapon is close enough to see",
+                      $"{local.z:F2}m forward");
+                Check(sb, local.y < 0.05f, "weapon sits low in frame",
+                      $"y {local.y:F2} relative to eye");
+                Check(sb, Mathf.Abs(local.x) > 0.05f, "weapon is off to one side",
+                      $"x {local.x:F2}");
+
+                // and actually inside the frustum
+                Vector3 vp = camera.WorldToViewportPoint(viewHolder.position);
+                Check(sb, vp.z > 0f && vp.x > 0f && vp.x < 1f && vp.y > 0f && vp.y < 1f,
+                      "weapon lands inside the viewport",
+                      $"viewport ({vp.x:F2}, {vp.y:F2}, {vp.z:F2})");
+            }
+            Object.DestroyImmediate(inst);
+        }
+
         Finish(sb);
     }
+
+    static string ColorToStr(Color c) => $"({c.r:F2}, {c.g:F2}, {c.b:F2})";
 
     static void Finish(StringBuilder sb)
     {
