@@ -158,7 +158,10 @@ public class ProbeRunner : MonoBehaviour
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
         // ---- what an enemy looks like ----
-        yield return CheckEnemyIsVisible(player);
+        // Two weapons, because the pose is different: a pistol is one fist, everything longer
+        // wants a second hand on it.
+        yield return CheckEnemyIsVisible(player, "Rifle");
+        yield return CheckEnemyIsVisible(player, "Pistol");
 
         // ---- dying ----
         yield return CheckDeathAndRespawn();
@@ -369,7 +372,7 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
-    IEnumerator CheckEnemyIsVisible(PlayerController player)
+    IEnumerator CheckEnemyIsVisible(PlayerController player, string weapon)
     {
         Camera camera = PlayerController.LocalCamera;
         if (camera == null)
@@ -414,12 +417,17 @@ public class ProbeRunner : MonoBehaviour
         Transform hand = rig.RightHand;
         if (hand != null)
         {
-            GameObject held = new GameObject("Rifle");
+            GameObject held = new GameObject(weapon);
             held.transform.SetParent(hand, false);
             Hitbox.Neutralise(held.transform);
 
+            GunInfo info = Resources.Load<GunInfo>("Guns/" + weapon);
             SingleShotGun gun = held.AddComponent<SingleShotGun>();
-            gun.Configure(Resources.Load<GunInfo>("Guns/Rifle"), null, false);
+            gun.Configure(info, null, false);
+
+            // Nothing feeds the rig here - there's no PlayerController on the stand-in - so
+            // the grip style is set the way one would.
+            rig.TwoHandedGrip = info == null || info.twoHanded;
 
             log.AppendLine($"  ..    enemy hand lossyScale {hand.lossyScale}  weapon lossyScale {held.transform.lossyScale * hand.lossyScale.x}");
         }
@@ -454,9 +462,9 @@ public class ProbeRunner : MonoBehaviour
         Check(weaponSize > 0.05f && weaponSize < 2.5f, "an enemy's weapon is weapon sized",
               $"{weaponSize:F2}m");
 
-        CheckArmsAreGripping(rig, stand);
+        CheckArmsAreGripping(stand, weapon);
 
-        Capture(null, "enemy");
+        Capture(null, "enemy-" + weapon.ToLower());
 
         Object.DestroyImmediate(stand);
         yield return null;
@@ -465,7 +473,7 @@ public class ProbeRunner : MonoBehaviour
     // A straight arm is an arm reaching at something; a bent one is an arm holding something.
     // Measuring how far the hand is from the shoulder against how far it could possibly be is
     // the difference, and it needs no knowledge of the rig's bone axes.
-    void CheckArmsAreGripping(MonkeyRig rig, GameObject stand)
+    void CheckArmsAreGripping(GameObject stand, string weapon)
     {
         Transform upper = FindBone(stand.transform, "RIGHTSHOULDER");
         Transform fore = FindBone(stand.transform, "RIGHTELBOW");
@@ -492,7 +500,34 @@ public class ProbeRunner : MonoBehaviour
         Vector3 chestToHand = hand.position - stand.transform.position;
         float forward = Vector3.Dot(chestToHand.normalized, stand.transform.forward);
 
-        Check(forward > 0.2f, "the hands are held in front", $"forward dot {forward:F2}");
+        Check(forward > 0.2f, $"{weapon}: the gun hand is held in front", $"forward dot {forward:F2}");
+
+        // The off hand is the whole point of the one handed change: on a pistol it should be
+        // down by the body, on anything longer it should be up near the weapon.
+        // The hand, not the elbow. An elbow sits below the hand in any grip, so measuring it
+        // said almost the same thing for both poses and proved nothing.
+        Transform offElbow = FindBone(stand.transform, "LEFTELBOW");
+        Transform offHand = offElbow != null && offElbow.childCount > 0 ? offElbow.GetChild(0) : offElbow;
+        GunInfo info = Resources.Load<GunInfo>("Guns/" + weapon);
+
+        if (offHand != null && info != null)
+        {
+            float offHandHeight = offHand.position.y - stand.transform.position.y;
+            float gunHandHeight = hand.position.y - stand.transform.position.y;
+
+            log.AppendLine($"  ..    {weapon}: off hand at {offHandHeight:F2}m, gun hand at {gunHandHeight:F2}m");
+
+            if (info.twoHanded)
+            {
+                Check(offHandHeight > gunHandHeight - 0.25f, $"{weapon}: both hands are on it",
+                      $"off hand {offHandHeight:F2}m against gun hand {gunHandHeight:F2}m");
+            }
+            else
+            {
+                Check(offHandHeight < gunHandHeight - 0.25f, $"{weapon}: the off hand is out of it",
+                      $"off hand {offHandHeight:F2}m against gun hand {gunHandHeight:F2}m");
+            }
+        }
     }
 
     static Transform FindBone(Transform root, string name)

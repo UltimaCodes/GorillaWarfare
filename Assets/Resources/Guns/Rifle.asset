@@ -12,19 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Rifle
   m_EditorClassIdentifier: 
-  itemName: Rifle
+  itemName: The Bunch
   damage: 21
   maxRange: 200
+  falloffStart: 30
+  falloffFloor: 0.65
   fireRate: 10
   automatic: 1
   spread: 0.5
+  pelletsPerShot: 1
+  melee: 0
+  twoHanded: 1
   magazineSize: 30
+  spareMagazines: 5
   reloadTime: 2.2
+  unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
+  ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
+  overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
   verticalKick: 1.75
   horizontalKick: 0.75
   patternLength: 12
   recoilRecovery: 0.3
   recoverySpeed: 3.5
-  falloffStart: 30
-  falloffFloor: 0.65
-  spareMagazines: 5

@@ -126,6 +126,18 @@ exactly that: pistol was doing 221 dps against the rifle's 210.
 Current: pistol 34 damage at 5/s semi (3 shots to kill, accurate, 12 round mag), rifle 21 at 10/s
 auto (5 shots to kill, sprays, 30 round mag).
 
+Asset names stay as roles, because the gun game ladder is defined in power order and
+`Pistol -> Shotgun -> Rifle -> Sniper -> Peel` says what each one does at a glance. What players
+read lives in `itemName` and is set by `WeaponNaming`:
+
+| role | on screen | why |
+|---|---|---|
+| Pistol | **Cavendish** | the supermarket banana - ordinary, dependable, everyone starts with it |
+| Shotgun | **The Split** | two bananas taped side by side, and a split is two halves in one dish |
+| Rifle | **The Bunch** | a lot of bananas at once, which is also what it does |
+| Sniper | **Big Mike** | Gros Michel, the cultivar wiped out in the fifties, and longer than a Cavendish |
+| Peel | **Slip Hazard** | what's left after you eat one, and what everyone does about it |
+
 ### M2 landed
 
 Five weapons with separate roles, shapes and colours. Deterministic recoil you can learn.
@@ -253,9 +265,9 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
 - [ ] Screenshake and hitstop
-- [x] **Two handed weapon poses.** Both hands now solve to their own target, the left further
-      along the weapon than the right, so there is a supporting hand rather than two arms doing
-      the same thing. Per weapon grips - a pistol held one handed - is still open.
+- [x] **Two handed weapon poses.** Both hands solve to their own target, the left further along
+      the weapon than the right. `twoHanded` on the GunInfo decides: the Cavendish and the Slip
+      Hazard are one handed and put the off hand on the hip, everything longer braces with both.
 - [ ] **Melee swing.** The Peel is a 2.4m hitscan with no arc and no animation, so it reads as
       an invisible short gun rather than a swing.
 - [ ] **Check hitbox alignment against the mesh.** They're spheres at bone origins and have

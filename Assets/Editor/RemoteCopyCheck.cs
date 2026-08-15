@@ -175,10 +175,24 @@ public static class RemoteCopyCheck
     {
         foreach (string weapon in WeaponLoadout.GunGameLadder)
         {
-            if (Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + weapon) == null)
+            GunInfo info = Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + weapon);
+
+            if (info == null)
+            {
                 Failures.Add($"gun game ladder wants '{weapon}' and there is no asset for it");
+                continue;
+            }
+
+            // Keys stay as roles; what players read comes off the asset. A weapon added without
+            // one would show its key on the HUD and in the kill feed.
+            if (string.IsNullOrWhiteSpace(info.itemName) || info.itemName == weapon)
+                Failures.Add($"'{weapon}' has no name of its own - run WeaponNaming");
         }
 
-        Notes.Add($"gun game ladder: {string.Join(" -> ", WeaponLoadout.GunGameLadder)}");
+        string[] shown = new string[WeaponLoadout.GunGameLadder.Length];
+        for (int i = 0; i < shown.Length; i++)
+            shown[i] = WeaponLoadout.DisplayName(WeaponLoadout.GunGameLadder[i]);
+
+        Notes.Add($"gun game ladder: {string.Join(" -> ", shown)}");
     }
 }

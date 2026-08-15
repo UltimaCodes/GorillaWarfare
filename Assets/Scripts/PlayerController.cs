@@ -319,8 +319,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // lerps it toward the replicated value - so the rig reads the same field either way.
     void FeedRig()
     {
-        if (rig != null)
-            rig.LookPitch = verticalLookRotation;
+        if (rig == null)
+            return;
+
+        rig.LookPitch = verticalLookRotation;
+
+        // Runs on remote copies too - they build the same loadout and receive the same equipped
+        // index, so they know whether you're holding something that needs two hands.
+        SingleShotGun held = ActiveGun;
+        rig.TwoHandedGrip = held == null || held.Info == null || held.Info.twoHanded;
     }
 
     /// Moves the item holder into view for the owner. Without this the weapon sits at the

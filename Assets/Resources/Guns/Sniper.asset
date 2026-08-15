@@ -12,21 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Sniper
   m_EditorClassIdentifier: 
-  itemName: Sniper
+  itemName: Big Mike
   damage: 95
   maxRange: 400
+  falloffStart: 400
+  falloffFloor: 1
   fireRate: 0.8
   automatic: 0
   spread: 0
+  pelletsPerShot: 1
+  melee: 0
+  twoHanded: 1
   magazineSize: 5
-  reloadTime: 3.0
-  verticalKick: 7.0
+  spareMagazines: 4
+  reloadTime: 3
+  unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
+  ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
+  overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
+  verticalKick: 7
   horizontalKick: 0.6
   patternLength: 2
   recoilRecovery: 0.55
-  recoverySpeed: 3.0
-  pelletsPerShot: 1
-  melee: 0
-  falloffStart: 400
-  falloffFloor: 1.0
-  spareMagazines: 4
+  recoverySpeed: 3
