@@ -39,8 +39,15 @@ public class CombatHud : MonoBehaviour
     static readonly Color emptyColour = new Color(0.12f, 0.12f, 0.14f, 0.85f);
 
     GUIStyle healthStyle;
-    string healthText = "100";
+    GUIStyle streakStyle;
+    string healthText = "140";
     int shownHealth = -1;
+
+    float healFlash;
+    int healAmount;
+
+    static readonly Color healColour = new Color(0.4f, 1f, 0.5f, 1f);
+    static readonly Color streakColour = new Color(1f, 0.55f, 0.1f, 1f);
 
     Texture2D scopeMask;
     int scopeSize;
@@ -80,6 +87,14 @@ public class CombatHud : MonoBehaviour
         player = owner;
     }
 
+    /// Called when a kill puts health back, so the number doesn't silently jump while you're
+    /// looking at something else.
+    public void ShowHeal(float amount)
+    {
+        healFlash = 1f;
+        healAmount = Mathf.RoundToInt(amount);
+    }
+
     /// Called when one of our shots connects. headshot draws the marker differently.
     public void ShowHit(bool headshot)
     {
@@ -91,6 +106,9 @@ public class CombatHud : MonoBehaviour
     {
         if (hitMarker > 0f)
             hitMarker = Mathf.Max(0f, hitMarker - Time.deltaTime * 3.2f);
+
+        if (healFlash > 0f)
+            healFlash = Mathf.Max(0f, healFlash - Time.deltaTime * 0.8f);
     }
 
     void OnGUI()
@@ -209,8 +227,34 @@ public class CombatHud : MonoBehaviour
             Rect(left + i * (blockWidth + gapWidth), bottom - blockHeight, blockWidth, blockHeight);
         }
 
-        GUI.color = colour;
+        // Flashes green as it comes back, so a heal reads as an event.
+        GUI.color = healFlash > 0f ? Color.Lerp(colour, healColour, healFlash) : colour;
         GUI.Label(new Rect(left, 0f, 300f, bottom - blockHeight - 6f), healthText, healthStyle);
+
+        if (streakStyle == null)
+        {
+            streakStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.LowerLeft,
+                fontStyle = FontStyle.Bold,
+                fontSize = 20,
+            };
+        }
+
+        if (healFlash > 0f)
+        {
+            GUI.color = new Color(healColour.r, healColour.g, healColour.b, healFlash);
+            GUI.Label(new Rect(left + 130f, 0f, 200f, bottom - blockHeight - 24f),
+                      $"+{healAmount}", streakStyle);
+        }
+
+        // Only once it's worth mentioning - a "streak" of one is just a kill.
+        if (player.Killstreak > 1)
+        {
+            GUI.color = streakColour;
+            GUI.Label(new Rect(left, 0f, 300f, bottom + 24f),
+                      $"{player.Killstreak} IN A ROW", streakStyle);
+        }
 
         GUI.color = Color.white;
     }
