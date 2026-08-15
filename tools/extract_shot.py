@@ -33,10 +33,19 @@ def read(path):
         channels, width, rate, frames = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(frames)
 
-    if width != 2:
-        raise SystemExit(f"[shot] {path} is {width * 8} bit; only 16 bit is handled")
-
-    data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    if width == 2:
+        data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif width == 3:
+        # 24 bit has no numpy dtype. Pad each 3 byte sample up to 4 and read as int32, putting
+        # the original bytes in the high three so the sign carries.
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3)
+        packed = np.zeros((len(b), 4), dtype=np.uint8)
+        packed[:, 1:] = b
+        data = packed.view("<i4").ravel().astype(np.float32) / 2147483648.0
+    elif width == 4:
+        data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    else:
+        raise SystemExit(f"[shot] {path} is {width * 8} bit, which isn't handled")
 
     if channels > 1:
         data = data.reshape(-1, channels).mean(axis=1)
@@ -67,67 +76,134 @@ def envelope(data, rate, window_ms=3.0):
     return np.sqrt((trimmed ** 2).mean(axis=1)), window
 
 
-def find_onsets(rms, rise=0.12, fall=0.04):
-    onsets = []
-    above = False
+def transients(data, rate, bucket_ms=5.0, floor=0.18, apart_ms=90.0):
+    """Every distinct bang in the recording, as sample indices.
 
-    peak = rms.max()
-    if peak <= 0:
-        return onsets
+    Peak per bucket, not RMS, and local maxima rather than a threshold crossing.
 
-    for i, level in enumerate(rms / peak):
-        if not above and level > rise:
-            onsets.append(i)
-            above = True
-        elif above and level < fall:
-            above = False
+    The threshold approach this replaces could not see rapid fire at all. It called a shot
+    "started" when the level rose past a fraction of the peak and "ended" when it fell back
+    below a lower one - but between two shots 80ms apart the level never falls that far, so an
+    entire magazine registered as a single onset and the extractor happily cut all of it. The
+    clip measured as one shot by the same broken logic that produced it, which is why it passed.
+    """
+    bucket = max(1, int(rate * bucket_ms / 1000.0))
+    count = len(data) // bucket
 
-    return onsets
+    env = np.abs(data[:count * bucket].reshape(count, bucket)).max(axis=1)
+    top = env.max()
+
+    if top <= 0:
+        return [], env, bucket
+
+    env = env / top
+    apart = max(1, int(apart_ms / bucket_ms))
+
+    # A bang is a sudden rise, not a loud moment.
+    #
+    # These recordings were made with a device that could not handle the level, so its automatic
+    # gain drags the reverb tail up to 80-90% of the shot itself. Every attempt to find shots by
+    # loudness failed on that: the tail is exactly as loud as the thing that caused it, so a
+    # level threshold either finds a "shot" every 50ms or finds nothing.
+    #
+    # What a real shot has and a tail does not is the attack - the level jumping several times
+    # over in five milliseconds from whatever preceded it. That is what this looks for, and it
+    # can be sanity checked against physics: a bolt action cannot cycle in 55ms, so if the
+    # detector claims it did, the detector is wrong.
+    look_back = max(2, int(30.0 / bucket_ms))
+
+    peaks = []
+    for i in range(look_back, len(env) - 1):
+        if env[i] < floor:
+            continue
+
+        before = env[i - look_back:i].mean()
+        if env[i] < before * 2.5:
+            continue
+
+        if env[i] < env[i + 1]:
+            continue
+
+        if peaks and i - peaks[-1] < apart:
+            if env[i] > env[peaks[-1]]:
+                peaks[-1] = i
+            continue
+
+        peaks.append(i)
+
+    return peaks, env, bucket
 
 
-def extract(data, rate, lead_ms=8.0, tail_floor=0.02, max_seconds=1.4):
-    rms, window = envelope(data, rate)
-    onsets = find_onsets(rms)
+def extract(data, rate, lead_ms=10.0, tail_floor=0.004, min_seconds=0.22, max_seconds=1.4):
+    peaks, env, bucket = transients(data, rate)
 
-    if not onsets:
-        raise SystemExit("[shot] no onsets found - is the file silent?")
+    if not peaks:
+        raise SystemExit("[shot] no transients found - is the file silent?")
 
-    log(f"{len(onsets)} shot(s) in the recording")
+    log(f"{len(peaks)} distinct bang(s) in the recording")
 
-    # The loudest onset, because the quiet ones are usually the recorder still settling.
-    def loudness(index):
-        end = min(len(rms), index + int(rate * 0.15 / window))
-        return rms[index:end].max()
+    # The most isolated one, not the loudest.
+    #
+    # Loudest sounds right and isn't: in these sessions the loudest shot is often the middle of
+    # a fast pair, so its tail gets truncated by the next one 90ms later and the clip comes out
+    # stunted. What matters for a usable clip is room after the bang, so this scores each
+    # candidate by the space following it and takes the roomiest of the loud ones.
+    loud_enough = [i for i in peaks if env[i] >= env[max(peaks, key=lambda j: env[j])] * 0.55]
 
-    best = max(onsets, key=loudness)
-    log(f"taking shot {onsets.index(best) + 1} of {len(onsets)}, the loudest")
+    def room_after(i):
+        later = [j for j in peaks if j > i]
+        return (later[0] - i) if later else len(env) - i
 
-    start = max(0, best * window - int(rate * lead_ms / 1000.0))
+    best = max(loud_enough, key=room_after)
 
-    # Run on until it has fallen back into the floor, or the next shot begins - whichever
-    # comes first, so a fast follow-up doesn't get glued onto the end of this one.
-    floor = rms.max() * tail_floor
+    log(f"taking bang {peaks.index(best) + 1} of {len(peaks)}, "
+        f"{room_after(best) * bucket / rate:.2f}s of room after it")
+
+    start = max(0, best * bucket - int(rate * lead_ms / 1000.0))
+
+    # Hard stop before the next bang, so a follow-up shot can never be glued on the end. This
+    # is the part that was missing: without it, "cut until it goes quiet" runs through the whole
+    # magazine, because it never goes quiet.
     limit = start + int(rate * max_seconds)
 
-    nxt = [o for o in onsets if o > best]
-    if nxt:
-        limit = min(limit, nxt[0] * window - int(rate * 0.01))
+    # Only a bang comparable in loudness to this one ends the clip.
+    #
+    # A shot outdoors is followed by its own echo off whatever is nearby, and an echo is a
+    # local maximum like any other - which is how the Mosin recording produced 62 "bangs" from
+    # a bolt action that physically cannot fire four times a second. Treating those as the next
+    # shot cut every clip down to 40ms, killing the tail that makes a gun sound like it was
+    # fired somewhere rather than in a padded box.
+    #
+    # An echo comes back quieter. A real follow-up shot does not.
+    loud = env[best] * 0.55
+    later = [i for i in peaks if i > best and env[i] >= loud]
 
+    if later:
+        limit = min(limit, later[0] * bucket - int(rate * 0.015))
+
+    # Otherwise run on while it decays, so the tail is kept.
+    #
+    # The floor has to be genuinely low. At 5% of peak these clean studio recordings were
+    # "finished" 40ms after the bang, which is not a gunshot - it's a click. What makes a shot
+    # sound like a gun rather than a snap is the decay, and that lives a long way down.
+    floor = env[best] * tail_floor
     end = limit
-    for i in range(best, min(len(rms), limit // window)):
-        if rms[i] < floor:
-            end = i * window
+
+    # And never shorter than this, whatever the floor says.
+    earliest = start + int(rate * min_seconds)
+
+    for i in range(best, min(len(env), limit // bucket)):
+        if env[i] < floor and i * bucket > earliest:
+            end = i * bucket
             break
 
-    clip = data[start:min(end, len(data))]
+    clip = np.copy(data[start:min(end, len(data))])
 
     # Put the bang at the front.
     #
-    # The RMS onset fires on the rising edge, and on an outdoor recording that edge can start
-    # in wind and handling noise well before the shot - one of these came out with 140ms of
-    # nothing in front of the bang. That is not a cosmetic problem: a gunshot clip with a lead
-    # in plays the bang that long after the trigger, and it reads as input lag rather than as
-    # a quiet start.
+    # The detector fires on the rising edge, and outdoors that edge can begin in wind and
+    # handling noise well before the shot. A clip with a lead-in plays the bang that long after
+    # the trigger, which reads as input lag rather than as a quiet start.
     lead = int(rate * 0.012)
     peak_at = int(np.argmax(np.abs(clip)))
 

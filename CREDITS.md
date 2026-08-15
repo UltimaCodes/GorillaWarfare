@@ -4,11 +4,27 @@
 
 Everything synthesised has been deleted. What's here is recorded.
 
-**Gunshots** - "Gunshot Sounds" by Tabasco, [OpenGameArt](https://opengameart.org/content/gunshot-sounds),
-**CC0**. Real range recordings: a CZ-52 for the Cavendish, an SKS for the Bunch, a shotgun for
-the Split, and a Mosin Nagant for Big Mike. Each source file holds a whole magazine, so
-`tools/extract_shot.py` cuts one clean shot out and aligns the bang to the front - a clip with a
-lead-in plays the shot late and reads as input lag.
+**Gunshots** - "The Free Firearm Sound Library" by Ben Jaszczak, Brian Nelson, Kevin Heras and
+Matthew Nanney, [OpenGameArt](https://opengameart.org/content/the-free-firearm-sound-library),
+**CC0**. Studio recordings at 96kHz/24bit: a 1911 for the Cavendish, an AK-47 for the Bunch, a
+Mossberg for the Split, a Mosin Nagant for Big Mike.
+
+Each source file is a whole session, so `tools/extract_shot.py` cuts one shot out. That took
+several goes and the failures are worth recording, because every one of them produced a file
+that measured fine:
+
+- Detecting shots by level found a "shot" every 50ms in one recording and none in another. An
+  earlier pack was recorded with automatic gain that dragged the reverb tail up to 90% of the
+  shot, so the tail was exactly as loud as the thing that caused it.
+- Detecting by attack instead works, but merging anything within 90ms hid genuine rapid fire -
+  the extractor then cut a whole burst and the onset counter, using the same broken logic,
+  called it one shot.
+- Cutting when the level fell below 5% of the peak ended the clip 40ms after the bang, which is
+  a click rather than a gunshot. The decay is most of what makes a gun sound like a gun.
+
+It picks the most isolated loud transient rather than the loudest, holds a floor low enough to
+keep the tail, and never returns anything shorter than 220ms. `AudioCheck` counts onsets
+independently and fails on more than one, which is what finally settled it.
 
 **Reload** - "Gun reload sounds" by SpringySpringo, [OpenGameArt](https://opengameart.org/content/gun-reload-sounds),
 **CC0**.
