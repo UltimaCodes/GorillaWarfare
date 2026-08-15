@@ -19,6 +19,30 @@ public class WeaponLoadout : MonoBehaviour
     /// Gun game order - weakest first, melee last. Killing with the peel wins the match.
     public static readonly string[] GunGameLadder = { "Pistol", "Shotgun", "Rifle", "Sniper", "Peel" };
 
+    // Resolved from the asset the first time anything asks, then kept. The HUD asks every
+    // frame and Resources.Load is not free.
+    static readonly Dictionary<string, string> displayNames = new Dictionary<string, string>();
+
+    /// <summary>
+    /// What a weapon is called on screen. The keys stay as roles - Pistol, Rifle, Sniper - so
+    /// the ladder still reads in power order and anyone opening the code can tell what a weapon
+    /// is for. The names players see live on the asset.
+    /// </summary>
+    public static string DisplayName(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return string.Empty;
+
+        if (displayNames.TryGetValue(key, out string name))
+            return name;
+
+        GunInfo info = Resources.Load<GunInfo>(GunResourcePath + key);
+        name = info != null && !string.IsNullOrWhiteSpace(info.itemName) ? info.itemName : key;
+
+        displayNames[key] = name;
+        return name;
+    }
+
     readonly List<SingleShotGun> built = new List<SingleShotGun>();
 
     public IReadOnlyList<SingleShotGun> Weapons => built;

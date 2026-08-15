@@ -29,6 +29,10 @@ public class GunInfo : ItemInfo
     [Tooltip("Melee weapons swing instead of shooting: no ammo, very short range, no recoil.")]
     public bool melee;
 
+    [Tooltip("Both hands on it. A pistol is one banana in one fist; everything longer needs a "
+             + "second hand further up. Drives the arm pose on the copy of you other people see.")]
+    public bool twoHanded = true;
+
     [Header("Ammo")]
     [Tooltip("Shots per banana.")]
     public int magazineSize = 30;

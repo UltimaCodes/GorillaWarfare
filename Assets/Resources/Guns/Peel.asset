@@ -12,21 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Peel
   m_EditorClassIdentifier: 
-  itemName: Peel
+  itemName: Slip Hazard
   damage: 55
   maxRange: 2.4
+  falloffStart: 2.4
+  falloffFloor: 1
   fireRate: 1.8
   automatic: 0
   spread: 0
+  pelletsPerShot: 1
+  melee: 1
+  twoHanded: 0
   magazineSize: 0
+  spareMagazines: 0
   reloadTime: 0
+  unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
+  ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
+  overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
   verticalKick: 0
   horizontalKick: 0
   patternLength: 1
   recoilRecovery: 1
   recoverySpeed: 8
-  pelletsPerShot: 1
-  melee: 1
-  falloffStart: 2.4
-  falloffFloor: 1.0
-  spareMagazines: 0

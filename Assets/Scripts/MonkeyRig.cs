@@ -50,10 +50,22 @@ public class MonkeyRig : MonoBehaviour
     [SerializeField] Vector3 rightGrip = new Vector3(0.34f, 0.17f, -0.02f);
     [SerializeField] Vector3 leftGrip = new Vector3(0.46f, 0.01f, 0.03f);
 
+    // A pistol is one banana in one fist, held further in and a little higher - you don't
+    // brace a revolver with your off hand the way you brace a rifle.
+    [SerializeField] Vector3 pistolGrip = new Vector3(0.40f, 0.11f, 0.04f);
+
+    // Where the off hand goes when it has nothing to hold: down by the hip, slightly out. This
+    // rig's rest pose is arms straight out to the sides, so leaving the arm alone is not an
+    // option - "do nothing" looks exactly like the zombie reach this was meant to fix.
+    [SerializeField] Vector3 idleHand = new Vector3(0.04f, -0.26f, -0.44f);
+
     // Which way the elbows break. Down and outward, like someone holding something, rather than
     // out to the sides like someone being arrested.
     [SerializeField] float elbowDrop = 0.8f;
     [SerializeField] float elbowFlare = 0.6f;
+
+    /// Set by PlayerController from whatever is equipped. False puts the off hand away.
+    public bool TwoHandedGrip { get; set; } = true;
 
     // Only input from outside. Everything else is measured here, because remote copies have
     // no PlayerMovement - it gets destroyed on them - but their transforms are replicated, so
@@ -305,10 +317,21 @@ public class MonkeyRig : MonoBehaviour
             return;
 
         SolveArm(rightUpperArm, rightForeArm, rightUpperAim, rightForeAim,
-                 rightUpperLength, rightForeLength, ChestPoint(rightGrip), 1f);
+                 rightUpperLength, rightForeLength,
+                 ChestPoint(TwoHandedGrip ? rightGrip : pistolGrip), 1f);
 
-        SolveArm(leftUpperArm, leftForeArm, leftUpperAim, leftForeAim,
-                 leftUpperLength, leftForeLength, ChestPoint(leftGrip), -1f);
+        if (TwoHandedGrip)
+        {
+            SolveArm(leftUpperArm, leftForeArm, leftUpperAim, leftForeAim,
+                     leftUpperLength, leftForeLength, ChestPoint(leftGrip), -1f);
+        }
+        else
+        {
+            // Solved to the hip rather than left at rest. Rest is a T-pose on this model, so
+            // doing nothing puts the arm straight out sideways.
+            SolveArm(leftUpperArm, leftForeArm, leftUpperAim, leftForeAim,
+                     leftUpperLength, leftForeLength, ChestPoint(idleHand), -1f);
+        }
     }
 
     Vector3 ChestPoint(Vector3 offset)

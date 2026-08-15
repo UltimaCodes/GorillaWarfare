@@ -126,7 +126,7 @@ public class MatchHud : MonoBehaviour
 
             string line = string.IsNullOrEmpty(entry.killer)
                 ? $"{entry.victim} died"
-                : $"{entry.killer}  «{entry.weapon}»  {entry.victim}";
+                : $"{entry.killer}  «{WeaponLoadout.DisplayName(entry.weapon)}»  {entry.victim}";
 
             if (entry.headshot)
                 line += "  HEAD";
@@ -201,7 +201,8 @@ public class MatchHud : MonoBehaviour
             GUI.color = landing ? Color.white : Live;
             huge.fontSize = landing ? 64 : 54;
 
-            GUI.Label(new Rect(0f, y, Screen.width, 72f), weapons[i].ToUpper(), huge);
+            GUI.Label(new Rect(0f, y, Screen.width, 72f),
+                      WeaponLoadout.DisplayName(weapons[i]).ToUpper(), huge);
             huge.fontSize = 58;
 
             y += 62f;

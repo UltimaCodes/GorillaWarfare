@@ -12,21 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Shotgun
   m_EditorClassIdentifier: 
-  itemName: Shotgun
+  itemName: The Split
   damage: 12
   maxRange: 22
+  falloffStart: 6
+  falloffFloor: 0.2
   fireRate: 1.4
   automatic: 0
   spread: 4.5
+  pelletsPerShot: 9
+  melee: 0
+  twoHanded: 1
   magazineSize: 6
+  spareMagazines: 6
   reloadTime: 2.8
-  verticalKick: 5.0
+  unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
+  ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
+  overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
+  verticalKick: 5
   horizontalKick: 1.1
   patternLength: 3
   recoilRecovery: 0.5
   recoverySpeed: 3.5
-  pelletsPerShot: 9
-  melee: 0
-  falloffStart: 6
-  falloffFloor: 0.2
-  spareMagazines: 6

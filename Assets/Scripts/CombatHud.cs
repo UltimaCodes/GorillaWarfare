@@ -68,7 +68,7 @@ public class CombatHud : MonoBehaviour
         if (!ReferenceEquals(gun.name, shownWeapon))
         {
             shownWeapon = gun.name;
-            weaponText = shownWeapon.ToUpper();
+            weaponText = WeaponLoadout.DisplayName(shownWeapon).ToUpper();
         }
     }
 

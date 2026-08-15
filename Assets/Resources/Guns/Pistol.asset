@@ -12,19 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Pistol
   m_EditorClassIdentifier: 
-  itemName: Pistol
+  itemName: Cavendish
   damage: 34
   maxRange: 120
+  falloffStart: 18
+  falloffFloor: 0.55
   fireRate: 5
   automatic: 0
   spread: 0.15
+  pelletsPerShot: 1
+  melee: 0
+  twoHanded: 0
   magazineSize: 12
+  spareMagazines: 6
   reloadTime: 1.4
+  unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
+  ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
+  overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
   verticalKick: 1.9
   horizontalKick: 0.35
   patternLength: 4
   recoilRecovery: 0.45
-  recoverySpeed: 5.0
-  falloffStart: 18
-  falloffFloor: 0.55
-  spareMagazines: 6
+  recoverySpeed: 5
