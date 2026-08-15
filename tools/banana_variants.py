@@ -191,6 +191,26 @@ def normalise(obj):
         lo, hi, size = extent(obj)
         log(f"rolled the curve upright: {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f}")
 
+    # Point the black end forwards.
+    #
+    # A banana has a thick woody stem at one end and a small dried blossom tip - the black nub -
+    # at the other. The stem is the part you'd wrap a fist around, so it belongs at the grip,
+    # and the black tip is where the shot comes out. It was the wrong way round: the muzzle
+    # flash was going off on the stem.
+    #
+    # Which end is which is measured rather than assumed. Both ends taper, but they taper
+    # differently: the stem narrows to a stalk and then stays a stalk, while the blossom end
+    # runs down to a point. So the last sliver of the fruit is meaningfully fatter at the stem.
+    stem_at, blossom_at = stem_end(obj)
+
+    if stem_at > blossom_at:
+        # Stem is at +Y, which is the muzzle end. Turn it round about the curve axis, so the
+        # ends swap and the curve carries on pointing the same way.
+        obj.data.transform(Matrix.Rotation(math.radians(180), 4, "Z"))
+        log("turned it round - the stem was at the muzzle")
+
+    lo, hi, size = extent(obj)
+
     # Centre on the origin, then scale so one unit of length is one metre.
     centre = Vector(((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2))
     obj.data.transform(Matrix.Translation(-centre))
@@ -201,6 +221,56 @@ def normalise(obj):
     _, _, size = extent(obj)
     log(f"normalised to {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f}")
     return obj
+
+
+def stem_end(obj):
+    """Work out which end of the banana carries the stem.
+
+    Returns (position of the stem end, position of the blossom end) along Y, as -1 or +1.
+
+    The stem is the narrow woody stalk. The blossom end is the blunt rounded one with the
+    little black nub on it. So at the very tip, the stem end is the *thinner* of the two - I
+    had this backwards first time and the render caught it, because a stalk reads as "thin
+    stick" and a blossom end reads as "end of a banana".
+    """
+    lo, hi, size = extent(obj)
+
+    # The outermost fiftieth. A twentieth included too much of the body, which left the two
+    # ends within a few percent of each other - a margin too thin to decide anything on.
+    band = size[1] * 0.02
+    axis_lo, axis_hi = lo[1] + band, hi[1] - band
+
+    low = [v.co for v in obj.data.vertices if v.co[1] <= axis_lo]
+    high = [v.co for v in obj.data.vertices if v.co[1] >= axis_hi]
+
+    def girth(points):
+        """Mean distance from the middle of this slice, in the plane across the fruit.
+
+        Measured about the slice's own centre, not about the length axis. A banana is bent, so
+        its ends sit well off that axis and distance from it is mostly a reading of the curve -
+        which came out near identical at both ends and said nothing about either.
+        """
+        if not points:
+            return 0.0
+
+        mid_x = sum(p[0] for p in points) / len(points)
+        mid_z = sum(p[2] for p in points) / len(points)
+
+        return sum(math.hypot(p[0] - mid_x, p[2] - mid_z) for p in points) / len(points)
+
+    low_girth, high_girth = girth(low), girth(high)
+
+    ratio = max(low_girth, high_girth) / max(min(low_girth, high_girth), 1e-6)
+
+    log(f"tip girth: -Y {low_girth:.4f} ({len(low)} verts), "
+        f"+Y {high_girth:.4f} ({len(high)} verts), {ratio:.2f}x apart - the stem is the thinner")
+
+    # Too close to call. Better to say so than to quietly pick one and have the muzzle flash
+    # come out of the wrong end of the fruit.
+    if ratio < 1.15:
+        log("WARNING: the two ends are nearly the same thickness - check the render")
+
+    return (1, -1) if high_girth < low_girth else (-1, 1)
 
 
 def build_variant(source, name, length, count, fatness, width_ratio):
