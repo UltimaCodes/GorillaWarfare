@@ -42,12 +42,18 @@ public class MonkeyRig : MonoBehaviour
     [SerializeField] float headShare = 0.55f;      // ...and the head. Should sum to ~1.
 
     [Header("Arms")]
-    [SerializeField] float armDown = 55f;          // shoulder rotation into a holding pose
-    [SerializeField] float elbowBend = 65f;
+    // Where each hand should be, measured from the chest, in metres. Forward, right, up.
+    //
+    // The right hand is the one the weapon hangs off, so this is effectively where the banana
+    // sits. The left is further along it and closer to the middle, which is what reads as a
+    // second hand supporting the thing rather than a second arm doing its own reaching.
+    [SerializeField] Vector3 rightGrip = new Vector3(0.34f, 0.17f, -0.02f);
+    [SerializeField] Vector3 leftGrip = new Vector3(0.46f, 0.01f, 0.03f);
 
-    // -1 because this rig mirrors its left side. Serialized so a different model can say
-    // otherwise without anyone editing this file.
-    [SerializeField] float leftArmSign = -1f;
+    // Which way the elbows break. Down and outward, like someone holding something, rather than
+    // out to the sides like someone being arrested.
+    [SerializeField] float elbowDrop = 0.8f;
+    [SerializeField] float elbowFlare = 0.6f;
 
     // Only input from outside. Everything else is measured here, because remote copies have
     // no PlayerMovement - it gets destroyed on them - but their transforms are replicated, so
@@ -66,6 +72,14 @@ public class MonkeyRig : MonoBehaviour
     Transform spine, head;
     Transform leftThigh, leftShin, rightThigh, rightShin;
     Transform leftUpperArm, leftForeArm, rightUpperArm, rightForeArm;
+
+    // Set once from the rest pose: the direction each bone points in its own local space, and
+    // how long it is. Derived rather than assumed, because which local axis runs down a bone is
+    // a decision the person who rigged the model made, not a convention.
+    Vector3 leftUpperAim, leftForeAim, rightUpperAim, rightForeAim;
+    float leftUpperLength, leftForeLength, rightUpperLength, rightForeLength;
+    Transform leftHand, rightHandEnd;
+    bool armsSolvable;
 
     Quaternion spineRest, headRest;
     Quaternion leftThighRest, leftShinRest, rightThighRest, rightShinRest;
@@ -153,7 +167,49 @@ public class MonkeyRig : MonoBehaviour
         if (leftForeArm != null) leftForeRest = leftForeArm.localRotation;
         if (rightForeArm != null) rightForeRest = rightForeArm.localRotation;
 
+        MeasureArms();
+
         return true;
+    }
+
+    // The hand at the end of each arm, and how long the two segments are. Taken from the model's
+    // rest pose, which is the only moment it's guaranteed to be unposed.
+    void MeasureArms()
+    {
+        leftHand = RightHand != null && RightHand.parent == leftForeArm ? RightHand : FirstChild(leftForeArm);
+        rightHandEnd = RightHand != null && RightHand.parent == rightForeArm ? RightHand : FirstChild(rightForeArm);
+
+        armsSolvable =
+            leftUpperArm != null && leftForeArm != null && leftHand != null &&
+            rightUpperArm != null && rightForeArm != null && rightHandEnd != null;
+
+        if (!armsSolvable)
+        {
+            Debug.LogWarning("[rig] arms are missing a joint - falling back to a static hold.", this);
+            return;
+        }
+
+        leftUpperAim = LocalAim(leftUpperArm, leftForeArm);
+        leftForeAim = LocalAim(leftForeArm, leftHand);
+        rightUpperAim = LocalAim(rightUpperArm, rightForeArm);
+        rightForeAim = LocalAim(rightForeArm, rightHandEnd);
+
+        leftUpperLength = Vector3.Distance(leftUpperArm.position, leftForeArm.position);
+        leftForeLength = Vector3.Distance(leftForeArm.position, leftHand.position);
+        rightUpperLength = Vector3.Distance(rightUpperArm.position, rightForeArm.position);
+        rightForeLength = Vector3.Distance(rightForeArm.position, rightHandEnd.position);
+    }
+
+    static Transform FirstChild(Transform bone)
+    {
+        return bone != null && bone.childCount > 0 ? bone.GetChild(0) : null;
+    }
+
+    /// The direction a bone points, expressed in its own local space.
+    static Vector3 LocalAim(Transform bone, Transform child)
+    {
+        Vector3 world = (child.position - bone.position).normalized;
+        return Quaternion.Inverse(bone.rotation) * world;
     }
 
     readonly Dictionary<string, Transform> bones = new Dictionary<string, Transform>();
@@ -234,23 +290,84 @@ public class MonkeyRig : MonoBehaviour
         head.localRotation = headRest * Quaternion.Euler(LookPitch * headShare, 0f, 0f);
     }
 
+    // Two bone IK, one arm at a time, aimed at a point in front of the chest.
+    //
+    // The old version rotated each bone by a fixed angle, which cannot hold anything: the hand
+    // ends up wherever the angles happen to put it, and on this rig that was straight out in
+    // front like a zombie. Solving for a target instead means the hands go where the weapon is
+    // and the elbows bend to suit, which is the difference between reaching and gripping.
+    //
+    // Runs after DriveAim, so the chest has already pitched and the targets come with it - aim
+    // up and the hands follow, without anything extra being replicated.
     void DriveArms()
     {
-        // Static hold rather than IK. The weapon is parented to the hand, so the hands are on
-        // it by construction - they just need to be up and forward rather than hanging.
-        // The left arm's bone axes are mirrored, so the same local rotation that swings the
-        // right arm down into a hold swings the left one up into the air. Signed per side
-        // rather than assumed, because which way round it is depends on the rig, not on us.
-        if (leftUpperArm != null)
-            leftUpperArm.localRotation = leftUpperRest * Quaternion.Euler(-armDown * leftArmSign, 0f, 0f);
+        if (!armsSolvable || spine == null)
+            return;
 
-        if (rightUpperArm != null)
-            rightUpperArm.localRotation = rightUpperRest * Quaternion.Euler(-armDown, 0f, 0f);
+        SolveArm(rightUpperArm, rightForeArm, rightUpperAim, rightForeAim,
+                 rightUpperLength, rightForeLength, ChestPoint(rightGrip), 1f);
 
-        if (leftForeArm != null)
-            leftForeArm.localRotation = leftForeRest * Quaternion.Euler(-elbowBend * leftArmSign, 0f, 0f);
+        SolveArm(leftUpperArm, leftForeArm, leftUpperAim, leftForeAim,
+                 leftUpperLength, leftForeLength, ChestPoint(leftGrip), -1f);
+    }
 
-        if (rightForeArm != null)
-            rightForeArm.localRotation = rightForeRest * Quaternion.Euler(-elbowBend, 0f, 0f);
+    Vector3 ChestPoint(Vector3 offset)
+    {
+        return spine.position
+               + transform.forward * offset.x
+               + transform.right * offset.y
+               + transform.up * offset.z;
+    }
+
+    void SolveArm(Transform upper, Transform fore, Vector3 upperAim, Vector3 foreAim,
+                  float upperLength, float foreLength, Vector3 target, float side)
+    {
+        Vector3 shoulder = upper.position;
+        Vector3 toTarget = target - shoulder;
+
+        float reach = toTarget.magnitude;
+        if (reach < 0.0001f)
+            return;
+
+        Vector3 direction = toTarget / reach;
+
+        // Clamped inside the arm's actual reach, or the law of cosines below goes imaginary and
+        // the arm snaps somewhere absurd.
+        float span = Mathf.Clamp(reach,
+                                 Mathf.Abs(upperLength - foreLength) + 0.01f,
+                                 upperLength + foreLength - 0.01f);
+
+        // Angle at the shoulder between the line to the target and the upper arm itself.
+        float cosine = (upperLength * upperLength + span * span - foreLength * foreLength)
+                       / (2f * upperLength * span);
+        float bend = Mathf.Acos(Mathf.Clamp(cosine, -1f, 1f)) * Mathf.Rad2Deg;
+
+        // The plane the elbow swings in. Down and out, so it reads as holding rather than
+        // presenting.
+        Vector3 pole = (-transform.up * elbowDrop + transform.right * side * elbowFlare).normalized;
+
+        Vector3 axis = Vector3.Cross(direction, pole);
+        if (axis.sqrMagnitude < 0.0001f)
+            axis = Vector3.Cross(direction, transform.forward);
+
+        axis.Normalize();
+
+        Vector3 upperDirection = Quaternion.AngleAxis(bend, axis) * direction;
+        AimBone(upper, upperAim, upperDirection);
+
+        // The forearm has moved with its parent, so where the elbow now is has to be read back
+        // rather than predicted.
+        Vector3 elbow = fore.position;
+        Vector3 foreDirection = target - elbow;
+
+        if (foreDirection.sqrMagnitude > 0.0001f)
+            AimBone(fore, foreAim, foreDirection.normalized);
+    }
+
+    /// Turns a bone so the axis that runs down it points along a world direction.
+    static void AimBone(Transform bone, Vector3 localAim, Vector3 worldDirection)
+    {
+        Vector3 current = bone.rotation * localAim;
+        bone.rotation = Quaternion.FromToRotation(current, worldDirection) * bone.rotation;
     }
 }

@@ -20,15 +20,6 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     [SerializeField] byte maxPlayersPerRoom = 8;
 
-    /// Which mode a room this client creates will run. Lives here rather than on MatchState
-    /// because it has to be chosen before the room exists.
-    public MatchMode SelectedMode { get; private set; } = MatchMode.Deathmatch;
-
-    public void CycleMode()
-    {
-        SelectedMode = SelectedMode == MatchMode.Deathmatch ? MatchMode.GunGame : MatchMode.Deathmatch;
-        GameAudio.Play2D(GameAudio.UI, "click_001");
-    }
 
     // Used to be static and never cleared, so dead rooms hung around in the browser for
     // the whole session (and across play sessions in the editor).
@@ -116,10 +107,12 @@ public class Launcher : MonoBehaviourPunCallbacks
             IsVisible = true,
             IsOpen = true,
 
-            // The mode has to be a room property so late joiners get it from the server rather
-            // than from whoever happens to answer first, and it has to be in the lobby list so
-            // you can tell what a room is before committing to joining it.
-            CustomRoomProperties = new Hashtable { { MatchState.ModeKey, (int)SelectedMode } },
+            // A room opens on deathmatch and the host changes it from the lobby, where they can
+            // see who turned up. It has to be a room property so late joiners get it from the
+            // server rather than from whoever answers first, and it has to be declared for the
+            // lobby so the browser can show what a room is running before you commit to it -
+            // including after the host changes their mind.
+            CustomRoomProperties = new Hashtable { { MatchState.ModeKey, (int)MatchMode.Deathmatch } },
             CustomRoomPropertiesForLobby = new[] { MatchState.ModeKey },
         };
 
