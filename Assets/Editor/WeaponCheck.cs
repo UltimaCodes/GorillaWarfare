@@ -306,6 +306,41 @@ public static class WeaponCheck
             Object.DestroyImmediate(inst);
         }
 
+        // ---- the bugs Ryaan found ----
+        sb.AppendLine("[gun] ---------- regressions ----------");
+
+        // Reload must not depend on a coroutine, because switching weapons deactivates the gun
+        // and kills its coroutines - that bricked the weapon for the rest of the life.
+        string gunSrc = System.IO.File.ReadAllText("Assets/Scripts/SingleShotGun.cs");
+        Check(sb, !gunSrc.Contains("StartCoroutine(ReloadRoutine"), "reload survives a weapon switch",
+              "no coroutine in the reload path");
+        Check(sb, gunSrc.Contains("reloadDoneAt"), "reload is timestamp driven", "reloadDoneAt present");
+
+        // Decals must never parent to a player, or they ride around with whoever was hit.
+        Check(sb, gunSrc.Contains("anchor.gameObject.layer != playerLayer"),
+              "decals refuse to stick to players", "layer guarded before SetParent");
+
+        // The trace has to skip our own hitboxes rather than stopping on them.
+        Check(sb, gunSrc.Contains("RaycastNonAlloc"), "trace skips our own hitboxes",
+              "RaycastNonAlloc, nearest non-self hit");
+
+        // ---- view arms ----
+        GameObject arms = Resources.Load<GameObject>("Models/Weapons/ViewArms");
+        Check(sb, arms != null, "view arms model", arms == null ? "missing" : "loaded");
+        Material armMat = Resources.Load<Material>("Models/Weapons/ViewArmsMat");
+        Check(sb, armMat != null, "view arms material", armMat == null ? "missing" : armMat.name);
+
+        // ---- recoil is no longer forgiving ----
+        GunInfo rf = Resources.Load<GunInfo>("Guns/Rifle");
+        if (rf != null)
+        {
+            float climb = 0f;
+            for (int i = 0; i < 10; i++) climb += rf.RecoilForShot(i).x;
+            Check(sb, climb > 18f, "ten rounds climb meaningfully", $"{climb:F0} degrees");
+            Check(sb, rf.recoilRecovery < 0.6f, "recoil is not handed back for free",
+                  $"recovery {rf.recoilRecovery}");
+        }
+
         Finish(sb);
     }
 
