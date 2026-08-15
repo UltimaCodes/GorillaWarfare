@@ -29,6 +29,16 @@ independently and fails on more than one, which is what finally settled it.
 **Reload** - "Gun reload sounds" by SpringySpringo, [OpenGameArt](https://opengameart.org/content/gun-reload-sounds),
 **CC0**.
 
+**Hits, headshots, kill, death, melee swing, menu taps** - "Punches, hits, swords and squishes"
+by Philippe Groarke (Socapex), [OpenGameArt](https://opengameart.org/content/punches-hits-swords-and-squishes),
+**CC BY-SA 3.0**, itself compiled from Freesound samples under CC-BY 3.0 and CC0. Attribution is a
+condition, so this entry stays.
+
+Chosen by measurement rather than by filename: the melee swing is the brightest of the swishes
+at 71% of its energy above 4kHz, which is what makes it read as air rather than impact; the
+headshot marker is brighter than the ordinary hit so the two are told apart by ear alone; and
+the menu sounds are percussive taps rather than tones, which is what the old ones got wrong.
+
 **Footsteps, impacts, hurt, UI clicks** - [Kenney](https://kenney.nl), **CC0**.
 
 ### Still missing
