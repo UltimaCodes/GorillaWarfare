@@ -157,6 +157,9 @@ public class ProbeRunner : MonoBehaviour
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
+        // ---- what an enemy looks like ----
+        yield return CheckEnemyIsVisible(player);
+
         // ---- dying ----
         yield return CheckDeathAndRespawn();
 
@@ -360,6 +363,101 @@ public class ProbeRunner : MonoBehaviour
         }
 
         Check(head, "there is a head to aim at", head ? "found" : "no head hitbox");
+    }
+
+    // Offline mode has exactly one player, so there is no remote copy to look at. This builds
+    // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
+    // camera and photographs it, which is the only way to answer "can you see an enemy" without
+    // a second machine.
+    IEnumerator CheckEnemyIsVisible(PlayerController player)
+    {
+        Camera camera = PlayerController.LocalCamera;
+        if (camera == null)
+            yield break;
+
+        // Spawn points are random and several of them face a wall, so a fixed offset forward
+        // put the stand-in inside the geometry about half the time. Find a direction with room
+        // in it first, then aim at what we placed.
+        const float range = 4.5f;
+        Vector3 eye = camera.transform.position;
+        Vector3 direction = camera.transform.forward;
+
+        for (int i = 0; i < 12; i++)
+        {
+            Vector3 candidate = Quaternion.Euler(0f, i * 30f, 0f) * camera.transform.forward;
+            candidate.y = 0f;
+            candidate.Normalize();
+
+            if (!Physics.Raycast(eye, candidate, range + 1.5f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                direction = candidate;
+                break;
+            }
+        }
+
+        GameObject stand = new GameObject("~enemy stand-in");
+        stand.transform.position = eye + direction * range - Vector3.up * 0.9f;
+        stand.transform.rotation = Quaternion.LookRotation(-direction, Vector3.up);
+
+        camera.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+
+        MonkeyRig rig = stand.AddComponent<MonkeyRig>();
+
+        if (!rig.Build(false))
+        {
+            Check(false, "an enemy body can be built", "MonkeyRig.Build refused");
+            Object.DestroyImmediate(stand);
+            yield break;
+        }
+
+        // Same weapon treatment a remote copy gets.
+        Transform hand = rig.RightHand;
+        if (hand != null)
+        {
+            GameObject held = new GameObject("Rifle");
+            held.transform.SetParent(hand, false);
+            Hitbox.Neutralise(held.transform);
+
+            SingleShotGun gun = held.AddComponent<SingleShotGun>();
+            gun.Configure(Resources.Load<GunInfo>("Guns/Rifle"), null, false);
+
+            log.AppendLine($"  ..    enemy hand lossyScale {hand.lossyScale}  weapon lossyScale {held.transform.lossyScale * hand.lossyScale.x}");
+        }
+
+        yield return null;
+        yield return null;
+
+        bool visible = false;
+        float tallest = 0f;
+
+        foreach (SkinnedMeshRenderer skin in stand.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            tallest = Mathf.Max(tallest, skin.bounds.size.y);
+
+            if (skin.enabled && skin.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly)
+                visible = true;
+        }
+
+        Check(visible, "an enemy body actually renders",
+              visible ? "not shadows-only" : "every renderer is shadows-only or off");
+
+        Check(tallest > 1.2f && tallest < 3f, "an enemy is person sized", $"{tallest:F2}m tall");
+
+        // Weapon on the hand must be a banana, not a building.
+        float weaponSize = 0f;
+        foreach (SingleShotGun gun in stand.GetComponentsInChildren<SingleShotGun>(true))
+        {
+            foreach (Renderer r in gun.GetComponentsInChildren<Renderer>(true))
+                weaponSize = Mathf.Max(weaponSize, r.bounds.size.magnitude);
+        }
+
+        Check(weaponSize > 0.05f && weaponSize < 2.5f, "an enemy's weapon is weapon sized",
+              $"{weaponSize:F2}m");
+
+        Capture(null, "enemy");
+
+        Object.DestroyImmediate(stand);
+        yield return null;
     }
 
     IEnumerator CheckDeathAndRespawn()
