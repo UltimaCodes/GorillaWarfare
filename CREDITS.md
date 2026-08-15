@@ -28,7 +28,11 @@ courtesy. The author's own wording, which has to travel with anything the game s
 
 ## Music
 
-Five slots, all original, all still to be written. Drop them into
+Menu, lobby and warmup are Ryaan's own tracks. Combat and the scoreboard are placeholders from
+`tools/placeholder_music.py` - a pulse and a drone, deliberately plain so a real track can never
+be mistaken for one. Delete either and MusicPlayer falls back to a slot that does have something.
+
+Slots, and what MusicPlayer picks them up as. Drop them into
 `Assets/Resources/Audio/Music/` and MusicPlayer picks them up by filename:
 
 | file | when it plays | length |
