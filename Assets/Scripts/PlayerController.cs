@@ -279,6 +279,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             AttachWeaponsToHand();
         }
 
+        // Ask for this spawn's weapon before building anything.
+        //
+        // In deathmatch that's a fresh roll every time you die, which is the whole point - you
+        // don't pick your gun, you get given one, and dying is how you get a different one. In
+        // gun game it's whatever rung you're on, which the master also sets when you climb;
+        // both work it out the same way so they can't disagree.
+        if (PV.IsMine && PhotonNetwork.InRoom)
+            PublishLoadout(MatchState.WeaponsFor(PhotonNetwork.LocalPlayer));
+
         // Both copies. Everyone needs the models - it is how you tell what someone is holding -
         // and only the owner's are allowed to fire. This used to run for the owner alone, so
         // remote players were left carrying whatever the prefab happened to ship with.

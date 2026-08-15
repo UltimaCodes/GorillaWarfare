@@ -37,11 +37,6 @@ public class MatchState : MonoBehaviourPunCallbacks
     public const string EndsAtKey = "endsAt";
     public const string WinnerKey = "winner";
 
-    /// The weapons this deathmatch rolled. A room property rather than a field, because a
-    /// field belongs to whoever is master right now - and if they leave, the next master would
-    /// roll a fresh set and hand it to the next person who joined, while everyone already in
-    /// the match carried the old one.
-    public const string RolledWeaponsKey = "rolled";
 
     /// Gun game position, per player.
     public const string RungKey = "rung";
@@ -55,7 +50,6 @@ public class MatchState : MonoBehaviourPunCallbacks
     [SerializeField] float respawnSeconds = 3f;
 
     [Header("Rules")]
-    [SerializeField] int deathmatchWeaponCount = 3;
     [SerializeField] int killsPerRung = 2;
 
     public static MatchState Instance { get; private set; }
@@ -156,23 +150,6 @@ public class MatchState : MonoBehaviourPunCallbacks
         }
     }
 
-    /// What this deathmatch rolled. Readable by anyone, so the warmup screen can show it and a
-    /// new master can keep handing out the same set.
-    public static string[] RolledWeapons
-    {
-        get
-        {
-            if (PhotonNetwork.InRoom
-                && PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(RolledWeaponsKey, out object value)
-                && value is string packed
-                && !string.IsNullOrEmpty(packed))
-            {
-                return Rules.Deserialise(packed);
-            }
-
-            return WeaponLoadout.AllWeapons;
-        }
-    }
 
     void Awake()
     {
@@ -233,6 +210,37 @@ public class MatchState : MonoBehaviourPunCallbacks
         }
 
         Debug.Log($"[match] took over as master mid {Phase}, restored {kills.Count} scores.");
+    }
+
+    /// <summary>
+    /// The host changed something about the room - almost always the mode.
+    ///
+    /// Nothing listened for this before, and it was the whole reason gun game didn't work.
+    /// BeginWarmup runs from OnJoinedRoom, which is the moment the room is created and long
+    /// before anyone picks a mode, so everybody was handed a deathmatch loadout. Switching to
+    /// gun game afterwards changed the label and nothing else: you kept the three weapons you'd
+    /// already been given, which is indistinguishable from the ladder being broken.
+    /// </summary>
+    public override void OnRoomPropertiesUpdate(Hashtable changed)
+    {
+        if (!changed.ContainsKey(ModeKey))
+            return;
+
+        Debug.Log($"[match] mode is now {Mode}, reissuing loadouts");
+
+        if (!PhotonNetwork.IsMasterClient)
+            return;
+
+        // Gun game starts everyone at the bottom of the ladder. Carrying a rung over from a
+        // deathmatch would be meaningless anyway.
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            player.SetCustomProperties(new Hashtable { { RungKey, 0 }, { RungKillsKey, 0 } });
+            rungs[player.ActorNumber] = 0;
+            rungKills[player.ActorNumber] = 0;
+
+            GiveLoadout(player);
+        }
     }
 
     // Anyone arriving mid-match needs a loadout, and in deathmatch that is the set this match
@@ -332,15 +340,6 @@ public class MatchState : MonoBehaviourPunCallbacks
             { EndsAtKey, PhotonNetwork.Time + warmupSeconds },
         });
 
-        // Rolled once for the whole match so everyone fights with the same three.
-        if (Mode == MatchMode.Deathmatch)
-        {
-            SetRoom(new Hashtable
-            {
-                { RolledWeaponsKey, Rules.Serialise(WeaponLoadout.RandomSelection(deathmatchWeaponCount)) },
-            });
-        }
-
         foreach (Player player in PhotonNetwork.PlayerList)
             GiveLoadout(player);
     }
@@ -369,14 +368,29 @@ public class MatchState : MonoBehaviourPunCallbacks
     }
 
     /// What a player should be carrying right now, under the current mode.
+    /// <summary>
+    /// What a player should be carrying right now, under the current mode.
+    ///
+    /// One weapon either way. Gun game hands you whatever rung you're on; deathmatch rolls a
+    /// fresh one, which is why this is called again on every respawn rather than once a match -
+    /// dying is how you get a different gun.
+    ///
+    /// Static and public because two different people call it: the master when someone climbs
+    /// a rung, and the player themselves when they spawn. Both computing it the same way is
+    /// what stops the two disagreeing.
+    /// </summary>
+    public static string[] WeaponsFor(Player player)
+    {
+        if (Mode == MatchMode.GunGame)
+            return Rules.LoadoutForRung(RoomManager.GetStat(player, RungKey), WeaponLoadout.GunGameLadder);
+
+        return WeaponLoadout.RandomSelection(1);
+    }
+
     void GiveLoadout(Player player)
     {
-        string[] weapons = Mode == MatchMode.GunGame
-            ? Rules.LoadoutForRung(RungOf(player), WeaponLoadout.GunGameLadder)
-            : RolledWeapons;
-
         player.SetCustomProperties(
-            new Hashtable { { PlayerController.LoadoutKey, Rules.Serialise(weapons) } });
+            new Hashtable { { PlayerController.LoadoutKey, Rules.Serialise(WeaponsFor(player)) } });
     }
 
     // ---- kills ----
