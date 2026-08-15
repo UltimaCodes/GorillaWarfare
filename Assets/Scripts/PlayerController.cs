@@ -94,6 +94,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     public CombatHud Hud { get; private set; }
 
+    /// 0 to 1. The HUD draws it; the old screen space healthbar on the prefab is gone.
+    public float HealthFraction => Mathf.Clamp01(currentHealth / maxHealth);
+    public int HealthPoints => Mathf.Max(0, Mathf.CeilToInt(currentHealth));
+
     void Awake()
     {
         PV = GetComponent<PhotonView>();
@@ -383,6 +387,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
 
         itemHolder.SetParent(rig.RightHand, false);
+
+        // Same 100x bone scale that was inflating the hitboxes. Left alone, everyone else saw
+        // you holding a banana the size of a building, positioned metres off your hand because
+        // the offset below was being multiplied by a hundred too.
+        Hitbox.Neutralise(itemHolder);
+
         itemHolder.localPosition = weaponHandOffset;
         itemHolder.localRotation = Quaternion.Euler(weaponHandRotation);
     }

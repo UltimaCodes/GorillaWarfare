@@ -31,9 +31,6 @@ public class SingleShotGun : Gun
     public int SpareMagazines { get; private set; }
     public bool Reloading => reloading;
 
-    // Reused so we're not allocating an array every shot.
-    static readonly Collider[] impactColliders = new Collider[4];
-
     // Shared trace buffer. 16 is plenty - a shot passes through our own hitboxes at most.
     static readonly RaycastHit[] hits = new RaycastHit[16];
 
@@ -88,6 +85,15 @@ public class SingleShotGun : Gun
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localRotation = Quaternion.identity;
 
+        // Park the model so its blunt end sits on the origin and it runs forward from there.
+        //
+        // The bananas are modelled about their centre, so a weapon placed at the holder had
+        // half its length behind that point - fine for the pistol, but the sniper is 1.33m and
+        // most of it ended up behind the camera, which is why it vanished at exactly the moment
+        // it should have been most visible. Anchoring the grip means every weapon is held the
+        // same way and a longer one simply reaches further out.
+        AnchorGrip(visual.transform);
+
         Material mat = Resources.Load<Material>($"Models/Weapons/Banana{gameObject.name}Mat");
         if (mat != null)
         {
@@ -98,6 +104,50 @@ public class SingleShotGun : Gun
         visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
         block = new MaterialPropertyBlock();
         ApplyRipeness();
+    }
+
+    // Bananas are built along +Z, which is also where the muzzle flash sits.
+    static void AnchorGrip(Transform visual)
+    {
+        Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+            return;
+
+        // Local space bounds, built from the meshes rather than Renderer.bounds - the latter is
+        // world space and would fold in wherever the player happens to be standing.
+        Bounds local = new Bounds();
+        bool started = false;
+
+        foreach (Renderer r in renderers)
+        {
+            Mesh mesh = null;
+
+            if (r is MeshRenderer && r.TryGetComponent(out MeshFilter filter))
+                mesh = filter.sharedMesh;
+            else if (r is SkinnedMeshRenderer skinned)
+                mesh = skinned.sharedMesh;
+
+            if (mesh == null)
+                continue;
+
+            Bounds b = mesh.bounds;
+            b.center = visual.InverseTransformPoint(r.transform.TransformPoint(b.center));
+
+            if (!started)
+            {
+                local = b;
+                started = true;
+            }
+            else
+            {
+                local.Encapsulate(b);
+            }
+        }
+
+        if (!started)
+            return;
+
+        visual.localPosition = new Vector3(-local.center.x, -local.center.y, -local.min.z);
     }
 
     /// Tints the banana by how much of the magazine is left. A property block rather than a
@@ -317,28 +367,9 @@ public class SingleShotGun : Gun
         if (muzzle != null)
             muzzle.Fire();
 
-        if (bulletImpactPrefab == null)
-            return;
-
-        int count = Physics.OverlapSphereNonAlloc(hitPosition, 0.3f, impactColliders);
-        if (count == 0)
-            return;
-
-        GameObject bulletImpactObj = Instantiate(
-            bulletImpactPrefab,
-            hitPosition + hitNormal * 0.001f,
-            Quaternion.LookRotation(hitNormal, Vector3.up) * bulletImpactPrefab.transform.rotation);
-
-        // Only stick decals to world geometry. Parenting to anything on a player meant they
-        // rode around with whoever was hit - and when that was our own hitbox, they hung in
-        // front of the camera and followed the view.
-        Collider anchor = impactColliders[0];
-        int playerLayer = LayerMask.NameToLayer(Hitbox.PlayerLayerName);
-        int hitboxLayer = LayerMask.NameToLayer(Hitbox.LayerName);
-
-        if (anchor != null && anchor.gameObject.layer != playerLayer && anchor.gameObject.layer != hitboxLayer)
-            bulletImpactObj.transform.SetParent(anchor.transform);
-
-        Destroy(bulletImpactObj, 10f);
+        // BulletDecal re-checks locally that there is still something at the hit point before
+        // it draws anything, and works out for itself whether it landed on a person or a wall.
+        // Passing the trace mask so it ignores movement capsules the same way the shot did.
+        BulletDecal.Spawn(hitPosition, hitNormal, TraceMask);
     }
 }

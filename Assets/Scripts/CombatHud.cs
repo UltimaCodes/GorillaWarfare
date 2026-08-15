@@ -33,6 +33,15 @@ public class CombatHud : MonoBehaviour
     static readonly Color spareColour = new Color(1f, 1f, 1f, 0.55f);
     static readonly Color nameColour = new Color(1f, 1f, 1f, 0.4f);
 
+    static readonly Color healthyColour = new Color(0.55f, 1f, 0.1f, 1f);
+    static readonly Color hurtColour = new Color(1f, 0.85f, 0f, 1f);
+    static readonly Color criticalColour = new Color(1f, 0.1f, 0.25f, 1f);
+    static readonly Color emptyColour = new Color(0.12f, 0.12f, 0.14f, 0.85f);
+
+    GUIStyle healthStyle;
+    string healthText = "100";
+    int shownHealth = -1;
+
     string ammoText = string.Empty;
     string spareText = string.Empty;
     string weaponText = string.Empty;
@@ -128,6 +137,8 @@ public class CombatHud : MonoBehaviour
             Rect(cx + size - thickness, cy, thickness, size);
         }
 
+        DrawHealth();
+
         // Ammo, bottom right: big number is what's in the banana, small one underneath is how
         // many spare bananas you're carrying.
         if (gun != null && gun.Info != null && !gun.Info.melee)
@@ -161,6 +172,61 @@ public class CombatHud : MonoBehaviour
             GUI.color = nameColour;
             GUI.Label(new Rect(0f, 0f, right, bottom - 52f), weaponText, spareStyle);
         }
+
+        GUI.color = Color.white;
+    }
+
+    // Health, bottom left. Blocks rather than a bar, because a smooth fill is a value you read
+    // and a row of blocks is a quantity you see - and losing one is an event.
+    //
+    // Cruelty Squad's UI is hostile on purpose: flat saturated colour, hard edges, no gradients,
+    // nothing tastefully translucent. The number is oversized because it is the only thing on
+    // screen that decides whether you are about to die.
+    void DrawHealth()
+    {
+        if (healthStyle == null)
+        {
+            healthStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.LowerLeft,
+                fontStyle = FontStyle.Bold,
+                fontSize = 54,
+            };
+        }
+
+        float fraction = player.HealthFraction;
+        int points = player.HealthPoints;
+
+        if (points != shownHealth)
+        {
+            shownHealth = points;
+            healthText = points.ToString();
+        }
+
+        // Acid green down to a violent red. No blending through orange - it steps, so a colour
+        // change means something happened.
+        Color colour = fraction > 0.6f ? healthyColour
+                     : fraction > 0.3f ? hurtColour
+                     : criticalColour;
+
+        float left = 34f;
+        float bottom = Screen.height - 34f;
+
+        const int blocks = 10;
+        const float blockWidth = 22f;
+        const float blockHeight = 14f;
+        const float gapWidth = 4f;
+
+        int lit = Mathf.CeilToInt(fraction * blocks);
+
+        for (int i = 0; i < blocks; i++)
+        {
+            GUI.color = i < lit ? colour : emptyColour;
+            Rect(left + i * (blockWidth + gapWidth), bottom - blockHeight, blockWidth, blockHeight);
+        }
+
+        GUI.color = colour;
+        GUI.Label(new Rect(left, 0f, 300f, bottom - blockHeight - 6f), healthText, healthStyle);
 
         GUI.color = Color.white;
     }
