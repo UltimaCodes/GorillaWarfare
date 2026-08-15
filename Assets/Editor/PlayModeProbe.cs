@@ -454,10 +454,56 @@ public class ProbeRunner : MonoBehaviour
         Check(weaponSize > 0.05f && weaponSize < 2.5f, "an enemy's weapon is weapon sized",
               $"{weaponSize:F2}m");
 
+        CheckArmsAreGripping(rig, stand);
+
         Capture(null, "enemy");
 
         Object.DestroyImmediate(stand);
         yield return null;
+    }
+
+    // A straight arm is an arm reaching at something; a bent one is an arm holding something.
+    // Measuring how far the hand is from the shoulder against how far it could possibly be is
+    // the difference, and it needs no knowledge of the rig's bone axes.
+    void CheckArmsAreGripping(MonkeyRig rig, GameObject stand)
+    {
+        Transform upper = FindBone(stand.transform, "RIGHTSHOULDER");
+        Transform fore = FindBone(stand.transform, "RIGHTELBOW");
+        Transform hand = FindBone(stand.transform, "RIGHTHOLD");
+
+        if (upper == null || fore == null || hand == null)
+        {
+            Check(false, "the right arm chain is present", "a joint is missing");
+            return;
+        }
+
+        float span = Vector3.Distance(upper.position, fore.position)
+                     + Vector3.Distance(fore.position, hand.position);
+        float reach = Vector3.Distance(upper.position, hand.position);
+        float extension = span > 0.0001f ? reach / span : 1f;
+
+        log.AppendLine($"  ..    right arm extension {extension:P0} ({reach:F2}m of a possible {span:F2}m)");
+
+        // Fully straight is 100%. Anything above about 95% is a zombie reach, which is what the
+        // fixed angle pose produced.
+        Check(extension < 0.95f, "arms are bent, not reaching", $"{extension:P0} extended");
+
+        // And the hand has to be in front of the chest rather than out to the side or behind.
+        Vector3 chestToHand = hand.position - stand.transform.position;
+        float forward = Vector3.Dot(chestToHand.normalized, stand.transform.forward);
+
+        Check(forward > 0.2f, "the hands are held in front", $"forward dot {forward:F2}");
+    }
+
+    static Transform FindBone(Transform root, string name)
+    {
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == name)
+                return t;
+        }
+
+        return null;
     }
 
     IEnumerator CheckDeathAndRespawn()

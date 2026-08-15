@@ -83,8 +83,9 @@ Regressions and broken basics. Nothing else matters while the game can't be play
 - [x] It renders — `PlayModeProbe` builds the remote rig, stands it in front of the camera and
       photographs it
 - [ ] Tune the gait numbers against the real model; current values are guesses
-- [ ] Arms reach forward rather than gripping, and the banana sits at hip height not in the
-      hand — M7, it's a rig job
+- [x] Arms reach forward rather than gripping — replaced the fixed angle pose with two bone IK
+      aimed at a grip point in front of the chest. A fixed rotation can't hold anything: the
+      hand lands wherever the angles put it, which on this rig was straight out front
 
 **Done when:** other players look like a monkey that walks, aims where it's looking, and holds
 its weapon.
@@ -151,7 +152,7 @@ Two modes.
 - [x] End-of-match scoreboard with a winner
 - [x] Respawn delay instead of instant, with a camera so death isn't a black screen
 - [x] Master client owns match state; survives host migration
-- [x] Mode picked before the room is created, and shown in the room browser
+- [x] Mode picked in the lobby by the host, live, and shown in the room browser as it changes
 - [x] Scores reset between matches — PUN never clears player properties by itself, they even
       follow you into the next room you join
 - [ ] Next *map* rather than next match — that's M6, there's only one map to rotate to
@@ -252,9 +253,9 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
 - [ ] Screenshake and hitstop
-- [ ] **Two handed weapon poses.** Rifle and sniper are shaped two handed but MonkeyRig poses
-      both arms identically, so there's no left hand on a foregrip. Only visible on remote
-      players - you never see your own arms - so it's cosmetic, but it's the obvious tell.
+- [x] **Two handed weapon poses.** Both hands now solve to their own target, the left further
+      along the weapon than the right, so there is a supporting hand rather than two arms doing
+      the same thing. Per weapon grips - a pistol held one handed - is still open.
 - [ ] **Melee swing.** The Peel is a 2.4m hitscan with no arc and no animation, so it reads as
       an invisible short gun rather than a swing.
 - [ ] **Check hitbox alignment against the mesh.** They're spheres at bone origins and have
