@@ -1400,10 +1400,10 @@ MonoBehaviour:
   - {fileID: 4834874955677074324}
   healthbarImage: {fileID: 4055823294845712000}
   ui: {fileID: 2101884168501079312}
-  weaponViewOffset: {x: 0.22, y: 0.3, z: 0.78}
-  weaponViewRotation: {x: 0, y: 0, z: 0}
-  viewArmsOffset: {x: -0.06, y: -0.1, z: -0.3}
-  viewArmsRotation: {x: 0, y: 0, z: 0}
+  weaponViewOffset: {x: 0.24, y: 0.16, z: 0.72}
+  weaponViewRotation: {x: -55, y: -18, z: 6}
+  viewArmsOffset: {x: -0.01, y: 0.01, z: -0.02}
+  viewArmsRotation: {x: 42, y: 12, z: -6}
   weaponHandOffset: {x: 0.02, y: 0, z: 0.06}
   weaponHandRotation: {x: 0, y: 0, z: 0}
 --- !u!114 &7754786868663888966

@@ -40,14 +40,16 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 # Built in Blender space: +Y is forward (becomes Unity +Z), +Z is up (becomes Unity +Y).
 # Arms come from behind and below the camera and reach forward to where the weapon sits.
 def arm(name, side):
-    x = 0.16 * side
+    """Forearm and hand only. The first version ran from the shoulder, which is most of a metre
+    of arm that can never be on screen - a viewmodel only ever shows from about the elbow."""
+    x = 0.085 * side
     return limb(name, [
-        ((x * 1.35, -0.34, -0.20), 0.062),   # shoulder, behind and below the eye
-        ((x * 1.20, -0.14, -0.17), 0.058),   # upper arm
-        ((x * 1.05,  0.06, -0.13), 0.049),   # elbow
-        ((x * 0.95,  0.22, -0.09), 0.042),   # forearm
-        ((x * 0.90,  0.32, -0.07), 0.046),   # wrist thickens into the hand
-        ((x * 0.88,  0.40, -0.06), 0.030),   # fist
+        ((x * 1.30, -0.20, -0.075), 0.052),   # elbow, just off the bottom of the frame
+        ((x * 1.15, -0.09, -0.055), 0.047),   # forearm
+        ((x * 1.02,  0.00, -0.035), 0.043),   # wrist
+        ((x * 0.98,  0.05, -0.025), 0.050),   # hand swells at the knuckles
+        ((x * 0.96,  0.10, -0.018), 0.047),   # fist
+        ((x * 0.95,  0.13, -0.014), 0.026),   # fingertips curl over
     ])
 
 pieces = [arm("ArmL", -1), arm("ArmR", 1)]
