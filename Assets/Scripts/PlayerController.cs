@@ -41,6 +41,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     Vector2 recoilTarget;
     float recoilRecovery = 0.75f;
     float recoilSpeed = 6f;
+    float lastRecoilAt = -1f;
+
+    // Grace period after the last shot before the view starts returning.
+    const float recoilHoldTime = 0.18f;
     bool cursorLocked = true;
     const float maxHealth = 100f;
     float currentHealth = maxHealth;
@@ -393,6 +397,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         recoilTarget += kick;
         recoilRecovery = recovery;
         recoilSpeed = speed;
+        lastRecoilAt = Time.time;
     }
 
     void Look()
@@ -411,11 +416,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void UpdateRecoil()
     {
-        // Decay the target so the kick doesn't stack forever, then chase it. Two stages is what
-        // makes it feel like a spring instead of a teleport - the shot snaps the view and it
-        // settles back smoothly.
-        recoilTarget = Vector2.Lerp(recoilTarget, Vector2.zero, recoilRecovery * recoilSpeed * Time.deltaTime);
-        recoilOffset = Vector2.Lerp(recoilOffset, recoilTarget, 1f - Mathf.Exp(-recoilSpeed * 2f * Time.deltaTime));
+        // Recovery only starts once you're off the trigger. Decaying while you fire made the
+        // spray self limiting - it climbed a little, then the decay matched the kick and it
+        // stopped going anywhere, which is why it felt like there was nothing to fight. A spray
+        // should keep climbing until you pull down against it.
+        if (Time.time - lastRecoilAt > recoilHoldTime)
+            recoilTarget = Vector2.Lerp(recoilTarget, Vector2.zero, recoilRecovery * recoilSpeed * Time.deltaTime);
+
+        recoilOffset = Vector2.Lerp(recoilOffset, recoilTarget, 1f - Mathf.Exp(-recoilSpeed * 2.5f * Time.deltaTime));
     }
 
     // Lerped, not snapped - serialization only fires 20x/sec so raw values visibly step.

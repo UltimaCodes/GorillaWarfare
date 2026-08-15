@@ -13,6 +13,8 @@ public class SingleShotGun : Gun
 
     PlayerController owner;
     MuzzleFlash muzzle;
+    Renderer[] visualRenderers;
+    MaterialPropertyBlock block;
 
     float nextShotTime;
     int shotsInBurst;          // where we are in the recoil pattern
@@ -21,6 +23,7 @@ public class SingleShotGun : Gun
     float reloadDoneAt;
 
     public int Ammo { get; private set; } = -1;
+    public int SpareMagazines { get; private set; }
     public bool Reloading => reloading;
 
     // Reused so we're not allocating an array every shot.
@@ -39,6 +42,7 @@ public class SingleShotGun : Gun
         bulletImpactPrefab = impactPrefab;
         itemGameObject = gameObject;
         Ammo = info != null ? info.magazineSize : 0;
+        SpareMagazines = info != null ? info.spareMagazines : 0;
     }
 
     private void Awake()
@@ -79,6 +83,28 @@ public class SingleShotGun : Gun
             foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))
                 r.sharedMaterial = mat;
         }
+
+        visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
+        block = new MaterialPropertyBlock();
+        ApplyRipeness();
+    }
+
+    /// Tints the banana by how much of the magazine is left. A property block rather than a
+    /// material instance, so five weapons don't become five materials and every player doesn't
+    /// get their own copy of each.
+    void ApplyRipeness()
+    {
+        if (visualRenderers == null || Info == null || block == null)
+            return;
+
+        Color c = Info.RipenessFor(Ammo);
+        foreach (Renderer r in visualRenderers)
+        {
+            if (r == null) continue;
+            r.GetPropertyBlock(block);
+            block.SetColor("_Color", c);
+            r.SetPropertyBlock(block);
+        }
     }
 
     void Update()
@@ -112,6 +138,10 @@ public class SingleShotGun : Gun
         if (reloading || Info == null || Ammo >= Info.magazineSize)
             return;
 
+        // No spare bananas left - you're done with this weapon until you find more.
+        if (SpareMagazines <= 0)
+            return;
+
         reloading = true;
         reloadDoneAt = Time.time + Info.reloadTime;
         GameAudio.Play2D(GameAudio.UI, 0.4f);
@@ -125,8 +155,11 @@ public class SingleShotGun : Gun
         if (!reloading || Time.time < reloadDoneAt)
             return;
 
+        // You ate the old one and pulled a fresh one out.
+        SpareMagazines--;
         Ammo = Info.magazineSize;
         reloading = false;
+        ApplyRipeness();
     }
 
     void TryShoot()
@@ -148,7 +181,10 @@ public class SingleShotGun : Gun
         lastShotTime = Time.time;
 
         if (!Info.melee && Ammo > 0)
+        {
             Ammo--;
+            ApplyRipeness();
+        }
 
         Shoot();
 
