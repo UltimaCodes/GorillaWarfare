@@ -160,8 +160,9 @@ public static class AudioCheck
 
             if (clip == null)
             {
-                // Music is optional by design - MusicPlayer disables itself without it.
-                Log.AppendLine($"  ..    music '{name}' absent, MusicPlayer will stay quiet");
+                // Optional by design. One theme covers the whole game - MusicPlayer falls back
+                // to whichever track it has - and with neither it disables itself.
+                Log.AppendLine($"  ..    music '{name}' absent, the other one covers for it");
                 continue;
             }
 
