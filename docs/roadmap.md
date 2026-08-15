@@ -228,16 +228,19 @@ see Unverified.
 
 The big aesthetic one. See the philosophy section above.
 
-- [ ] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction
-- [ ] Lobby and room browser restyled to match
-- [ ] In-game HUD: health, ammo, timer, scores. **A temporary IMGUI one exists**
-      (`CombatHud.cs`) with ammo, hitmarker and a reactive crosshair - it works but it's
-      programmer art and gets replaced wholesale here.
+- [x] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction — Ryaan did this himself
+- [x] Lobby and room browser restyled to match — same
+- [x] In-game HUD: health, ammo, timer, scores. The two IMGUI scripts are gone; `GameHud` drives
+      a real Canvas built into the game scene by `HudBuilder`, so every position, size, colour
+      and font is scene data rather than a constant in an `OnGUI` call
+- [x] Mode selector as real objects, for the same reason
+- [x] Four fonts imported with TextMeshPro assets built (`FontAssetBuilder`). The HUD defaults
+      to Helvetica Punk — the only one of the four a number is legible in at a glance
 - [x] Hitmarkers (headshots read differently)
 - [x] Health as ten blocks and an oversized number, flat saturated colour, stepping rather than
       sliding. The old screen space bar is out of the prefab
 - [x] Loadout reveal during warmup — names your weapons one at a time before the match goes live
-- [ ] Damage numbers
+- [x] Damage numbers — pooled, reprojected each frame so they stay stuck to who you hit
 - [x] **Kill feed** — who killed who with what, top corner, fading entries. Laid out from the
       right so names line up down the feed instead of jittering with their length, and anything
       you were part of is drawn brighter — in a room of eight the feed is mostly other people's
@@ -290,7 +293,7 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [ ] Replace the remaining placeholder textures (the menu still uses them)
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
-- [ ] Screenshake and hitstop
+- [x] Screenshake and hitstop — `Juice`, on the camera, all unscaled time
 - [x] **Two handed weapon poses.** Both hands solve to their own target, the left further along
       the weapon than the right. `twoHanded` on the GunInfo decides: the Cavendish and the Slip
       Hazard are one handed and put the off hand on the hip, everything longer braces with both.
@@ -325,8 +328,11 @@ Things the checks can't reach, so they need a person:
 - **all of M4.** Every sound is verified to exist, to be one shot, and not to clip. Whether any
   of it sounds *good* is not something a check can answer, and the synthesised ones especially
   are worth a listen before they're trusted.
-- the scope overlay composited over the game - IMGUI doesn't appear in a camera render, so the
-  mask is checked on its own and the rest is unseen
+- the scope overlay composited over the game - a screen space overlay canvas doesn't appear in
+  a camera render, so the mask is checked on its own, the overlay is checked to raise and drop
+  with the aim, and how the two look together is unseen
+- **the HUD's layout.** Every label is verified to say the right thing, and none of it has been
+  looked at. The starting positions are arithmetic against a 1920x1080 reference, not taste
 - **anything that needs a second client.** The probe runs a real match in offline mode, which
   covers spawning, loadouts, dying and respawning — but offline mode is one player, so it can't
   see a remote copy of anybody. Weapons on someone else's hand, replicated aim, and the kill
