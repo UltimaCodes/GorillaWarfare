@@ -25,10 +25,14 @@ public class WeaponLoadout : MonoBehaviour
     public IReadOnlyList<SingleShotGun> Weapons => built;
 
     /// <summary>
-    /// Clears whatever is in the holder and builds the named weapons into it.
-    /// Returns the weapons in the order requested.
+    /// Clears whatever weapons are in the holder and builds the named ones into it.
+    /// Returns them in the order requested.
     /// </summary>
-    public List<SingleShotGun> Build(Transform holder, Camera cam, IEnumerable<string> weaponNames)
+    /// <param name="owned">
+    /// False for the copies of a player that other people see. Those still need the models -
+    /// that's how anyone can tell what you're holding - but they must never trace a shot.
+    /// </param>
+    public List<SingleShotGun> Build(Transform holder, Camera cam, IEnumerable<string> weaponNames, bool owned)
     {
         built.Clear();
 
@@ -38,9 +42,15 @@ public class WeaponLoadout : MonoBehaviour
             return built;
         }
 
-        // Anything already parented here came from the prefab and is being replaced.
+        // Only clear out weapons. The holder is also where the first person arms live, and
+        // emptying it wholesale used to delete those the moment a loadout was built - they
+        // were being destroyed one frame after spawning, which is why nobody ever saw a hand.
         for (int i = holder.childCount - 1; i >= 0; i--)
-            Destroy(holder.GetChild(i).gameObject);
+        {
+            Transform child = holder.GetChild(i);
+            if (child.GetComponent<Item>() != null)
+                Destroy(child.gameObject);
+        }
 
         GameObject impact = Resources.Load<GameObject>(ImpactResource);
 
@@ -59,7 +69,7 @@ public class WeaponLoadout : MonoBehaviour
             go.transform.SetParent(holder, false);
 
             SingleShotGun gun = go.AddComponent<SingleShotGun>();
-            gun.Configure(info, cam, impact);
+            gun.Configure(info, cam, impact, owned);
 
             built.Add(gun);
         }
@@ -71,7 +81,7 @@ public class WeaponLoadout : MonoBehaviour
         return built;
     }
 
-    /// A random selection, used by deathmatch. Never returns duplicates.
+    /// A random selection, used by deathmatch. Never returns duplicates, never returns melee.
     public static string[] RandomSelection(int count)
     {
         List<string> pool = new List<string>(AllWeapons);
