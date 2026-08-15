@@ -28,7 +28,57 @@ def log(message):
     print(f"[shot] {message}")
 
 
+def read_float_wav(path):
+    """Reads a float WAV by hand.
+
+    Python's wave module refuses format 3 outright - "unknown format: 3" - even though a float
+    WAV is otherwise an ordinary RIFF file. Plenty of tools export it, so rejecting the file is
+    not an option; walking the chunks is a dozen lines.
+    """
+    raw = open(path, "rb").read()
+
+    if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        raise SystemExit(f"[shot] {path} is not a RIFF WAVE file")
+
+    channels = bits = 0
+    rate = 0
+    data = None
+    pos = 12
+
+    while pos + 8 <= len(raw):
+        cid = raw[pos:pos + 4]
+        size = int.from_bytes(raw[pos + 4:pos + 8], "little")
+        body = raw[pos + 8:pos + 8 + size]
+
+        if cid == b"fmt ":
+            channels = int.from_bytes(body[2:4], "little")
+            rate = int.from_bytes(body[4:8], "little")
+            bits = int.from_bytes(body[14:16], "little")
+        elif cid == b"data":
+            data = body
+
+        pos += 8 + size + (size & 1)   # chunks are word aligned
+
+    if data is None or rate == 0:
+        raise SystemExit(f"[shot] {path} has no usable data chunk")
+
+    dtype = "<f4" if bits == 32 else "<f8"
+    samples = np.frombuffer(data[:len(data) - len(data) % (bits // 8)], dtype=dtype).astype(np.float32)
+
+    if channels > 1:
+        samples = samples[:len(samples) - len(samples) % channels].reshape(-1, channels).mean(axis=1)
+
+    return samples, rate
+
+
 def read(path):
+    try:
+        return read_pcm(path)
+    except wave.Error:
+        return read_float_wav(path)
+
+
+def read_pcm(path):
     with wave.open(path, "rb") as w:
         channels, width, rate, frames = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(frames)

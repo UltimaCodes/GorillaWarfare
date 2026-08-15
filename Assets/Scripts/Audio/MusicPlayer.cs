@@ -131,9 +131,26 @@ public class MusicPlayer : MonoBehaviour
         if (clip == null)
             return;
 
+        // Already playing on this source - nothing to do. Restarting it here is what made the
+        // same track audible twice: the incoming source starts the clip from zero while the
+        // outgoing one is still fading out the same music, so you hear it against itself,
+        // slightly out of phase.
+        if (live.clip == clip && live.isPlaying)
+            return;
+
+        AudioSource other = live == a ? b : a;
+
+        // If the other source already has this track running, hand over to it rather than
+        // starting a third copy.
+        if (other.clip == clip && other.isPlaying)
+        {
+            live = other;
+            return;
+        }
+
         // Onto whichever source isn't currently carrying the track, so the outgoing one has
         // something to fade out from.
-        live = live == a ? b : a;
+        live = other;
 
         live.clip = clip;
         live.volume = 0f;

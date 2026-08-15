@@ -76,9 +76,11 @@ courtesy. The author's own wording, which has to travel with anything the game s
 
 ## Music
 
-Menu, lobby and warmup are Ryaan's own tracks. Combat and the scoreboard are placeholders from
-`tools/placeholder_music.py` - a pulse and a drone, deliberately plain so a real track can never
-be mistaken for one. Delete either and MusicPlayer falls back to a slot that does have something.
+**Combat** - "Drum and bass" by bertsz, [OpenGameArt](https://opengameart.org/content/drum-and-bass),
+**CC0**. 96 seconds, instrumental, written as a loop for a game jam. Roughly 21 strong transients
+a second, which is the breakbeat density the match wanted.
+
+Menu, lobby and warmup are Ryaan's own tracks. The scoreboard slot is still empty; MusicPlayer falls back to a slot that does have something.
 
 Slots, and what MusicPlayer picks them up as. Drop them into
 `Assets/Resources/Audio/Music/` and MusicPlayer picks them up by filename:

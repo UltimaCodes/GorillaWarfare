@@ -23,7 +23,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // degrees down, which is the bottom edge of a 60 degree FOV. That's why the hands were
     // invisible: they were rendering just off the bottom of the screen.
     // This sits the weapon ~17 degrees below and ~12 right of centre, well inside the frame.
-    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.2f, 0.26f, 0.8f);
+    [SerializeField] Vector3 weaponViewOffset = new Vector3(0.29f, 0.26f, 0.8f);
     // Angled across the view rather than pointing straight down the camera axis. Aimed
     // straight ahead you see a long thin banana end-on, which reads as a tube - you need the
     // yaw to show its curve and silhouette, which is how CS frames a rifle.
