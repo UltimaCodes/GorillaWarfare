@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Photon.Pun;
 
 /// <summary>
 /// Plays the menu loop in the menu and the combat loop in a match, and crossfades between them.
@@ -24,36 +25,63 @@ public class MusicPlayer : MonoBehaviour
     AudioSource live;
 
     AudioClip menu;
+    AudioClip lobby;
+    AudioClip warmup;
     AudioClip combat;
+    AudioClip over;
     AudioClip wanted;
 
     /// <summary>
     /// Which track belongs to where we are.
     ///
-    /// One theme is a perfectly good answer, and it's the usual one for a game this size - so a
-    /// single file is enough. Drop in menu.ogg alone and it plays everywhere, including through
-    /// the scene change, which is the point of this living on RoomManager. Drop in both and the
-    /// match gets its own. Neither arrangement needs a setting.
+    /// Five moments, because they're genuinely different: sitting on the title screen, waiting
+    /// in a room with people, the seconds before it goes live, the match, and the scoreboard.
+    /// All of it falls out of state that already exists - the scene, whether we're in a room,
+    /// and the match phase - so none of it needs wiring up anywhere.
+    ///
+    /// Every slot falls back rather than going silent, so a partial set still works: no lobby
+    /// track and the menu one carries on, no warmup and combat starts early. One file in the
+    /// folder still plays everywhere.
     /// </summary>
     AudioClip should
     {
         get
         {
-            bool inMatch = SceneManager.GetActiveScene().buildIndex == gameSceneIndex;
+            bool inGame = SceneManager.GetActiveScene().buildIndex == gameSceneIndex;
 
-            if (inMatch)
-                return combat != null ? combat : menu;
+            if (!inGame)
+                return PhotonNetwork.InRoom ? Pick(lobby, menu) : Pick(menu, lobby);
 
-            return menu != null ? menu : combat;
+            switch (MatchState.Phase)
+            {
+                case MatchPhase.Warmup: return Pick(warmup, combat, menu);
+                case MatchPhase.Over:   return Pick(over, lobby, menu);
+                default:                return Pick(combat, menu);
+            }
         }
+    }
+
+    /// First one that exists, or the first thing loaded at all.
+    AudioClip Pick(params AudioClip[] options)
+    {
+        foreach (AudioClip clip in options)
+        {
+            if (clip != null)
+                return clip;
+        }
+
+        return menu ?? lobby ?? combat ?? warmup ?? over;
     }
 
     void Awake()
     {
         menu = Resources.Load<AudioClip>("Audio/Music/menu");
+        lobby = Resources.Load<AudioClip>("Audio/Music/lobby");
+        warmup = Resources.Load<AudioClip>("Audio/Music/warmup");
         combat = Resources.Load<AudioClip>("Audio/Music/combat");
+        over = Resources.Load<AudioClip>("Audio/Music/over");
 
-        if (menu == null && combat == null)
+        if (menu == null && lobby == null && warmup == null && combat == null && over == null)
         {
             enabled = false;
             return;
@@ -70,7 +98,7 @@ public class MusicPlayer : MonoBehaviour
         host.transform.SetParent(transform, false);
 
         AudioSource source = host.AddComponent<AudioSource>();
-        source.loop = true;
+        source.loop = true;   // the short ones repeat rather than leaving silence
         source.playOnAwake = false;
         source.spatialBlend = 0f;   // music is not in the world
         source.volume = 0f;

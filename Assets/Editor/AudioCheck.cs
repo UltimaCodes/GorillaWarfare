@@ -154,7 +154,7 @@ public static class AudioCheck
     /// </summary>
     static void MusicLoopsCleanly()
     {
-        foreach (string name in new[] { "menu", "combat" })
+        foreach (string name in new[] { "menu", "lobby", "warmup", "combat", "over" })
         {
             AudioClip clip = Resources.Load<AudioClip>($"Audio/Music/{name}");
 
@@ -184,7 +184,11 @@ public static class AudioCheck
             Check(relative < 1.5f, $"music '{name}' loops without a click",
                   $"seam gap {seam:F4} against a level of {level:F4} = {relative:F2}x");
 
-            Check(clip.length > 8f, $"music '{name}' is long enough not to nag",
+            // The warmup and scoreboard slots are stingers, so only the long ones get held
+            // to a length.
+            bool stinger = name == "warmup" || name == "over";
+
+            Check(stinger || clip.length > 8f, $"music '{name}' is long enough not to nag",
                   $"{clip.length:F1}s");
         }
     }
