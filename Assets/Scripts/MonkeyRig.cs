@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Procedural animation. No clips, no AnimatorController - the bones get driven directly.
@@ -109,6 +110,12 @@ public class MonkeyRig : MonoBehaviour
 
     bool CacheBones()
     {
+        // One traversal for all eleven bones. It used to walk the entire skeleton once per
+        // bone, and a player respawning is a player rebuilding its rig.
+        bones.Clear();
+        foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
+            bones[t.name] = t;
+
         spine = Find(spineBone);
         head = Find(headBone);
 
@@ -145,15 +152,11 @@ public class MonkeyRig : MonoBehaviour
         return true;
     }
 
+    readonly Dictionary<string, Transform> bones = new Dictionary<string, Transform>();
+
     Transform Find(string boneName)
     {
-        foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
-        {
-            if (t.name == boneName)
-                return t;
-        }
-
-        return null;
+        return bones.TryGetValue(boneName, out Transform bone) ? bone : null;
     }
 
     // LateUpdate so we're writing bones after anything else has had its say this frame.

@@ -37,17 +37,20 @@ public class FootstepPlayer : MonoBehaviour
         if (dt <= 0f)
             return;
 
-        // Was missing entirely: you got footsteps mid-jump, because horizontal distance keeps
-        // ticking over while you're airborne. Raycast rather than asking PlayerMovement,
-        // because remote players don't have one - it's destroyed on non-local copies.
-        if (!IsGrounded(position))
+        // Speed first, because it's free and the ground check is a raycast. Standing still is
+        // the common case - eight players idling in a lobby were casting eight rays a frame
+        // to work out that none of them had taken a step.
+        float distance = delta.magnitude;
+        if (distance / dt < minSpeed)
         {
             distanceSinceStep = 0f;
             return;
         }
 
-        float distance = delta.magnitude;
-        if (distance / dt < minSpeed)
+        // Was missing entirely: you got footsteps mid-jump, because horizontal distance keeps
+        // ticking over while you're airborne. Raycast rather than asking PlayerMovement,
+        // because remote players don't have one - it's destroyed on non-local copies.
+        if (!IsGrounded(position))
         {
             distanceSinceStep = 0f;
             return;
