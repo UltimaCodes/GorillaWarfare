@@ -134,6 +134,7 @@ public static class SceneCheck
             Failures.Add($"Game is build index {scene.buildIndex}, but the spawn path waits for index 1");
 
         CheckHud();
+        CheckNothingIsOnTheDefaultFont();
     }
 
     /// <summary>
@@ -177,6 +178,35 @@ public static class SceneCheck
 
         if (empty == 0)
             Notes.Add("Game: HUD is fully wired");
+    }
+
+    /// <summary>
+    /// Nothing should be left on TextMeshPro's default font.
+    ///
+    /// LiberationSans is what TMP assigns when nobody chooses, so it's the reliable giveaway
+    /// that a piece of UI was built and never styled. Four prefabs were still on it long after
+    /// everything around them had been restyled, and the result was that parts of the game
+    /// looked like they belonged to an older build - because they did.
+    ///
+    /// Prefabs rather than just scenes, since that is where all four of them were hiding.
+    /// </summary>
+    static void CheckNothingIsOnTheDefaultFont()
+    {
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
+            if (prefab == null)
+                continue;
+
+            foreach (TMPro.TMP_Text text in prefab.GetComponentsInChildren<TMPro.TMP_Text>(true))
+            {
+                if (text.font != null && text.font.name.Contains("LiberationSans"))
+                    Failures.Add($"{System.IO.Path.GetFileName(path)}/{text.name} is still on the "
+                                 + "default font - run Tools/Gorilla Warfare/Retarget default fonts");
+            }
+        }
     }
 
     static void CheckMenuScene()
