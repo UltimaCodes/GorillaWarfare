@@ -13,6 +13,16 @@ public class MuzzleFlash : MonoBehaviour
 
     Light flash;
     float level;
+    float tipDistance = 0.35f;
+
+    /// Where the business end is, in the weapon's local space.
+    public void SetTipDistance(float distance)
+    {
+        tipDistance = distance;
+
+        if (flash != null)
+            flash.transform.localPosition = new Vector3(0f, 0f, tipDistance);
+    }
 
     void Awake()
     {
@@ -30,8 +40,10 @@ public class MuzzleFlash : MonoBehaviour
         host.transform.SetParent(transform, false);
 
         // Out at the barrel tip. The banana models are built along +Z, so this sits at the end
-        // of one rather than inside the grip.
-        host.transform.localPosition = new Vector3(0f, 0f, 0.35f);
+        // of one rather than inside the grip. The distance is set by the weapon once it knows
+        // how long its model is - a fixed value put the pistol's flash out in open air and the
+        // sniper's somewhere in the middle of the fruit.
+        host.transform.localPosition = new Vector3(0f, 0f, tipDistance);
 
         flash = host.AddComponent<Light>();
         flash.type = LightType.Point;

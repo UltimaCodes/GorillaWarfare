@@ -12,7 +12,6 @@ using UnityEngine;
 public class WeaponLoadout : MonoBehaviour
 {
     public const string GunResourcePath = "Guns/";
-    public const string ImpactResource = "Prefabs/BulletImpact";
 
     /// Every weapon in the game, in power order. Gun game walks this list; deathmatch samples it.
     public static readonly string[] AllWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper" };
@@ -52,8 +51,6 @@ public class WeaponLoadout : MonoBehaviour
                 Destroy(child.gameObject);
         }
 
-        GameObject impact = Resources.Load<GameObject>(ImpactResource);
-
         foreach (string name in weaponNames)
         {
             GunInfo info = Resources.Load<GunInfo>(GunResourcePath + name);
@@ -69,7 +66,7 @@ public class WeaponLoadout : MonoBehaviour
             go.transform.SetParent(holder, false);
 
             SingleShotGun gun = go.AddComponent<SingleShotGun>();
-            gun.Configure(info, cam, impact, owned);
+            gun.Configure(info, cam, owned);
 
             built.Add(gun);
         }

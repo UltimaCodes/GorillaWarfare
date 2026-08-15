@@ -42,11 +42,10 @@ public class SingleShotGun : Gun
     public GunInfo Info => itemInfo as GunInfo;
 
     /// Set up a weapon built at runtime by WeaponLoadout. Safe to call before Awake.
-    public void Configure(GunInfo info, Camera camera, GameObject impactPrefab, bool isOwned)
+    public void Configure(GunInfo info, Camera camera, bool isOwned)
     {
         itemInfo = info;
         cam = camera;
-        bulletImpactPrefab = impactPrefab;
         itemGameObject = gameObject;
         owned = isOwned;
         Ammo = info != null ? info.magazineSize : 0;
@@ -63,18 +62,20 @@ public class SingleShotGun : Gun
         if (Info != null)
             Ammo = Info.magazineSize;
 
-        BuildVisual();
+        float tip = BuildVisual();
         muzzle = gameObject.AddComponent<MuzzleFlash>();
+        muzzle.SetTipDistance(tip);
     }
 
     // Swaps the old AK/M1911 meshes for a banana. Done at runtime, keyed off the weapon's own
     // name, so there's no prefab surgery and adding a weapon means dropping a Banana<Name>.fbx
     // into Resources/Models/Weapons.
-    void BuildVisual()
+    /// Returns how far the muzzle end sits from the grip, so the flash lands on the tip.
+    float BuildVisual()
     {
         GameObject prefab = Resources.Load<GameObject>($"Models/Weapons/Banana{gameObject.name}");
         if (prefab == null)
-            return;
+            return 0.35f;
 
         // Hide rather than destroy - the old meshes carry the muzzle transforms and general
         // shape the camera was framed around, and something may still reference them.
@@ -92,7 +93,7 @@ public class SingleShotGun : Gun
         // most of it ended up behind the camera, which is why it vanished at exactly the moment
         // it should have been most visible. Anchoring the grip means every weapon is held the
         // same way and a longer one simply reaches further out.
-        AnchorGrip(visual.transform);
+        float tip = AnchorGrip(visual.transform);
 
         Material mat = Resources.Load<Material>($"Models/Weapons/Banana{gameObject.name}Mat");
         if (mat != null)
@@ -104,14 +105,17 @@ public class SingleShotGun : Gun
         visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
         block = new MaterialPropertyBlock();
         ApplyRipeness();
+
+        return tip;
     }
 
-    // Bananas are built along +Z, which is also where the muzzle flash sits.
-    static void AnchorGrip(Transform visual)
+    // Bananas are built along +Z, which is also where the muzzle flash sits. Returns the
+    // length, so the flash can be put on the end of whichever weapon this is.
+    static float AnchorGrip(Transform visual)
     {
         Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0)
-            return;
+            return 0.35f;
 
         // Local space bounds, built from the meshes rather than Renderer.bounds - the latter is
         // world space and would fold in wherever the player happens to be standing.
@@ -145,9 +149,11 @@ public class SingleShotGun : Gun
         }
 
         if (!started)
-            return;
+            return 0.35f;
 
         visual.localPosition = new Vector3(-local.center.x, -local.center.y, -local.min.z);
+
+        return local.size.z;
     }
 
     /// Tints the banana by how much of the magazine is left. A property block rather than a
