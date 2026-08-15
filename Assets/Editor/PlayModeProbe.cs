@@ -156,6 +156,9 @@ public class ProbeRunner : MonoBehaviour
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
 
+        // ---- firing ----
+        yield return CheckFiringLeavesAStreak(player);
+
         // ---- aiming down the banana ----
         yield return CheckAimingDownSights(player);
 
@@ -357,6 +360,46 @@ public class ProbeRunner : MonoBehaviour
     // the same rig a remote copy gets - not hidden from its owner - stands it in front of the
     // camera and photographs it, which is the only way to answer "can you see an enemy" without
     // a second machine.
+    // A shot has to leave something behind, hit or miss.
+    IEnumerator CheckFiringLeavesAStreak(PlayerController player)
+    {
+        PlayerController.PublishLoadout(new[] { "Rifle" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+
+        if (cam == null || gun == null)
+        {
+            Check(false, "there is a weapon to fire", "none");
+            yield break;
+        }
+
+        // Point at something, so the shot has a wall to land on.
+        for (int i = 0; i < 12; i++)
+        {
+            Vector3 direction = Quaternion.Euler(0f, i * 30f, 0f) * Vector3.forward;
+            if (Physics.Raycast(cam.transform.position, direction, 30f, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            {
+                cam.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+                break;
+            }
+        }
+
+        yield return null;
+
+        gun.Use();
+
+        // Tracers live a twentieth of a second, so this has to look immediately.
+        int tracers = Object.FindObjectsByType<BulletTracer>(FindObjectsSortMode.None).Length;
+        Check(tracers > 0, "firing leaves a tracer", $"{tracers} in the air");
+
+        Capture(null, "firing");
+
+        yield return null;
+    }
+
     // Right click on Big Mike. Driven straight through UpdateAim, because batch mode has no
     // mouse and this is the only way to see whether any of it moves.
     IEnumerator CheckAimingDownSights(PlayerController player)
