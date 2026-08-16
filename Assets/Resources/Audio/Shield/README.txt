@@ -1,7 +1,12 @@
-Drop a glass break in here and it plays when somebody's overshield shatters.
+Two glass breaks from Kenney's Impact Sounds pack, which is CC0 - no attribution required,
+though the credits should say so anyway.
 
-Short, bright, and quiet - the Fortnite shield break is the reference. Anything longer
-than about half a second arrives after the moment it is describing.
+Picked by measuring rather than by filename: both are a single transient (not a pile of
+breaking), 0.54s long, and the quietest of the four candidates by RMS - 0.054 against 0.086
+for the 'light' one, which despite the name was the loudest on average. Run
+Tools/Gorilla Warfare/Measure the shield sounds to see the numbers and an ASCII envelope.
 
-With this folder empty the game falls back to an impact clip pitched up, which reads as
-breakage but is obviously not the same thing.
+Two rather than one so repeated breaks vary slightly. GameAudio picks from a bank at random.
+
+They play at ShieldVolume, which is 0.55 - deliberately under the hit and kill sounds, since
+a shield break that drowns out the gunfire is worse than one you miss.
