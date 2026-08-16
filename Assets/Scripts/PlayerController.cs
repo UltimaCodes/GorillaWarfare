@@ -204,6 +204,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// every kill. Starts at zero because that is where everybody starts.
     int announcedRung;
 
+    PlayerMovement movement;
+
     /// <summary>
     /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
     ///
@@ -290,7 +292,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 baseFov = LocalCamera.fieldOfView;
             }
 
-            gameObject.AddComponent<PlayerMovement>();
+            movement = gameObject.AddComponent<PlayerMovement>();
 
             // Only on your own body. Wind lines around somebody else's gorilla would be drawn
             // in their peripheral vision, not yours.
@@ -371,6 +373,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         UpdateCursorLock();
         FeedRig();
+
+        // The last of your health is the fastest part of the match. Pushed rather than pulled,
+        // so the mover never has to know what health is.
+        if (movement != null)
+            movement.SetAdrenaline(Adrenaline);
 
         // The match is over and the scoreboard is up. Aiming and firing through it looks like
         // the game failed to notice it had ended.
@@ -716,6 +723,21 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                                     GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
         }
 
+        // The launch comes from firing, not from the blast landing.
+        //
+        // This is how Raze's ult reads and it is how a rocket launcher reads in life: what
+        // throws you is putting something that heavy out of a tube, and it happens the instant
+        // you pull the trigger. Waiting for the shell to land meant the timing was never yours -
+        // you committed, then waited, then got shoved. Now the shove is the trigger pull.
+        //
+        // Applied only by whoever owns the body, because movement is local. Backwards along the
+        // shot with a lift on it: aiming down throws you up, which is the whole technique.
+        if (PV.IsMine && gun.fireKnockback > 0.01f)
+        {
+            Vector3 push = (-direction.normalized + Vector3.up * 0.35f).normalized;
+            Launch(push * gun.fireKnockback);
+        }
+
         Projectile.Launch(gun, origin, direction, this, PV.IsMine);
     }
 
@@ -953,6 +975,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (IsProtected)
             return;
 
+        // Taking a hit costs you speed. Without it, shooting somebody sprinting past does
+        // nothing observable until the moment they die - and half of a fight is the part before
+        // that. Scaled to the damage, so a pellet is a stumble and a rocket is a stop.
+        PlayerMovement mover = GetComponent<PlayerMovement>();
+
+        if (mover != null)
+            mover.Stagger(Mathf.Clamp01(damage / 90f) * 0.55f);
+
         float shieldBefore = Overshield;
         currentHealth = Absorb(currentHealth, damage);
 
@@ -1109,6 +1139,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// getting your bearings.
     /// </summary>
     public void DropProtection() => gaveUpProtection = true;
+
+    /// <summary>
+    /// How far into the red you are, from zero to one.
+    ///
+    /// Only starts once you are properly in trouble - a scratch is not adrenaline. Used for the
+    /// speed boost and for the veins round the edge of the screen, so both agree without either
+    /// having to ask the other.
+    /// </summary>
+    public float Adrenaline
+    {
+        get
+        {
+            if (dead || currentHealth <= 0f)
+                return 0f;
+
+            const float startsBelow = 0.35f;
+            float fraction = currentHealth / maxHealth;
+
+            return fraction >= startsBelow ? 0f : 1f - fraction / startsBelow;
+        }
+    }
 
     public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);
     public float MaxHealth => maxHealth;

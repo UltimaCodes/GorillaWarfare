@@ -29,6 +29,24 @@ public class GunInfo : ItemInfo
     [Tooltip("Melee weapons swing instead of shooting: no ammo, very short range, no recoil.")]
     public bool melee;
 
+    [Tooltip("How a melee weapon is held, in degrees. Exposed rather than hard coded because I "
+             + "have guessed it wrong twice - drag it in the inspector until the peel points the "
+             + "way you want and it will stay there.")]
+    public Vector3 meleeHold = new Vector3(72f, 0f, 18f);
+
+    [Tooltip("How far the stab drives forward, in degrees about the same axis.")]
+    public float meleeSwing = 65f;
+
+    /// <summary>
+    /// Knockback applied to the shooter the instant this is fired, in metres per second.
+    ///
+    /// Separate from the blast. Raze's ult throws you when you fire it, not when it lands - the
+    /// launch is the recoil of putting something that heavy out of a tube, and waiting for the
+    /// explosion means the timing never feels like yours. Zero on everything that is not a
+    /// launcher.
+    /// </summary>
+    public float fireKnockback;
+
     [Tooltip("Both hands on it. A pistol is one banana in one fist; everything longer needs a "
              + "second hand further up. Drives the arm pose on the copy of you other people see.")]
     public bool twoHanded = true;

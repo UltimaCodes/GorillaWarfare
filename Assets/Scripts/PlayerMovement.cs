@@ -87,6 +87,46 @@ public class PlayerMovement : MonoBehaviour
     /// treated as airborne no matter what the controller says, which is long enough to
     /// physically leave the floor.
     /// </summary>
+    /// <summary>
+    /// Being hit bleeds momentum, unless you are nearly dead.
+    ///
+    /// A shot landing on somebody sprinting past should slow them down - it is the only way
+    /// shooting at a moving target reads as having done anything before they die. Scaled to the
+    /// damage, so a pellet is a stumble and a rocket is a stop.
+    ///
+    /// Deliberately does nothing while adrenaline is up. The whole point of the last of your
+    /// health being the fastest part of the match is that it cannot be taken away by the person
+    /// who put you there.
+    /// </summary>
+    public void Stagger(float fraction)
+    {
+        if (adrenaline > 0.01f)
+            return;
+
+        float keep = Mathf.Clamp01(1f - fraction);
+
+        velocity.x *= keep;
+        velocity.z *= keep;
+
+        // The chain breaks. Taking a hit mid-chain and keeping the bonus would make the tech
+        // free, and it should be a thing you can be knocked out of.
+        chainExpires = -99f;
+        chain = 0;
+    }
+
+    float adrenaline;
+
+    /// <summary>
+    /// How close to death the player is, as a speed multiplier from zero to one.
+    ///
+    /// Set by PlayerController, which owns health. Kept here because it is movement, and because
+    /// having the mover ask about health every frame is the wrong way round.
+    /// </summary>
+    public void SetAdrenaline(float amount) => adrenaline = Mathf.Clamp01(amount);
+
+    /// The multiplier currently applied to ground speed.
+    public float AdrenalineSpeed => 1f + adrenaline * 0.28f;
+
     public void AddImpulse(Vector3 impulse)
     {
         velocity += impulse;
@@ -149,6 +189,26 @@ public class PlayerMovement : MonoBehaviour
     Vector3 velocity;
     bool grounded;
     float jumpPressedAt = -1f;
+
+    [Tooltip("How many slides in a row keep paying. After this the chain gives nothing until "
+             + "you break it, so the technique has a ceiling rather than being infinite speed.")]
+    [SerializeField] int maxChain = 4;
+
+    [Tooltip("Extra kick per link in the chain, on top of the base slide boost.")]
+    [SerializeField] float chainBonus = 0.09f;
+
+    [Tooltip("Seconds you have after leaving a slide to start the next one and keep the chain.")]
+    [SerializeField] float chainWindow = 0.9f;
+
+    [Tooltip("Speed you get when you jump straight out of a slide, on top of what you had.")]
+    [SerializeField] float slideJumpBoost = 1.6f;
+
+    int chain;
+    float chainExpires = -99f;
+
+    /// How many slides deep the current chain is, for the camera and the effects. Zero when
+    /// nothing is going on.
+    public int SlideChain => Time.time < chainExpires ? chain : 0;
 
     bool sliding;
     bool crouching;
@@ -216,7 +276,7 @@ public class PlayerMovement : MonoBehaviour
 
         Vector3 wishDir = WishDirection();
 
-        float wishSpeed = crouching ? crouchSpeed : maxGroundSpeed;
+        float wishSpeed = (crouching ? crouchSpeed : maxGroundSpeed) * AdrenalineSpeed;
 
         if (grounded)
             GroundMove(wishDir, wishSpeed, wantsJump, dt);
@@ -263,16 +323,27 @@ public class PlayerMovement : MonoBehaviour
             {
                 sliding = true;
 
+                // Chaining. Each slide taken shortly after the last one pays a little more, up
+                // to a ceiling - so slide, hop, slide, hop builds speed and is worth learning,
+                // but it tops out rather than turning into infinite acceleration. Break the
+                // rhythm and you start again from the base kick.
+                chain = Time.time < chainExpires ? Mathf.Min(chain + 1, maxChain) : 1;
+                chainExpires = Time.time + chainWindow;
+
+                float kick = slideKick + chainBonus * (chain - 1);
+
                 // The kick is what makes sliding a decision rather than a brake. Applied to the
                 // direction you are already travelling, not the one you are looking - a slide
                 // goes where you were going.
                 Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
-                flat *= slideKick;
+                flat *= kick;
 
                 velocity.x = flat.x;
                 velocity.z = flat.z;
 
-                GameAudio.PlayAt(GameAudio.Footstep, transform.position, 0.5f, 0.1f);
+                // Rising in pitch with the chain, so the fourth one sounds like the fourth one.
+                GameAudio.PlayAtDelayed(GameAudio.Slide, transform.position,
+                                        GameAudio.SlideVolume, 0.9f + 0.07f * chain, 0f);
             }
             else
             {
@@ -335,9 +406,26 @@ public class PlayerMovement : MonoBehaviour
             velocity.y = jumpSpeed;
             grounded = false;
 
-            // Jumping out of a slide is the cancel. It needs no special handling beyond ending
-            // the slide - the horizontal speed is already yours and a jump does not touch it, so
-            // the boost carries into the air on its own.
+            // Jumping out of a slide is the cancel, and it is also the link between one slide
+            // and the next. The horizontal speed is already yours and a jump does not touch it,
+            // so the boost carries into the air on its own - the extra shove here is what makes
+            // the hop worth taking rather than merely free.
+            if (sliding)
+            {
+                Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+
+                if (flat.sqrMagnitude > 0.01f)
+                {
+                    flat = flat.normalized * slideJumpBoost;
+                    velocity.x += flat.x;
+                    velocity.z += flat.z;
+                }
+
+                // The window is refreshed rather than started, so the chain survives the time
+                // spent in the air between two slides.
+                chainExpires = Time.time + chainWindow;
+            }
+
             sliding = false;
 
             Accelerate(wishDir, wishSpeed, groundAccel, dt);

@@ -33,6 +33,16 @@ public static class GameAudio
     /// falls back to an impact pitched up, which reads as breakage rather than as a hit but is
     /// no substitute for the real thing.
     /// </summary>
+    /// <summary>
+    /// Boots scraping along the ground. Its own bank because a slide is not a footstep - it is
+    /// one continuous noise rather than a series of taps, and borrowing the footstep bank made
+    /// sliding sound like walking very quickly.
+    ///
+    /// Drop a scrape into Resources/Audio/Slide and it plays. Empty, it falls back to a footstep
+    /// pitched down, which reads as a scuff and is obviously not the real thing.
+    /// </summary>
+    public const string Slide = "Slide";
+
     public const string Shield = "Shield";
 
     /// A pineapple going off. Its own bank rather than the generic impact, which is the sound a
@@ -61,6 +71,10 @@ public static class GameAudio
     // Under the hit and kill sounds on purpose. It is meant to be noticed, not to interrupt -
     // a shield break that drowns out the gunfire is worse than one you miss.
     public const float ShieldVolume = 0.55f;
+
+    // Under the guns and over the footsteps. You should hear your own slide clearly and somebody
+    // else's only as a hint that they are moving fast nearby.
+    public const float SlideVolume = 0.5f;
 
     // Above everything. It is the loudest thing that happens and it should be.
     // Was 1.0, which is full scale - the loudest thing the game can produce, louder than the
@@ -202,6 +216,16 @@ public static class GameAudio
                                      float delay)
     {
         AudioClip clip = Pick(bank);
+
+        // A bank that has nothing in it yet borrows from one that does. Pitching a real
+        // recording is arranging, not synthesising, and it means a missing clip is a slightly
+        // wrong sound rather than silence.
+        if (clip == null && bank == Slide)
+        {
+            clip = Pick(Footstep);
+            pitch *= 0.55f;
+        }
+
         if (clip == null)
             return;
 
