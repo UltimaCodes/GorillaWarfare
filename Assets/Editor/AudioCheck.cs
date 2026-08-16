@@ -23,18 +23,16 @@ public static class AudioCheck
     }
 
     /// <summary>
-    /// The two banks added last, checked for the things Ryaan actually asked for.
+    /// The shield break, checked for what Ryaan actually asked for.
     ///
-    /// He was specific about the shield break: one break, not loud, not a pile of them. Length
-    /// is the part worth asserting here - a clip over a second and a half is a cupboard falling
-    /// over rather than a pane going, and no amount of volume tuning fixes that. The transient
-    /// count and the envelope live in Tools/Gorilla Warfare/Measure the shield sounds, which
-    /// prints them rather than asserting, because picking a sound is a judgement and this is a
-    /// guard against the obviously wrong one.
-    ///
-    /// Ambience is the opposite problem: it has to be long, or the loop becomes a metronome.
+    /// He was specific: one break, not loud, not a pile of them. Length is the part worth
+    /// asserting - a clip over a second and a half is a cupboard falling over rather than a pane
+    /// going, and no amount of volume tuning fixes that. The transient count and the envelope
+    /// live in Tools/Gorilla Warfare/Measure the shield sounds, which prints them rather than
+    /// asserting, because picking a sound is a judgement and this is only a guard against the
+    /// obviously wrong one.
     /// </summary>
-    static void ShieldAndAmbienceAreTheRightShape()
+    static void ShieldIsTheRightShape()
     {
         AudioClip[] shield = Resources.LoadAll<AudioClip>("Audio/Shield");
 
@@ -47,17 +45,6 @@ public static class AudioCheck
                   $"{clip.length:F2}s");
         }
 
-        AudioClip[] ambience = Resources.LoadAll<AudioClip>("Audio/Ambience");
-
-        Check(ambience.Length > 0, "the map has an ambience bed", $"{ambience.Length} clips");
-
-        foreach (AudioClip clip in ambience)
-        {
-            // Twenty seconds is about the point where a loop stops announcing itself. Anything
-            // shorter and you have heard the whole thing three times before the warmup ends.
-            Check(clip.length > 20f, $"{clip.name} is long enough not to be a metronome",
-                  $"{clip.length:F1}s");
-        }
     }
 
     public static void Run()
@@ -71,7 +58,7 @@ public static class AudioCheck
         SingleShotsAreSingleShots();
         NothingIsSilentOrClipped();
         MusicLoopsCleanly();
-        ShieldAndAmbienceAreTheRightShape();
+        ShieldIsTheRightShape();
 
         Debug.Log("[audio] banks\n" + Log);
         Debug.Log(failures == 0 ? "[audio] ===== ALL PASS =====" : $"[audio] {failures} FAILURES");

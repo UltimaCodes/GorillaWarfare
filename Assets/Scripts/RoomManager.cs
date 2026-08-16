@@ -108,10 +108,6 @@ public class RoomManager : MonoBehaviourPunCallbacks
         if (GetComponent<MusicPlayer>() == null)
             gameObject.AddComponent<MusicPlayer>();
 
-        // Same reasoning as the music: a loop that restarts with the scene is a loop everybody
-        // notices.
-        if (GetComponent<Ambience>() == null)
-            gameObject.AddComponent<Ambience>();
     }
 
     public override void OnEnable()

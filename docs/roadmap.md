@@ -277,6 +277,15 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 ---
 
+## Tried and dropped
+
+- **Ambient jungle audio.** Built, sourced, and cut after listening to it. The CC0 forest bed
+  that was available had wind chimes in it, and measuring the alternatives put numbers on why
+  that was wrong: a bed wants a low crest factor and almost no distinct events, and the chime
+  track ran 0.49 events a second. A dense cricket wall measured far better (crest 5.8 against
+  9.3, 0.09 events a second) but by then the answer was that the feature was not worth the
+  hunt. The component and the import tool are in git if it ever is.
+
 ## Later polish
 
 - [ ] Bananas could bruise and spot rather than just tint, and the eat-and-swap on reload wants
