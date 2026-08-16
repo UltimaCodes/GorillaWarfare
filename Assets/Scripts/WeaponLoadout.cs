@@ -123,6 +123,12 @@ public class WeaponLoadout : MonoBehaviour
         SingleShotGun gun = go.AddComponent<SingleShotGun>();
         gun.Configure(info, cam, owned);
 
+        // Only your own weapon goes on the viewmodel layer. Somebody else's is a real object in
+        // the world that should be occluded by walls exactly like the rest of them - putting
+        // theirs on this layer would draw their banana through the building they are behind.
+        if (owned)
+            ViewModelCamera.Adopt(go.transform);
+
         built.Add(gun);
     }
 

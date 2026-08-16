@@ -27,7 +27,7 @@ MonoBehaviour:
   aimFov: 26
   aimSpreadScale: 0.15
   projectile: 1
-  projectileSpeed: 34
+  projectileSpeed: 75
   projectileGravity: 0.55
   armingDistance: 1.2
   blastRadius: 7.5

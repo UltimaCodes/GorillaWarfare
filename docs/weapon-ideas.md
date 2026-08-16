@@ -1,4 +1,4 @@
-# Weapons, abilities and rewards
+# Weapons, movement tech and rewards
 
 Rewritten. The first version of this was a list of guns that differed by damage and fire rate,
 and Ryaan's read on it was right: it adds variety without adding a game. A shotgun and an SMG
@@ -76,37 +76,45 @@ game currently lets you say "you can't go through there for the next three secon
 
 ---
 
-## 2. Abilities
+## 2. Movement tech
 
-Chosen before you spawn, one per life, on a cooldown. Not earned — the earned things are in the
-next section. Everyone always has one, so it's a loadout decision rather than a reward.
+Abilities are scrapped. They were a cooldown you press, and a cooldown you press is a thing the
+game does *for* you - the opposite of what makes movement feel good. What replaces them is tech:
+things that are always available, cost nothing, and only work if you are good at them.
 
-Gorilla-shaped on purpose: these should read as things an enormous ape can do, not as
-sci-fi powers.
+The slide already landed and is the template for the rest. Hold the key at speed and you slide;
+hold it standing still and you crouch; jump out of a slide and the boost goes with you into the
+air. No cooldown, no resource, no button that says SLIDE - just momentum you either had or
+didn't.
 
-**Chest Beat** — shockwave in a ring around you. Knocks everyone back, and for about a second
-their screen shakes and their audio ducks. A panic button that solves being surrounded without
-solving being outplayed. Loud enough that everyone in the room knows you used it.
+**Slide hop.** Landing a jump directly into a slide keeps more speed than either alone. Already
+half true, because a hop inside the grace window skips friction; making the window slightly wider
+when you land *into* a slide turns it into a chain you can practise.
 
-**Knuckle Run** — drop to all fours. Much faster, camera drops to waist height, and **you can't
-shoot**. Pure rotation and escape. The camera drop is half the appeal; it changes what the map
-looks like.
+**Wall run.** Hold toward a wall while airborne and above a speed threshold, and you stick to it
+for a second or so, gravity mostly off, gaining a little height. Ends when you jump off, slow
+down, or run out of wall. The jump off it is the payoff and should push away as well as up.
 
-**Brachiate** — one mid-air lunge in the direction you're looking. Small, but it turns every gap
-into a decision and every rocket jump into something you can steer.
+**Vault.** Run at a ledge below chest height and go over it without stopping. Purely a smoothing
+mechanic - it removes the moment where speed dies against a knee-high box, which is the single
+most common way momentum is lost on any map.
 
-**Silverback** — a few seconds of heavy damage resistance and immunity to knockback, during
-which **you glow and everybody can see it**. Committing to a fight rather than winning one. The
-tell is the balance.
+**Ground slam.** Crouch in the air with speed and you come down hard, keeping the horizontal
+component. A way to convert height into distance, and it pairs with rocket jumping - up with the
+pineapple, across with the slam.
 
-**Scent** — enemy footprints light up through walls for a few seconds. Information rather than
-force. The counter is standing still, which is its own punishment.
+**Air brake.** Tap slide in the air to kill horizontal speed almost instantly. Sounds
+counterproductive on a list about going fast, and it is the most important entry: movement tech
+is only fun when you can *stop*, because otherwise every rocket jump ends in a wall. It is also
+the counter-play - the person who can stop is the person who can shoot.
 
-**Peel Trail** — drop peels behind you for a few seconds. Anyone who runs through one slips: no
-damage, they just lose control of their aim for a moment. Chase-breaking, and it makes the Slip
-Hazard's whole joke into a mechanic.
+**Momentum melee.** The peel does more damage the faster you are travelling when it lands. Turns
+a slide into an attack and gives the last gun game rung something to build toward, instead of
+being the weapon you dread getting.
 
----
+None of these need a system. They are all conditions checked against the velocity the mover
+already has, which is what makes them cheap to add and cheap to remove if one turns out to be
+horrible.
 
 ## 3. Earned rewards
 
@@ -119,6 +127,9 @@ the reward makes you harder to stop, not able to press a button that wins.
 **Snowballing is the real risk.** In a room of five, one person on a streak can end the match on
 their own. So every one of these is **short, loud, and visible**. If somebody is on a streak, the
 other four should know instantly and be able to do something about it.
+
+These stay. They are earned rather than pressed, which is a different thing to a cooldown -
+you get them by playing well, and everyone can see you have one.
 
 **3 kills — Banana Rain.** Mark an area; a few seconds later a cluster of bananas falls on it.
 Telegraphed on the ground for everyone, so it denies a space rather than deleting whoever was in
@@ -144,11 +155,11 @@ all of it.
    knockback into `PlayerMovement`'s velocity.
 2. **The Pineapple**, on top of it. Get the three numbers right by playing, not by reasoning —
    self-knockback in particular is a feel number and no check will ever tell you it's wrong.
-3. **One ability, to build the ability system.** Chest Beat is the right first one: it needs a
-   cooldown, a radius query, a replicated effect and a sound, which is the whole framework.
-4. **The rest of the abilities**, which are then mostly data.
-5. **Streak rewards**, last, because they need the abilities framework and because they're the
-   easiest thing to ruin the balance with.
+3. **The vault**, because losing all your speed on a knee-high box is the most common way
+   momentum dies and it is the cheapest of these to build.
+4. **Wall running**, which is the one people will actually talk about.
+5. **The air brake and the ground slam**, which are both a condition and an impulse.
+6. **Streak rewards**, last, because they are the easiest thing to ruin the balance with.
 
 The five hitscan guns from the previous version of this document — SMG, marksman rifle, hand
 cannon, LMG, auto shotgun — are still worth having eventually, as ladder filler for gun game.

@@ -698,7 +698,10 @@ public class MatchState : MonoBehaviourPunCallbacks
             // by whoever had just joined.
             //
             // Above the suicide check on purpose: falling off the map is still a life ended.
-            if (Mode == MatchMode.Deathmatch)
+            // Both deathmatches, not just the free-for-all. Team deathmatch fell through this
+            // and nobody ever got a new weapon - it is the same mode with sides, and "a
+            // different gun every life" is the shape of both.
+            if (Mode != MatchMode.GunGame)
                 GiveLoadout(victim);
         }
 

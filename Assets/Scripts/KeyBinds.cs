@@ -26,6 +26,8 @@ public static class KeyBinds
         Left,
         Right,
         Jump,
+        /// Slide when you are moving, crouch when you are not. Called Walk in the enum for one
+        /// release's worth of saved bindings; the label is what people read.
         Walk,
         Fire,
         Aim,
@@ -46,7 +48,7 @@ public static class KeyBinds
         KeyCode.A,          // Left
         KeyCode.D,          // Right
         KeyCode.Space,      // Jump
-        KeyCode.LeftShift,  // Walk - Source style, you run by default and this slows you down
+        KeyCode.LeftShift,  // Slide at speed, crouch standing still
         KeyCode.Mouse0,     // Fire
         KeyCode.Mouse1,     // Aim
         KeyCode.R,          // Reload
@@ -214,7 +216,7 @@ public static class KeyBinds
             case Action.Left: return "strafe left";
             case Action.Right: return "strafe right";
             case Action.Jump: return "jump";
-            case Action.Walk: return "walk (hold)";
+            case Action.Walk: return "slide / crouch (hold)";
             case Action.Fire: return "fire";
             case Action.Aim: return "aim";
             case Action.Reload: return "reload";

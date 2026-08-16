@@ -277,6 +277,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
             if (LocalCamera != null)
             {
+                // Draws the weapon with its own camera and pulls the near plane in. Without it
+                // the gun pushes through walls and you can see through anything you stand
+                // against, because Unity's default near plane hides everything within 30cm.
+                if (LocalCamera.GetComponent<ViewModelCamera>() == null)
+                    LocalCamera.gameObject.AddComponent<ViewModelCamera>();
+
                 // The camera is built fresh on every respawn and arrives holding whatever the
                 // prefab was authored with, so the saved field of view has to be reapplied
                 // rather than read once at startup.
@@ -996,7 +1002,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // Past the normal maximum it becomes overshield, up to the ceiling. Without this a
         // heal is worth nothing to the one person who earned it - whoever is on a streak is
         // usually the person already at full health.
-        float ceiling = Killstreak > 0 ? overshieldCeiling : maxHealth;
+        // No overshield on the peel. The last rung is meant to be the hard one - you have to
+        // walk up to somebody holding a banana skin - and arriving there on a killstreak with
+        // two hundred health turned the climax into the easiest kill of the match.
+        bool finalRung = MatchState.Mode == MatchMode.GunGame
+                         && MatchState.LadderRung(PV.Owner)
+                            >= WeaponLoadout.GunGameLadder.Length - 1;
+
+        float ceiling = Killstreak > 0 && !finalRung ? overshieldCeiling : maxHealth;
         currentHealth = Mathf.Min(ceiling, currentHealth + amount);
 
         if (currentHealth > before && Hud != null)

@@ -110,14 +110,63 @@ public class PlayerMovement : MonoBehaviour
     public bool Grounded => grounded;
     public float HorizontalSpeed => new Vector3(velocity.x, 0f, velocity.z).magnitude;
 
+    [Header("Slide and crouch")]
+    [Tooltip("Speed you must already be carrying for the slide key to slide rather than crouch. "
+             + "Below it you simply go down.")]
+    [SerializeField] float slideEntrySpeed = 6.5f;
+
+    [Tooltip("Multiplier applied to your speed the moment a slide starts. Slightly over one, so "
+             + "sliding into a fight is a commitment that pays rather than a way to stop.")]
+    [SerializeField] float slideKick = 1.18f;
+
+    [Tooltip("How fast a slide bleeds off, in metres per second per second. Lower slides "
+             + "further.")]
+    [SerializeField] float slideDrag = 7f;
+
+    [Tooltip("Below this a slide has run out and becomes a crouch.")]
+    [SerializeField] float slideExitSpeed = 3.5f;
+
+    [Tooltip("How tall you are crouched, as a fraction of standing.")]
+    [Range(0.35f, 0.9f)] [SerializeField] float crouchHeight = 0.55f;
+
+    [Tooltip("How fast you can walk while crouched.")]
+    [SerializeField] float crouchSpeed = 3.2f;
+
+    [Tooltip("How quickly the camera drops and rises. Fast enough to feel responsive, slow "
+             + "enough that a slide cancel reads as a movement rather than a teleport.")]
+    [SerializeField] float stanceEase = 12f;
+
+    [Header("Hopping")]
+    [Tooltip("How long after landing a jump still counts, in seconds. Larger is more forgiving "
+             + "and is what makes hopping in a straight line learnable.")]
+    [SerializeField] float bhopGrace = 0.14f;
+
+    [Tooltip("Fraction of your speed kept when you hop within the grace window instead of "
+             + "taking a frame of friction. One means a perfect hop costs nothing.")]
+    [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 1f;
+
     CharacterController controller;
     Vector3 velocity;
     bool grounded;
     float jumpPressedAt = -1f;
 
+    bool sliding;
+    bool crouching;
+    float standingHeight;
+    float standingCentre;
+    float landedAt = -99f;
+
+    /// Whether the player is currently sliding. Read by the camera, which leans into it, and by
+    /// anything that wants to know why somebody is moving faster than they should be.
+    public bool Sliding => sliding;
+    public bool Crouching => crouching;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
+
+        standingHeight = controller.height;
+        standingCentre = controller.center.y;
     }
 
     void Update()
@@ -155,10 +204,19 @@ public class PlayerMovement : MonoBehaviour
 
         // The launch window overrides the controller. Without it a blast that has not yet moved
         // you off the floor is treated as a walk and its speed is thrown away by friction.
+        bool wasAirborne = !grounded;
         grounded = controller.isGrounded && !Launched;
 
+        // Landing is worth remembering, because a hop taken shortly after it should keep the
+        // speed you arrived with rather than pay a frame of friction for touching the floor.
+        if (grounded && wasAirborne)
+            landedAt = Time.time;
+
+        UpdateStance(listening, dt);
+
         Vector3 wishDir = WishDirection();
-        float wishSpeed = KeyBinds.Held(KeyBinds.Action.Walk) ? walkSpeed : maxGroundSpeed;
+
+        float wishSpeed = crouching ? crouchSpeed : maxGroundSpeed;
 
         if (grounded)
             GroundMove(wishDir, wishSpeed, wantsJump, dt);
@@ -166,6 +224,89 @@ public class PlayerMovement : MonoBehaviour
             AirMove(wishDir, wishSpeed, dt);
 
         controller.Move(velocity * dt);
+    }
+
+    /// <summary>
+    /// Slide, crouch, or neither.
+    ///
+    /// One key does both and which one you get depends on whether you were going anywhere.
+    /// Holding it at speed on the ground starts a slide; holding it standing still puts you in a
+    /// crouch; a slide that runs out of speed becomes a crouch on its own. That is the whole
+    /// rule, and it is the rule because it means you never have to decide which one you wanted -
+    /// your momentum already decided.
+    ///
+    /// Slide cancelling falls out of it rather than being a special case: jumping out of a slide
+    /// is just a jump, and a jump keeps your horizontal speed, so a slide into a hop carries the
+    /// slide's boost into the air. Releasing the key mid-slide stands you straight up with the
+    /// speed you had. Neither needed a line of its own.
+    /// </summary>
+    void UpdateStance(bool listening, float dt)
+    {
+        bool wants = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
+        float speed = HorizontalSpeed;
+
+        if (!wants)
+        {
+            // Standing up is refused while there is something overhead, or you would be shoved
+            // through the ceiling.
+            if ((sliding || crouching) && !Blocked())
+            {
+                sliding = false;
+                crouching = false;
+            }
+        }
+        else if (!sliding && !crouching)
+        {
+            // Which one you get is decided once, on the press, by how fast you were already
+            // going. Deciding it every frame would flicker between the two at the boundary.
+            if (grounded && speed >= slideEntrySpeed)
+            {
+                sliding = true;
+
+                // The kick is what makes sliding a decision rather than a brake. Applied to the
+                // direction you are already travelling, not the one you are looking - a slide
+                // goes where you were going.
+                Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+                flat *= slideKick;
+
+                velocity.x = flat.x;
+                velocity.z = flat.z;
+
+                GameAudio.PlayAt(GameAudio.Footstep, transform.position, 0.5f, 0.1f);
+            }
+            else
+            {
+                crouching = true;
+            }
+        }
+        else if (sliding && (speed < slideExitSpeed || !grounded))
+        {
+            // Run out of speed and you end up crouched, which is where a slide naturally ends.
+            // Leave the ground and it ends too - sliding through the air is not a thing.
+            sliding = false;
+            crouching = grounded;
+        }
+
+        // The capsule follows the stance, eased rather than snapped, so the camera drops into a
+        // slide instead of teleporting down.
+        float wantedHeight = sliding || crouching ? standingHeight * crouchHeight : standingHeight;
+
+        controller.height = Mathf.MoveTowards(controller.height, wantedHeight, stanceEase * dt);
+
+        Vector3 centre = controller.center;
+        centre.y = standingCentre - (standingHeight - controller.height) * 0.5f;
+        controller.center = centre;
+    }
+
+    /// Whether there is something directly overhead, so standing up would clip through it.
+    bool Blocked()
+    {
+        Vector3 top = transform.position + Vector3.up * (controller.height * 0.5f);
+        float need = standingHeight - controller.height + 0.1f;
+
+        return need > 0.01f
+               && Physics.SphereCast(top, controller.radius * 0.9f, Vector3.up, out _, need,
+                                     Hitbox.WorldMask, QueryTriggerInteraction.Ignore);
     }
 
     Vector3 WishDirection()
@@ -193,11 +334,46 @@ public class PlayerMovement : MonoBehaviour
             jumpPressedAt = -1f;
             velocity.y = jumpSpeed;
             grounded = false;
+
+            // Jumping out of a slide is the cancel. It needs no special handling beyond ending
+            // the slide - the horizontal speed is already yours and a jump does not touch it, so
+            // the boost carries into the air on its own.
+            sliding = false;
+
             Accelerate(wishDir, wishSpeed, groundAccel, dt);
             return;
         }
 
-        ApplyFriction(dt);
+        // A slide bleeds off on its own schedule rather than taking ground friction, which is
+        // what makes it travel: friction is tuned to stop you in about a step and a half.
+        if (sliding)
+        {
+            Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+            float speed = flat.magnitude;
+
+            if (speed > 0.01f)
+            {
+                float slowed = Mathf.Max(0f, speed - slideDrag * dt);
+                flat = flat / speed * slowed;
+
+                velocity.x = flat.x;
+                velocity.z = flat.z;
+            }
+
+            // No steering input while sliding. You committed to a direction; the mouse still
+            // turns your view and your aim, but the slide goes where it was going.
+            velocity.y = -2f;
+            return;
+        }
+
+        // A hop taken shortly after landing skips friction entirely, which is what makes
+        // bunnyhopping in a straight line learnable rather than frame perfect. Without it every
+        // touch of the floor costs speed and only an exact landing-frame jump keeps any.
+        if (Time.time - landedAt > bhopGrace)
+            ApplyFriction(dt);
+        else if (bhopKeep < 1f)
+            velocity *= bhopKeep;
+
         Accelerate(wishDir, wishSpeed, groundAccel, dt);
 
         // Small constant push into the floor. CharacterController.isGrounded only reports what

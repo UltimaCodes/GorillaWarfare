@@ -37,7 +37,7 @@ public class PlayerListItem : MonoBehaviourPunCallbacks
         if (text != null && text.font != null && text.font.HasCharacter(crown))
             return crown + "  ";
 
-        return "HOST  ";
+        return "Host  ";
     }
 
     public void SetUp(Player _player)
