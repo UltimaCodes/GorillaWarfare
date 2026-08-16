@@ -157,6 +157,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // Camera on the prefab is Untagged so Camera.main is useless. Billboards need this.
     public static Camera LocalCamera { get; private set; }
 
+    /// Whether the game currently wants the mouse. Exposed because Cursor.lockState cannot be
+    /// read back meaningfully without a graphics device, so the play mode probe has no other
+    /// way to tell whether the game intends to hold the cursor.
+    public static bool CursorCaptured { get; private set; }
+
     /// Hands the static over to the death camera while the controller is gone, so nameplates
     /// keep facing the right way instead of hunting for a camera that no longer exists.
     public static void SetLocalCamera(Camera camera) => LocalCamera = camera;
@@ -335,7 +340,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             return;
 
         UpdateAim(AimInputOverride ?? KeyBinds.Held(KeyBinds.Action.Aim));
-        Look();
+
+        // Not while the settings screen is up. The mouse is being used to drag sliders, and
+        // reading it as look input meant the camera span round behind the panel while you
+        // adjusted your sensitivity - which is a memorable way to discover a new sensitivity.
+        if (cursorLocked)
+            Look();
 
         // Gun game hands you exactly one weapon and can leave you briefly holding nothing while
         // a rebuild lands, so none of the input below may assume there's something in your hands.
@@ -364,6 +374,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             EquipItem(itemIndex <= 0 ? items.Length - 1 : itemIndex - 1);
 
         Item held = items[Mathf.Clamp(itemIndex, 0, items.Length - 1)];
+
+        // Every one of these is gated on the cursor being captured, so clicking a button on the
+        // settings screen doesn't also empty a magazine into the wall behind it.
+        if (!cursorLocked)
+        {
+            FallOutOfTheWorldCheck();
+            return;
+        }
 
         if (KeyBinds.Pressed(KeyBinds.Action.Fire))
             held.Use();
@@ -735,20 +753,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     void UpdateCursorLock()
     {
-        // The settings screen owns the cursor while it's up. Without this the game grabs it
-        // back the instant you click a slider, and you end up dragging the camera instead.
-        if (SettingsMenu.IsOpen)
-        {
-            cursorLocked = false;
-        }
-        else if (KeyBinds.Pressed(KeyBinds.Action.Menu))
-        {
-            cursorLocked = false;
-        }
-        else if (KeyBinds.Pressed(KeyBinds.Action.Fire))
-        {
-            cursorLocked = true;
-        }
+        // One rule: the cursor is free exactly while the settings screen is up, and captured
+        // the rest of the time.
+        //
+        // It used to unlock on escape and only re-lock when you clicked, which meant closing
+        // settings left you with a loose cursor and a game that didn't respond until you
+        // clicked somewhere - and that click also fired your gun. Tying it to the one thing
+        // that actually wants a cursor means there is no state to get stuck in.
+        cursorLocked = !SettingsMenu.IsOpen;
+        CursorCaptured = cursorLocked;
 
         if (cursorLocked)
         {
@@ -775,7 +788,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (dead)
             return;
 
+        float shieldBefore = Overshield;
         currentHealth = Absorb(currentHealth, damage);
+
+        // The shield going is worth its own sound. It is the one thing you cannot read off the
+        // bar in time - by the moment you have looked down to check, the next shot has landed.
+        if (shieldBefore > 0f && Overshield <= 0f && currentHealth > 0f)
+            ShieldBreak();
 
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume, 0.1f);
@@ -842,6 +861,25 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         float eaten = Mathf.Min(shield * ShieldToughness, damage);
 
         return health - eaten / ShieldToughness - (damage - eaten);
+    }
+
+    /// <summary>
+    /// Plays the shield shattering, falling back to something breakage-shaped if no clip has
+    /// been dropped in yet.
+    ///
+    /// The fallback is a real recorded impact pitched up rather than anything synthesised -
+    /// pitching a sourced clip is arranging, and the alternative has been tried and rejected
+    /// four times.
+    /// </summary>
+    void ShieldBreak()
+    {
+        if (Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Shield).Length > 0)
+        {
+            GameAudio.Play2D(GameAudio.Shield, GameAudio.ShieldVolume, 0.05f);
+            return;
+        }
+
+        GameAudio.PlayPitched(GameAudio.Impact, null, GameAudio.ShieldVolume, 1.9f);
     }
 
     public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);

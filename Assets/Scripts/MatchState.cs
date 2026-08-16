@@ -172,14 +172,30 @@ public class MatchState : MonoBehaviourPunCallbacks
     {
         Feed.Clear();
 
-        // The room is fresh and nobody has set a phase yet, so start one.
-        if (PhotonNetwork.IsMasterClient && !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(PhaseKey))
-            BeginWarmup();
+        // No warmup here any more, and this was the whole bug behind "there's no warmup, you get
+        // thrown straight into the match".
+        //
+        // OnJoinedRoom fires the moment the room is created, which is while you are still
+        // standing in the lobby picking a mode and waiting for people. The warmup clock is a
+        // deadline against server time, so it started ticking there - and by the time anybody
+        // actually loaded into the game, thirty seconds of lobby had gone by and an eight second
+        // warmup had expired four times over. Tick had already moved the phase to Live before
+        // the first player existed.
+        //
+        // It starts when the game scene loads instead. See BeginMatchIfFresh.
     }
+
+
 
     public override void OnLeftRoom()
     {
         Feed.Clear();
+
+        // Reset the echo tracking as well as the tallies. Rejoining with `requested` still
+        // pointing at the last match's phase makes the first transition of the next one wait
+        // for an echo that already came and went.
+        requested = MatchPhase.Warmup;
+        awaitingEcho = false;
         kills.Clear();
         deaths.Clear();
         rungKills.Clear();
@@ -287,6 +303,28 @@ public class MatchState : MonoBehaviourPunCallbacks
     {
         if (!PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom)
             return;
+
+        // No phase in the room at all. This is the whole reason there was no warmup.
+        //
+        // Phase falls back to Warmup when the key is missing and TimeLeft falls back to zero,
+        // so an unstarted match reads as "a warmup that has already run out" - and the switch
+        // below promotes it to Live on the very first frame. You were thrown into the match
+        // because the game believed the warmup had already happened.
+        //
+        // Gated on the scene rather than on joining the room, because the phase is meaningless
+        // while everyone is still in the lobby picking a mode. The clock is a deadline against
+        // server time, so starting it there burned the whole warmup on the lobby.
+        if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(PhaseKey))
+        {
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
+                == RoomManager.gameSceneIndex)
+            {
+                Debug.Log("[match] map is up, starting warmup");
+                BeginWarmup();
+            }
+
+            return;
+        }
 
         if (awaitingEcho)
         {

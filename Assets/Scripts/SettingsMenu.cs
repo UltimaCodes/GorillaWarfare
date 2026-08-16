@@ -35,6 +35,7 @@ public class SettingsMenu : MonoBehaviour
     [SerializeField] TMP_Text heading;
     [SerializeField] Button closeButton;
     [SerializeField] Button resetButton;
+    [SerializeField] Button quitButton;
 
     [Header("Tabs")]
     [SerializeField] RectTransform tabBar;
@@ -100,8 +101,26 @@ public class SettingsMenu : MonoBehaviour
             });
         }
 
+        if (quitButton != null)
+            quitButton.onClick.AddListener(LeaveToMenu);
+
         BuildTabs();
         Hide();
+    }
+
+    /// <summary>
+    /// Out of the match and back to the title screen.
+    ///
+    /// RoomManager listens for the room being left and loads the menu scene, because leaving
+    /// from inside a match used to leave you standing in an empty level - the Launcher handles
+    /// that transition and the Launcher only exists in the menu.
+    /// </summary>
+    public void LeaveToMenu()
+    {
+        Close();
+
+        if (Photon.Pun.PhotonNetwork.InRoom)
+            Photon.Pun.PhotonNetwork.LeaveRoom();
     }
 
     void OnDestroy()
@@ -201,6 +220,11 @@ public class SettingsMenu : MonoBehaviour
         if (panel != null)
             panel.SetActive(true);
 
+        // Only offered when there is a match to leave. In the menu the screen is already one
+        // click from the title, and a button that takes you where you already are is clutter.
+        if (quitButton != null)
+            quitButton.gameObject.SetActive(Photon.Pun.PhotonNetwork.InRoom);
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -219,6 +243,15 @@ public class SettingsMenu : MonoBehaviour
 
         if (panel != null)
             panel.SetActive(false);
+
+        // Handing the cursor back is PlayerController's job in the game - it captures whenever
+        // this screen is down - but in the menu there is no player, so nothing would ever put
+        // it back and the title screen would be unclickable.
+        if (!Photon.Pun.PhotonNetwork.InRoom || PlayerController.Local == null)
+            return;
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     // ---------------------------------------------------------------- tabs

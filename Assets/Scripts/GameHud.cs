@@ -62,6 +62,11 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text centreSubtitle;
     [SerializeField] TMP_Text comboText;
 
+    /// Drawn behind the winner's name when the round is over. Without it the result was a line
+    /// of text floating over a firefight that had visibly stopped mattering, which is not what
+    /// winning should look like.
+    [SerializeField] GameObject resultsBackdrop;
+
     [Header("Gun game ladder")]
     [SerializeField] GameObject ladder;
     [SerializeField] TMP_Text ladderLabel;
@@ -298,7 +303,6 @@ public class GameHud : MonoBehaviour
             return;
 
         float max = Mathf.Max(1f, player.MaxHealth);
-        float ceiling = Mathf.Max(max, player.OvershieldCeiling);
         int points = player.HealthPoints;
         float fraction = Mathf.Clamp01(points / max);
 
@@ -314,25 +318,32 @@ public class GameHud : MonoBehaviour
             healthNumber.color = colour;
         }
 
-        // The bar is scaled to the overshield ceiling rather than to max health, so a shielded
-        // bar genuinely runs past where a full one stops instead of both reading as "full".
+        // The track is a hundred and forty, full stop.
+        //
+        // It used to be scaled to the overshield ceiling, which meant an unshielded player at
+        // full health saw a bar that was only seventy percent filled - so the normal state of
+        // the game looked like being hurt, and the number 140 read as low. Overshield now grows
+        // out past the end of the track instead of sharing it, which is what a bonus should look
+        // like: the bar is full, and then there is more of it.
         float width = healthTrack != null ? healthTrack.rect.width : 0f;
 
         if (healthFill != null)
         {
             healthFill.rectTransform.sizeDelta =
-                new Vector2(Mathf.Min(points, max) / ceiling * width,
+                new Vector2(Mathf.Min(points, max) / max * width,
                             healthFill.rectTransform.sizeDelta.y);
             healthFill.color = colour;
         }
 
         if (healthShield != null)
         {
-            float over = player.Overshield / ceiling * width;
+            // Measured in the same units as the track, so sixty points of shield is visibly
+            // less than the hundred and forty beside it rather than an arbitrary stub.
+            float over = player.Overshield / max * width;
 
             healthShield.gameObject.SetActive(over > 0.5f);
             healthShield.rectTransform.anchoredPosition =
-                new Vector2(max / ceiling * width, healthShield.rectTransform.anchoredPosition.y);
+                new Vector2(width, healthShield.rectTransform.anchoredPosition.y);
             healthShield.rectTransform.sizeDelta =
                 new Vector2(over, healthShield.rectTransform.sizeDelta.y);
         }
@@ -597,14 +608,28 @@ public class GameHud : MonoBehaviour
         if (phase == MatchPhase.Over)
         {
             Player winner = MatchState.Winner;
+            bool youWon = winner != null && winner == PhotonNetwork.LocalPlayer;
 
-            SetCentre(winner != null ? MatchState.NameOf(winner).ToUpper() : "NOBODY", killColour,
-                      $"WINS   -   next match in {left:F0}");
+            Show(resultsBackdrop, true);
+
+            // Your own win reads differently to somebody else's. The name is the same size
+            // either way, but being told YOU WIN is the part worth having.
+            SetCentre(winner != null ? MatchState.NameOf(winner).ToUpper() : "NOBODY",
+                      youWon ? headshotColour : killColour,
+                      youWon ? $"YOU WIN   -   next match in {left:F0}"
+                             : $"WINS   -   next match in {left:F0}");
+
+            // A slow pulse rather than a static line. The results screen sits there for twelve
+            // seconds and anything that doesn't move for twelve seconds stops being looked at.
+            float pulse = 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.04f;
+            centreTitle.rectTransform.localScale = Vector3.one * pulse;
 
             UpdateStandings(true);
             return;
         }
 
+        centreTitle.rectTransform.localScale = Vector3.one;
+        Show(resultsBackdrop, false);
         UpdateStandings(false);
 
         if (RoomManager.AwaitingRespawn)
@@ -830,6 +855,12 @@ public class GameHud : MonoBehaviour
     {
         if (thing != null)
             thing.gameObject.SetActive(visible);
+    }
+
+    static void Show(GameObject thing, bool visible)
+    {
+        if (thing != null)
+            thing.SetActive(visible);
     }
 
     /// <summary>

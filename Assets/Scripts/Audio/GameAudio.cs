@@ -22,6 +22,19 @@ public static class GameAudio
     /// Someone died and it was you. Deliberately a different shape to a hit, not a louder one.
     public const string Kill = "Kill";
 
+    /// <summary>
+    /// Your overshield just shattered.
+    ///
+    /// Its own bank because it is the one piece of information you cannot get any other way -
+    /// health you can read off the bar, but the moment the shield goes is the moment the next
+    /// shot starts hurting, and by the time you have looked down to check you are dead.
+    ///
+    /// Drop a glass break into Resources/Audio/Shield and it plays. With the folder empty it
+    /// falls back to an impact pitched up, which reads as breakage rather than as a hit but is
+    /// no substitute for the real thing.
+    /// </summary>
+    public const string Shield = "Shield";
+
     /// Eating one banana and pulling out another. Used to borrow a random UI click.
     public const string Reload = "Reload";
 
@@ -39,6 +52,10 @@ public static class GameAudio
     public const float DeathVolume = 0.85f;
     public const float FootstepVolume = 0.45f;
     public const float UiVolume = 0.7f;
+
+    // Under the hit and kill sounds on purpose. It is meant to be noticed, not to interrupt -
+    // a shield break that drowns out the gunfire is worse than one you miss.
+    public const float ShieldVolume = 0.55f;
 
     const int poolSize = 16;
 

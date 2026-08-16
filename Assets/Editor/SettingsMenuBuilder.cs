@@ -74,11 +74,19 @@ public static class SettingsMenuBuilder
         heading.text = "AIM";
         heading.color = Accent;
 
-        Button close = Push(frame.transform, "Close", font, "CLOSE",
-                            new Vector2(1f, 1f), new Vector2(-40f, -34f), new Vector2(150f, 48f));
+        // "BACK" rather than "CLOSE": opening this from the main menu makes it a screen you
+        // came from somewhere to reach, and back is what you want from it.
+        Button close = Push(frame.transform, "Close", font, "BACK",
+                            new Vector2(1f, 1f), new Vector2(-40f, -34f), new Vector2(160f, 48f));
 
         Button reset = Push(frame.transform, "Reset", font, "DEFAULTS",
                             new Vector2(1f, 0f), new Vector2(-40f, 34f), new Vector2(210f, 48f));
+
+        // Bottom left, well away from DEFAULTS - the two most destructive buttons on the screen
+        // should not be neighbours. Hidden unless there is a match to leave.
+        Button quit = Push(frame.transform, "Quit", font, "MAIN MENU",
+                           new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
+        quit.gameObject.SetActive(false);
 
         // ---------------------------------------------------------------- tabs
         GameObject tabBar = Empty(frame.transform, "Tabs", new Vector2(0f, 1f),
@@ -145,6 +153,7 @@ public static class SettingsMenuBuilder
         Wire(so, "heading", heading);
         Wire(so, "closeButton", close);
         Wire(so, "resetButton", reset);
+        Wire(so, "quitButton", quit);
         Wire(so, "tabBar", (RectTransform)tabBar.transform);
         Wire(so, "tabTemplate", tabTemplate);
         Wire(so, "content", contentRect);
@@ -193,12 +202,27 @@ public static class SettingsMenuBuilder
         element.minHeight = RowHeight;
 
         label = Label(row.transform, "Label", font, 26f, TextAlignmentOptions.Left,
-                      new Vector2(0f, 0.5f), new Vector2(18f, 0f), new Vector2(360f, RowHeight));
+                      new Vector2(0f, 0.5f), new Vector2(18f, 0f), new Vector2(LabelWidth, RowHeight));
         label.color = Ink;
 
         row.SetActive(false);
         return (RectTransform)row.transform;
     }
+
+    // Three columns, measured from the right edge of the row so they cannot drift into each
+    // other when the panel is resized.
+    //
+    // The first version anchored the slider right with a centre pivot, which means the position
+    // names the middle of a 360 wide control - so it reached 180 past its anchor, straight under
+    // the value text and 30 pixels off the edge of the panel. Everything here is right-pivoted
+    // now, so the number is the edge and the columns are exact.
+    const float ValueRight = -16f;      // value text runs -16 to -126
+    const float ValueWidth = 110f;
+    const float ControlRight = -140f;   // controls stop here, clear of the value
+    const float SliderWidth = 300f;
+    const float LabelWidth = 330f;
+
+    static readonly Vector2 RightMiddle = new Vector2(1f, 0.5f);
 
     static RectTransform SliderRow(Transform parent, TMP_FontAsset font)
     {
@@ -206,8 +230,8 @@ public static class SettingsMenuBuilder
 
         // The slider proper. uGUI needs the whole hierarchy - a background, a fill inside a fill
         // area, and a handle inside a slide area - and none of it is built for you.
-        GameObject slider = Box(row, "Slider", new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                                new Vector2(-150f, 0f), new Vector2(360f, 12f),
+        GameObject slider = Box(row, "Slider", RightMiddle, RightMiddle, RightMiddle,
+                                new Vector2(ControlRight, 0f), new Vector2(SliderWidth, 12f),
                                 new Color(1f, 1f, 1f, 0.12f));
 
         GameObject fillArea = Empty(slider.transform, "Fill Area", new Vector2(0.5f, 0.5f),
@@ -232,7 +256,8 @@ public static class SettingsMenuBuilder
         control.direction = Slider.Direction.LeftToRight;
 
         TMP_Text value = Label(row, "Value", font, 26f, TextAlignmentOptions.Right,
-                               new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(120f, RowHeight));
+                               RightMiddle, new Vector2(ValueRight, 0f),
+                               new Vector2(ValueWidth, RowHeight));
         value.color = Accent;
 
         return row;
@@ -242,8 +267,8 @@ public static class SettingsMenuBuilder
     {
         RectTransform row = Row(parent, "ToggleRowTemplate", font, out TMP_Text _);
 
-        GameObject box = Box(row, "Toggle", new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                             new Vector2(-150f, 0f), new Vector2(30f, 30f),
+        GameObject box = Box(row, "Toggle", RightMiddle, RightMiddle, RightMiddle,
+                             new Vector2(ControlRight, 0f), new Vector2(30f, 30f),
                              new Color(1f, 1f, 1f, 0.12f));
 
         GameObject tick = Box(box.transform, "Checkmark", new Vector2(0.5f, 0.5f),
@@ -254,7 +279,8 @@ public static class SettingsMenuBuilder
         control.graphic = tick.GetComponent<Image>();
 
         TMP_Text value = Label(row, "Value", font, 26f, TextAlignmentOptions.Right,
-                               new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(110f, RowHeight));
+                               RightMiddle, new Vector2(ValueRight, 0f),
+                               new Vector2(ValueWidth, RowHeight));
         value.color = Accent;
 
         return row;
@@ -264,16 +290,15 @@ public static class SettingsMenuBuilder
     {
         RectTransform row = Row(parent, "ChoiceRowTemplate", font, out TMP_Text _);
 
-        Push(row, "Previous", font, "<", new Vector2(1f, 0.5f), new Vector2(-330f, 0f),
-             new Vector2(44f, 36f));
+        // Arrows either side of the reading, all right-pivoted so the three tile exactly: next
+        // ends at -16, the value runs -70 to -270, previous ends at -280.
+        Push(row, "Next", font, ">", RightMiddle, new Vector2(-16f, 0f), new Vector2(44f, 36f));
 
-        TMP_Text value = Label(row, "Value", font, 26f, TextAlignmentOptions.Center,
-                               new Vector2(1f, 0.5f), new Vector2(-180f, 0f),
-                               new Vector2(250f, RowHeight));
+        TMP_Text value = Label(row, "Value", font, 24f, TextAlignmentOptions.Center,
+                               RightMiddle, new Vector2(-70f, 0f), new Vector2(200f, RowHeight));
         value.color = Accent;
 
-        Push(row, "Next", font, ">", new Vector2(1f, 0.5f), new Vector2(-30f, 0f),
-             new Vector2(44f, 36f));
+        Push(row, "Previous", font, "<", RightMiddle, new Vector2(-280f, 0f), new Vector2(44f, 36f));
 
         return row;
     }
@@ -282,7 +307,7 @@ public static class SettingsMenuBuilder
     {
         RectTransform row = Row(parent, "BindRowTemplate", font, out TMP_Text _);
 
-        Push(row, "Bind", font, "KEY", new Vector2(1f, 0.5f), new Vector2(-18f, 0f),
+        Push(row, "Bind", font, "KEY", RightMiddle, new Vector2(ValueRight, 0f),
              new Vector2(260f, 36f));
 
         return row;
@@ -314,13 +339,19 @@ public static class SettingsMenuBuilder
     static GameObject Box(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
                           Vector2 position, Vector2 size, Color colour)
     {
+        return Box(parent, name, anchorMin, anchorMax, new Vector2(0.5f, 0.5f), position, size, colour);
+    }
+
+    static GameObject Box(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
+                          Vector2 pivot, Vector2 position, Vector2 size, Color colour)
+    {
         GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         go.transform.SetParent(parent, false);
 
         RectTransform rect = (RectTransform)go.transform;
         rect.anchorMin = anchorMin;
         rect.anchorMax = anchorMax;
-        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.pivot = pivot;
         rect.anchoredPosition = position;
         rect.sizeDelta = size;
 
