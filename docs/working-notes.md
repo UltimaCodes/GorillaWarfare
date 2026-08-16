@@ -166,6 +166,25 @@ assert the method count is unchanged.
 
 ---
 
+**Never load a scene synchronously from a PUN callback.** PUN dispatches callbacks in a bare
+`foreach` with no try/catch over every target it knows about, and loading a scene destroys half
+of those targets mid-iteration. `OnLeftRoom` doing `SceneManager.LoadScene(0)` directly took the
+game down. Wait a frame.
+
+**A GameObject can only carry one Graphic**, and `TextMeshProUGUI` is one. `AddComponent<Image>()`
+on an object that already has a label returns **null** rather than failing loudly, and the next
+line throws a NullReferenceException that looks like it came from nowhere. Use the label as the
+button's `targetGraphic` - TMP raycasts over its whole rect anyway, so the row is clickable
+rather than the letters.
+
+**`AddComponent` on a prefab loaded with `LoadAssetAtPath` does not work either.** Use
+`PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset` / `UnloadPrefabContents`.
+
+**The cursor has no owner in the menu.** `PlayerController` captures and releases it, and there
+is no PlayerController in the menu scene - so whatever state the game left it in persists. Any
+path back to the title has to free it explicitly or the menu is unclickable, which reads as a
+hang.
+
 ## Where input is read
 
 Four separate scripts read the mouse and keyboard, and every one of them has to be told when the
