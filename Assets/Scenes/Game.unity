@@ -24861,6 +24861,7 @@ GameObject:
   - component: {fileID: 2855653317733717930}
   - component: {fileID: 1157013909486442511}
   - component: {fileID: 4029170584845872325}
+  - component: {fileID: 4029170584845872326}
   m_Layer: 0
   m_Name: statue_block
   m_TagString: Untagged
@@ -25237,6 +25238,28 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!64 &4029170584845872326
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3236541379595160848}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: -3600236446110781772, guid: 5e20565e1b2ac2a4982d8732b5caca52, type: 3}
 --- !u!4 &4034886906901230084
 Transform:
   m_ObjectHideFlags: 0

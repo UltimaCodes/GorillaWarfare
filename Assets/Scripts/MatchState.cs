@@ -472,6 +472,20 @@ public class MatchState : MonoBehaviourPunCallbacks
         bestStreak.Clear();
         lastKilledBy.Clear();
 
+        // Seeded to zero rather than merely emptied, and this is the bug where everybody started
+        // the next gun game holding the peel.
+        //
+        // RungFor prefers the master's own tally and falls back to the replicated property when
+        // the tally has no entry. Clearing the dictionary removed the entry, so the fallback
+        // fired - and the property still held last match's rung, because SetCustomProperties a
+        // few lines below has not echoed yet. Every player was handed the weapon for the rung
+        // they finished on.
+        foreach (Player seat in PhotonNetwork.PlayerList)
+        {
+            rungs[seat.ActorNumber] = 0;
+            rungKills[seat.ActorNumber] = 0;
+        }
+
         foreach (Player player in PhotonNetwork.PlayerList)
         {
             player.SetCustomProperties(new Hashtable
@@ -730,10 +744,20 @@ public class MatchState : MonoBehaviourPunCallbacks
             return;
         }
 
+        bool climbed = step.rung != rungs.GetValueOrDefault(killer.ActorNumber, 0);
+
         rungs[killer.ActorNumber] = step.rung;
         rungKills[killer.ActorNumber] = step.rungKills;
 
-        killer.SetCustomProperties(new Hashtable { { RungKey, step.rung }, { RungKillsKey, step.rungKills } });
+        // The rung only goes on the wire when it actually moves. Writing it on every kill meant
+        // every client saw a rung property change every time anybody died, and the HUD announced
+        // a promotion that had not happened.
+        Hashtable progress = new Hashtable { { RungKillsKey, step.rungKills } };
+
+        if (climbed)
+            progress[RungKey] = step.rung;
+
+        killer.SetCustomProperties(progress);
 
         if (step.climbed)
             GiveLoadout(killer);

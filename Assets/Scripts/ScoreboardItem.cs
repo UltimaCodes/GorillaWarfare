@@ -40,6 +40,22 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
 
         if (deathsText != null)
             deathsText.text = player.CustomProperties.TryGetValue(RoomManager.DeathsKey, out object deaths) ? deaths.ToString() : "0";
+
+        // In gun game the rung is the score - kills only matter as the thing that moves it, and
+        // two people on the same kill count can be a whole weapon apart. Shown on the name so it
+        // needs no new column, and named rather than numbered because "BIG MIKE" tells you what
+        // they are holding and "4" does not.
+        if (usernameText != null && MatchState.Mode == MatchMode.GunGame)
+        {
+            string[] ladder = WeaponLoadout.GunGameLadder;
+            int rung = Mathf.Clamp(MatchState.LadderRung(player), 0, ladder.Length - 1);
+
+            string nick = player.NickName;
+            string name = string.IsNullOrWhiteSpace(nick) ? $"Player {player.ActorNumber}" : nick;
+
+            usernameText.text = $"{name}   {rung + 1}/{ladder.Length} "
+                                + WeaponLoadout.DisplayName(ladder[rung]).ToUpper();
+        }
     }
 
     public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
@@ -47,7 +63,9 @@ public class ScoreboardItem : MonoBehaviourPunCallbacks
         if (player == null || targetPlayer != player)
             return;
 
-        if (changedProps.ContainsKey(RoomManager.KillsKey) || changedProps.ContainsKey(RoomManager.DeathsKey))
+        if (changedProps.ContainsKey(RoomManager.KillsKey)
+            || changedProps.ContainsKey(RoomManager.DeathsKey)
+            || changedProps.ContainsKey(MatchState.RungKey))
             UpdateStats();
     }
 }

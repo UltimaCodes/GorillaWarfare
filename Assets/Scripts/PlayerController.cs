@@ -200,6 +200,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     public GameHud Hud { get; private set; }
 
+    /// The last rung this player was told about, so a promotion is announced once rather than on
+    /// every kill. Starts at zero because that is where everybody starts.
+    int announcedRung;
+
     /// <summary>
     /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
     ///
@@ -509,8 +513,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             && MatchState.Mode == MatchMode.GunGame)
         {
             int rung = MatchState.LadderRung(PV.Owner);
-            Hud.ShowRungUp(rung, WeaponLoadout.DisplayName(
-                MatchState.Rules.LoadoutForRung(rung, WeaponLoadout.GunGameLadder)[0]));
+
+            // Compared against what was last announced rather than trusting the property to have
+            // changed. Belt and braces with the master only writing it on a climb - a rung reset
+            // between matches also lands here, and "RUNG 1" shouted at the start of every match
+            // is the same noise from the other direction.
+            if (rung != announcedRung)
+            {
+                announcedRung = rung;
+
+                Hud.ShowRungUp(rung, WeaponLoadout.DisplayName(
+                    MatchState.Rules.LoadoutForRung(rung, WeaponLoadout.GunGameLadder)[0]));
+            }
         }
     }
 

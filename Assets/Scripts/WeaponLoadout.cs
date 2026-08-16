@@ -50,8 +50,24 @@ public class WeaponLoadout : MonoBehaviour
     /// </summary>
     public static string[] Everything => (string[])GunGameLadder.Clone();
 
+    /// <summary>
+    /// The gun game ladder, strongest first.
+    ///
+    /// It used to climb from the pistol up to the launcher, which meant whoever was ahead also
+    /// had the best weapon in the game and whoever was behind had the worst - a lead
+    /// compounding itself. Descending inverts that: falling behind means keeping something
+    /// strong while the leader is down to a pistol, so the mode closes up rather than running
+    /// away from whoever got the first two kills.
+    ///
+    /// Ordered by what a weapon is actually worth in a fight rather than by damage on paper.
+    /// The shotgun does more per trigger pull than the sniper and is still the weaker of the
+    /// two, because it only does it inside twenty metres.
+    ///
+    /// The peel stays last regardless of any of this. Winning on the melee is the shape of gun
+    /// game, and it is meant to be the hard rung rather than the strong one.
+    /// </summary>
     public static readonly string[] GunGameLadder =
-        { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple", "Peel" };
+        { "Pineapple", "Sniper", "Shotgun", "Rifle", "Pistol", "Peel" };
 
     // Resolved from the asset the first time anything asks, then kept. The HUD asks every
     // frame and Resources.Load is not free.
