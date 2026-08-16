@@ -269,6 +269,19 @@ public static class HudBuilder
                                 Vector2.zero, new Vector2(760f, 34f));
         feedRow.text = "someone got peeled by someone else";
 
+        // ---------------------------------------------------------------- damage bearings
+        // A ring of marks around the crosshair saying which way you are being shot from. Its own
+        // group rather than living with the crosshair, because the radius is the thing you would
+        // want to change and it should not drag the reticle with it.
+        GameObject bearings = Panel(rootObject.transform, "DamageBearings", Center, Center, Center,
+                                    Vector2.zero, Vector2.zero, null);
+
+        // A tangential bar, not an arrow. At this size an arrowhead is four pixels of detail
+        // nobody can read while being shot; a thick arc segment reads instantly.
+        Image arrow = Image(bearings.transform, "Template", Center, Center, Center,
+                            Vector2.zero, new Vector2(110f, 14f), new Color(1f, 0.1f, 0.25f));
+        arrow.gameObject.SetActive(false);
+
         // ---------------------------------------------------------------- damage numbers
         // Full screen, because these are positioned by projecting a world point and can land
         // anywhere. Last child so they read over the top of everything else.
@@ -327,6 +340,8 @@ public static class HudBuilder
         Wire(so, "standingsTemplate", standingRow);
         Wire(so, "damageContainer", (RectTransform)damage.transform);
         Wire(so, "damageTemplate", damageRow);
+        Wire(so, "arrowContainer", (RectTransform)bearings.transform);
+        Wire(so, "arrowTemplate", arrow);
 
         so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -410,6 +425,35 @@ public static class HudBuilder
 
                 Debug.Log("[hud] added the results backdrop");
             }
+        }
+
+        // Damage bearings, which arrived with the direction indicator.
+        SerializedProperty arrowSlot = so.FindProperty("arrowContainer");
+
+        if (arrowSlot != null && arrowSlot.objectReferenceValue == null)
+        {
+            GameHud existing = hud;
+
+            GameObject group = new GameObject("DamageBearings", typeof(RectTransform));
+            group.transform.SetParent(existing.transform, false);
+
+            RectTransform groupRect = (RectTransform)group.transform;
+            groupRect.anchorMin = groupRect.anchorMax = groupRect.pivot = Center;
+            groupRect.anchoredPosition = Vector2.zero;
+            groupRect.sizeDelta = Vector2.zero;
+
+            Image made = Image(group.transform, "Template", Center, Center, Center,
+                               Vector2.zero, new Vector2(110f, 14f), new Color(1f, 0.1f, 0.25f));
+            made.gameObject.SetActive(false);
+
+            arrowSlot.objectReferenceValue = groupRect;
+
+            SerializedProperty templateSlot = so.FindProperty("arrowTemplate");
+            if (templateSlot != null)
+                templateSlot.objectReferenceValue = made;
+
+            added++;
+            Debug.Log("[hud] added the damage bearing ring");
         }
 
         // Sizes and positions that changed after the HUD was first built. Applied by name so a

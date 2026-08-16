@@ -111,6 +111,15 @@ health, the round count against the magazine, the weapon name against what's equ
 catches the thing a screenshot wouldn't anyway: a number that's present, correctly placed and
 stale.
 
+**Played on 3-4 clients, and it works.** Ryaan confirmed this on 2026-08-16. Remote weapon
+switching, replicated aim, the kill feed firing on a client that didn't do the killing and host
+migration were all reasoned about and never observed for months; they are observed now. Treat
+the replication design as sound rather than as a standing risk.
+
+That does not make the probe redundant - it still catches regressions in one client faster than
+anyone can by playing - but "this has never been tested with two people" is no longer the
+sentence to hang every doubt on.
+
 **What no check can reach:** anything needing a second client. Offline mode is one player.
 Remote weapon switching, replicated aim, the kill feed firing on a client that didn't do the
 killing, host migration — all reasoned about, none observed.
@@ -178,7 +187,7 @@ Anything else that reads a phase or a deadline out of room properties needs to d
 
 ## Open, and known
 
-- Nothing has been played with two people. This is the biggest risk in the project.
+- ~~Nothing has been played with two people.~~ Played on 3-4 clients and working, 2026-08-16.
 - Match timings are guesses: warmup 8s, deathmatch 5min, gun game 10min, respawn 3s.
 - `warmup.mp3` is 20s against an 8s phase, so only its opening is ever heard. The crossfade
   handles it cleanly; whether the first eight seconds are the good eight seconds needs an ear.

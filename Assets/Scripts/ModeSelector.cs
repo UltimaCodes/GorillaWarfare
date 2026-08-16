@@ -67,7 +67,9 @@ public class ModeSelector : MonoBehaviour
 
     void Apply(MatchMode mode, bool host)
     {
-        string name = mode == MatchMode.GunGame ? "GUN GAME" : "DEATHMATCH";
+        string name = mode == MatchMode.GunGame ? "GUN GAME"
+                      : mode == MatchMode.TeamDeathmatch ? "TEAM DEATHMATCH"
+                      : "DEATHMATCH";
 
         if (label != null)
             label.text = name;
@@ -76,6 +78,8 @@ public class ModeSelector : MonoBehaviour
         {
             description.text = mode == MatchMode.GunGame
                 ? "climb the ladder, two kills a rung, win on the peel"
+                : mode == MatchMode.TeamDeathmatch
+                ? "red against blue, no friendly fire, most kills wins it"
                 : "a random banana every life, most kills on the clock";
         }
 
@@ -97,7 +101,10 @@ public class ModeSelector : MonoBehaviour
         if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient)
             return;
 
-        MatchMode next = MatchState.Mode == MatchMode.Deathmatch ? MatchMode.GunGame : MatchMode.Deathmatch;
+        // Round the enum rather than a chain of ternaries, so adding a fourth mode is adding a
+        // fourth enum member and nothing else.
+        int count = System.Enum.GetValues(typeof(MatchMode)).Length;
+        MatchMode next = (MatchMode)(((int)MatchState.Mode + 1) % count);
 
         // Straight onto the room, so late joiners get it from the server and the browser
         // updates without anyone being told.

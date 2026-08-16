@@ -79,6 +79,8 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text standingsTemplate;
     [SerializeField] RectTransform damageContainer;
     [SerializeField] TMP_Text damageTemplate;
+    [SerializeField] RectTransform arrowContainer;
+    [SerializeField] Image arrowTemplate;
 
     [Header("Colours")]
     [SerializeField] Color healthy = new Color(0.55f, 1f, 0.1f);
@@ -104,6 +106,12 @@ public class GameHud : MonoBehaviour
     [Tooltip("How far a damage number drifts up over its life, in canvas units.")]
     [SerializeField] float damageRise = 46f;
 
+    [Tooltip("How far from the middle the damage direction marks sit.")]
+    [SerializeField] float arrowRadius = 210f;
+
+    [Tooltip("How long a damage direction mark stays up.")]
+    [SerializeField] float arrowSeconds = 1.6f;
+
     PlayerController player;
     RectTransform canvasRect;
 
@@ -116,6 +124,16 @@ public class GameHud : MonoBehaviour
     readonly List<TMP_Text> feedRows = new List<TMP_Text>();
     readonly List<TMP_Text> standingsRows = new List<TMP_Text>();
     readonly List<DamageLabel> damageLabels = new List<DamageLabel>();
+    readonly List<DamageArrow> damageArrows = new List<DamageArrow>();
+
+    class DamageArrow
+    {
+        public Image image;
+        public RectTransform rect;
+        public Vector3 from;
+        public float born;
+        public bool live;
+    }
 
     class DamageLabel
     {
@@ -155,6 +173,9 @@ public class GameHud : MonoBehaviour
             crosshairDot = made.GetComponent<Image>();
             crosshairDot.raycastTarget = false;
         }
+
+        if (arrowTemplate != null)
+            arrowTemplate.gameObject.SetActive(false);
 
         HideTemplate(feedTemplate);
         HideTemplate(standingsTemplate);
@@ -235,6 +256,97 @@ public class GameHud : MonoBehaviour
             centreSubtitle.text = weapon.ToUpper();
     }
 
+    /// <summary>
+    /// Marks which way the shot came from.
+    ///
+    /// The single most disorienting thing about being shot in a first person game is not knowing
+    /// where to look, and the map has no landmarks yet to work it out from. A mark on the edge
+    /// of the screen at the right bearing turns "I am being shot" into "I am being shot from
+    /// behind and to the left", which is a fact you can act on.
+    ///
+    /// Bearing only - the vertical is thrown away. Someone above you and someone level with you
+    /// are the same problem, and an indicator that tries to say both ends up saying neither.
+    /// </summary>
+    public void ShowDamageFrom(Vector3 source)
+    {
+        if (arrowTemplate == null || arrowContainer == null)
+            return;
+
+        DamageArrow arrow = null;
+
+        foreach (DamageArrow candidate in damageArrows)
+        {
+            if (!candidate.live)
+            {
+                arrow = candidate;
+                break;
+            }
+        }
+
+        if (arrow == null)
+        {
+            // Capped low. More than a handful at once is not information any more, it is a ring
+            // of orange, and being shot by three people at once already communicates itself.
+            if (damageArrows.Count >= 6)
+                arrow = damageArrows[0];
+            else
+            {
+                Image made = Instantiate(arrowTemplate, arrowContainer);
+                made.name = $"DamageArrow{damageArrows.Count}";
+
+                arrow = new DamageArrow { image = made, rect = made.rectTransform };
+                damageArrows.Add(arrow);
+            }
+        }
+
+        arrow.from = source;
+        arrow.born = Time.unscaledTime;
+        arrow.live = true;
+        arrow.image.gameObject.SetActive(true);
+    }
+
+    void UpdateDamageArrows()
+    {
+        Camera camera = PlayerController.LocalCamera;
+
+        foreach (DamageArrow arrow in damageArrows)
+        {
+            if (!arrow.live)
+                continue;
+
+            float age = (Time.unscaledTime - arrow.born) / arrowSeconds;
+
+            if (age >= 1f || camera == null)
+            {
+                arrow.live = false;
+                arrow.image.gameObject.SetActive(false);
+                continue;
+            }
+
+            // Recomputed every frame rather than fixed at the moment of the hit, so turning
+            // toward the shooter walks the mark round to the top of the screen. That feedback
+            // loop is the whole point - it is what makes you turn the right way.
+            Vector3 to = arrow.from - camera.transform.position;
+            to.y = 0f;
+
+            Vector3 forward = camera.transform.forward;
+            forward.y = 0f;
+
+            if (to.sqrMagnitude < 0.001f || forward.sqrMagnitude < 0.001f)
+                continue;
+
+            float bearing = Vector3.SignedAngle(forward, to, Vector3.up);
+
+            // Screen space turns the other way to world yaw, hence the negative.
+            Quaternion turn = Quaternion.Euler(0f, 0f, -bearing);
+
+            arrow.rect.anchoredPosition = turn * Vector3.up * arrowRadius;
+            arrow.rect.localRotation = turn;
+
+            arrow.image.color = new Color(critical.r, critical.g, critical.b, 1f - age * age);
+        }
+    }
+
     public void ShowDamage(Vector3 worldPoint, float amount, bool headshot)
     {
         DamageLabel label = FreeDamageLabel();
@@ -288,6 +400,7 @@ public class GameHud : MonoBehaviour
         UpdateCentre();
         UpdateFeed();
         UpdateDamageNumbers();
+        UpdateDamageArrows();
     }
 
     void UpdateHealth()
@@ -612,6 +725,27 @@ public class GameHud : MonoBehaviour
 
             Show(resultsBackdrop, true);
 
+            // A team match is won by a side, and saying "someone wins" over the top of that
+            // would be answering a question nobody asked.
+            if (MatchState.Mode == MatchMode.TeamDeathmatch)
+            {
+                int side = MatchState.WinningTeam;
+                bool yours = side >= 0 && side == PlayerColours.TeamOf(PhotonNetwork.LocalPlayer);
+
+                SetCentre(side >= 0 ? PlayerColours.TeamNames[side] + " WINS" : "DRAW",
+                          side >= 0 ? PlayerColours.TeamPalette[side] : dim,
+                          side < 0 ? $"nobody wins   -   next match in {left:F0}"
+                          : yours ? $"that's you   -   next match in {left:F0}"
+                          : $"{PlayerColours.TeamScore(0)} - {PlayerColours.TeamScore(1)}   "
+                            + $"-   next match in {left:F0}");
+
+                float beat = 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.04f;
+                centreTitle.rectTransform.localScale = Vector3.one * beat;
+
+                UpdateStandings(true);
+                return;
+            }
+
             // Your own win reads differently to somebody else's. The name is the same size
             // either way, but being told YOU WIN is the part worth having.
             SetCentre(winner != null ? MatchState.NameOf(winner).ToUpper() : "NOBODY",
@@ -691,10 +825,38 @@ public class GameHud : MonoBehaviour
             {
                 TMP_Text row = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
                 row.gameObject.SetActive(true);
-                row.text = $"{MatchState.NameOf(person)}   "
+
+                // In a team mode the side you were on is the thing worth reading first.
+                int team = PlayerColours.TeamOf(person);
+                string side = team >= 0 ? PlayerColours.TeamNames[team] + "  " : string.Empty;
+
+                row.text = $"{side}{MatchState.NameOf(person)}   "
                            + $"{RoomManager.GetStat(person, RoomManager.KillsKey)} / "
                            + $"{RoomManager.GetStat(person, RoomManager.DeathsKey)}";
-                row.color = person == PhotonNetwork.LocalPlayer ? headshotColour : dim;
+
+                row.color = person == PhotonNetwork.LocalPlayer ? headshotColour
+                            : team >= 0 ? PlayerColours.TeamPalette[team] : dim;
+                shown++;
+            }
+
+            // A blank line, then what everybody was best at. Cheap to compute, and it gives the
+            // person who lost something to have won.
+            List<MatchState.Award> awards = MatchState.Awards();
+
+            if (awards.Count > 0)
+            {
+                TMP_Text gap = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
+                gap.gameObject.SetActive(true);
+                gap.text = string.Empty;
+                shown++;
+            }
+
+            foreach (MatchState.Award award in awards)
+            {
+                TMP_Text row = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
+                row.gameObject.SetActive(true);
+                row.text = $"{award.title}   {award.who}   {award.detail}";
+                row.color = killColour;
                 shown++;
             }
         }
@@ -739,7 +901,7 @@ public class GameHud : MonoBehaviour
 
                 default:
                     row.text = KillFeedLines.For(entry.actor, entry.subject, entry.weapon,
-                                                 entry.headshot, entry.flavour);
+                                                 entry.headshot, entry.flavour, entry.revenge);
 
                     // Anything you were part of burns brighter. In a room of eight most of the
                     // feed is other people's business and reads as noise otherwise.

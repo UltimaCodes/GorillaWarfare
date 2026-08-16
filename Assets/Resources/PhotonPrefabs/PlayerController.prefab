@@ -275,6 +275,7 @@ MonoBehaviour:
   aimSpeed: 12
   weaponHandOffset: {x: 0.02, y: 0, z: 0.06}
   weaponHandRotation: {x: 0, y: 0, z: 0}
+  spawnProtectionSeconds: 2
 --- !u!114 &7754786868663888966
 MonoBehaviour:
   m_ObjectHideFlags: 0
