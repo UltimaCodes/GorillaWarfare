@@ -730,6 +730,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", transform.position,
                                     GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
+
+            // A third layer on the heaviest weapons, lower and later still. Two layers gave the
+            // shotgun a body; three give it a room to be in, which is the part that was missing -
+            // a real shotgun is mostly what happens after the bang.
+            if (fired.Weight > 0.8f)
+            {
+                GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", transform.position,
+                                        GameAudio.ShotVolume * 0.55f, 0.38f, 0.095f);
+            }
         }
 
         if (hit)

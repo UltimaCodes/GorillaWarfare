@@ -220,23 +220,32 @@ public class Projectile : MonoBehaviour
             Sprite smoke = Pick("smoke");
             Sprite spark = Pick("spark");
 
-            // Core: small, white hot, over in three frames.
-            FlashSprite.Spawn(core, at, radius * 0.5f, radius * 1.6f, 0.09f,
+            // Core: white hot, and already wider than the blast when it appears. An explosion
+            // that starts small and grows reads as a firework; one that arrives at full size and
+            // collapses reads as something detonating.
+            FlashSprite.Spawn(core, at, radius * 1.6f, radius * 2.6f, 0.11f,
                               new Color(1f, 0.98f, 0.85f, 1f));
 
-            // Fireball: the shape you actually read as the explosion.
-            FlashSprite.Spawn(fire, at, radius * 0.7f, radius * 2.3f, 0.32f,
+            // Fireball: the shape you actually read as the explosion. Drawn well past the
+            // damage radius on purpose - the killing volume is 7.5 metres and a fireball that
+            // only just covers it looks like a firecracker at that scale.
+            FlashSprite.Spawn(fire, at, radius * 1.4f, radius * 3.6f, 0.42f,
                               new Color(1f, 0.62f, 0.18f, 1f));
+
+            // A second fireball, offset and slower, so the shape is lumpy rather than a disc.
+            FlashSprite.Spawn(fire, at + Random.onUnitSphere * radius * 0.35f,
+                              radius * 1.1f, radius * 2.8f, 0.55f,
+                              new Color(1f, 0.42f, 0.08f, 0.9f));
 
             // Smoke, drifting up and outliving the rest. Placed slightly high so it reads as
             // rising out of the blast rather than sitting in it.
             FlashSprite.Spawn(smoke, at + Vector3.up * radius * 0.35f,
-                              radius * 0.9f, radius * 2.8f, 0.85f,
-                              new Color(0.35f, 0.32f, 0.30f, 0.75f));
+                              radius * 1.4f, radius * 4.2f, 1.3f,
+                              new Color(0.35f, 0.32f, 0.30f, 0.8f));
 
             // Sparks thrown outward. Random directions rather than a ring, because a ring reads
             // as a shockwave decal and this should read as debris.
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 14; i++)
             {
                 Vector3 away = Random.onUnitSphere;
                 away.y = Mathf.Abs(away.y) * 0.6f + 0.15f;
