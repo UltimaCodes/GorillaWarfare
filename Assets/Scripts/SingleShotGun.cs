@@ -614,7 +614,35 @@ public class SingleShotGun : Gun
         if (Info != null && !Info.melee)
         {
             Vector3 from = muzzle != null ? muzzle.Tip.position : transform.position;
+
+            // One streak per pellet, not one per trigger pull. The split throws nine and drew a
+            // single line, so the weapon that should look like a wall of fruit looked exactly
+            // like the pistol.
+            //
+            // Only the first is the real traced path - the others are scattered around it by
+            // the weapon's own cone, which is honest about what a shotgun does without needing
+            // nine separate raycasts replicated across the network.
+            int streaks = Mathf.Max(1, Info.pelletsPerShot);
+
             BulletTracer.Spawn(from, endPoint, TracerColour());
+
+            for (int i = 1; i < streaks; i++)
+            {
+                Vector3 along = endPoint - from;
+                float reach = along.magnitude;
+
+                if (reach < 0.01f)
+                    break;
+
+                // Scattered by the cone at the distance it actually travelled, so the spread
+                // widens with range the way the pellets themselves do.
+                Vector3 spread = Random.insideUnitCircle * Mathf.Tan(Info.spread * Mathf.Deg2Rad) * reach;
+                Vector3 scattered = endPoint
+                                    + Vector3.Cross(along.normalized, Vector3.up).normalized * spread.x
+                                    + Vector3.up * spread.y;
+
+                BulletTracer.Spawn(from, scattered, TracerColour());
+            }
         }
 
         if (!hit)

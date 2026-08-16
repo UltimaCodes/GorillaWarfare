@@ -18,10 +18,10 @@ public class SpeedRush : MonoBehaviour
 {
     [Tooltip("Below this you are running, and nothing happens. Ground speed is 8.13, so this "
              + "sits above anything you can reach on foot.")]
-    [SerializeField] float threshold = 11.5f;
+    [SerializeField] float threshold = 15f;
 
     [Tooltip("Speed at which the effect is at full strength.")]
-    [SerializeField] float full = 24f;
+    [SerializeField] float full = 32f;
 
     [Tooltip("Degrees of extra field of view at full speed.")]
     [SerializeField] float fovKick = 14f;
