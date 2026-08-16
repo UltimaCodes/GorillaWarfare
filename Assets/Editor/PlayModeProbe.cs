@@ -150,6 +150,11 @@ public class ProbeRunner : MonoBehaviour
         yield return CaptureEveryWeapon(player);
 
         // ---- match clock ----
+        log.AppendLine($"  ..    phase {MatchState.Phase} | left {MatchState.TimeLeft:F2}"
+                       + $" | warmup length {MatchState.WarmupLength:F2}"
+                       + $" | photon time {Photon.Pun.PhotonNetwork.Time:F2}"
+                       + $" | realtime {Time.realtimeSinceStartup:F2}");
+
         Check(MatchState.Phase == MatchPhase.Warmup, "a match starts in warmup", MatchState.Phase.ToString());
 
         float warmupLeft = MatchState.TimeLeft;
@@ -169,6 +174,9 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- a loadout that resolves to nothing still arms you ----
         yield return CheckEmptyLoadoutFallsBack(player);
+
+        // ---- the settings screen must not leak into the game ----
+        yield return CheckSettingsScreenBlocksTheGame(player);
 
         // ---- settings, keys and the shader stack ----
         yield return CheckSettingsApply();
@@ -1231,6 +1239,8 @@ public class ProbeRunner : MonoBehaviour
         // Named rather than counted. The first version of this counted two volumes on Off and
         // said nothing about what they were, which is exactly the sort of number you can stare
         // at for ten minutes - printing what it actually found named the culprit immediately.
+        log.AppendLine($"  ..    preset {GameSettings.Shaders} | motion blur {GameSettings.MotionBlur}");
+
         Check(offVolumes == "none" && onVolumes == "~ShaderVolume",
               "the preset is the only thing driving the picture",
               $"Off: {offVolumes} | Overripe: {onVolumes}");
@@ -1341,6 +1351,68 @@ public class ProbeRunner : MonoBehaviour
 
         names.Sort();
         return names.Count == 0 ? "none" : string.Join(", ", names);
+    }
+
+    /// <summary>
+    /// While the settings screen is up, the game underneath has to stop listening.
+    ///
+    /// Both halves of this were real: the camera turned with the mouse while you dragged a
+    /// sensitivity slider, and clicking a button also pulled the trigger. Neither is the sort of
+    /// thing a static check can see, because both are about which of two things is reading the
+    /// same input.
+    /// </summary>
+    IEnumerator CheckSettingsScreenBlocksTheGame(PlayerController player)
+    {
+        SettingsMenu menu = SettingsMenu.Instance;
+
+        if (menu == null)
+        {
+            Check(false, "the settings screen exists", "RoomManager never instantiated it");
+            yield break;
+        }
+
+        menu.Open();
+        yield return null;
+        yield return null;
+
+        Check(SettingsMenu.IsOpen, "the settings screen opens", "IsOpen");
+
+        // The camera must not move. Driven by reading the angle across a few frames rather than
+        // by faking mouse input, which the probe cannot do - if anything else moved the camera
+        // this would catch that too, which is the point.
+        Camera camera = PlayerController.LocalCamera;
+        Quaternion before = camera != null ? camera.transform.rotation : Quaternion.identity;
+
+        yield return null;
+        yield return null;
+        yield return null;
+
+        float drift = camera != null ? Quaternion.Angle(before, camera.transform.rotation) : 0f;
+        Check(drift < 0.01f, "the camera is still while settings are open", $"{drift:F3} degrees");
+
+        Check(!PlayerController.CursorCaptured, "and the game lets go of the cursor",
+              PlayerController.CursorCaptured ? "still captured" : "free");
+
+        SingleShotGun gun = player.ActiveGun;
+        int loaded = gun != null ? gun.Ammo : -1;
+
+        menu.Close();
+        yield return null;
+        yield return null;
+
+        Check(!SettingsMenu.IsOpen, "it closes again", "IsOpen false");
+
+        // Closing has to hand the mouse back on its own. It used to wait for a click, and that
+        // click went through to the weapon.
+        // Checked against the game's intent rather than Cursor.lockState, which does not report
+        // anything useful with no graphics device - it reads None either way, so the version of
+        // this that asked the OS was passing the "free" half for the wrong reason.
+        Check(PlayerController.CursorCaptured, "closing recaptures the cursor",
+              PlayerController.CursorCaptured ? "captured" : "still free");
+
+        if (gun != null)
+            Check(gun.Ammo == loaded, "and nothing was fired through the panel",
+                  $"{loaded} rounds before, {gun.Ammo} after");
     }
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't

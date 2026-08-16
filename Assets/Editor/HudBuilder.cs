@@ -214,23 +214,34 @@ public static class HudBuilder
         GameObject centre = Panel(rootObject.transform, "Centre", Center, Center, Center,
                                   Vector2.zero, Vector2.zero, null);
 
-        TMP_Text title = Text(centre.transform, "Title", font, 84f,
+        // Full screen, first in the group so everything else in the middle draws over it. Only
+        // up when the round is over.
+        GameObject results = Panel(centre.transform, "ResultsBackdrop", Vector2.zero, Vector2.one,
+                                   Center, Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.72f));
+        results.SetActive(false);
+
+        // Big. This is the winner's name at the end of a match and the multikill callout during
+        // one, and at 84 it read as a caption rather than as the game shouting at you.
+        TMP_Text title = Text(centre.transform, "Title", font, 130f,
                               TextAlignmentOptions.Center, Center,
-                              new Vector2(0f, 210f), new Vector2(1400f, 100f));
+                              new Vector2(0f, 230f), new Vector2(1600f, 150f));
         title.text = "DOUBLE";
         title.color = new Color(1f, 0.35f, 0.05f);
 
-        TMP_Text subtitle = Text(centre.transform, "Subtitle", font, 30f,
+        TMP_Text subtitle = Text(centre.transform, "Subtitle", font, 42f,
                                  TextAlignmentOptions.Center, Center,
-                                 new Vector2(0f, 150f), new Vector2(1400f, 40f));
+                                 new Vector2(0f, 148f), new Vector2(1600f, 56f));
         subtitle.text = "3 IN A ROW";
         subtitle.color = new Color(1f, 1f, 1f, 0.55f);
 
-        // Off to one side of the crosshair. Directly under it, a rising hit counter covers the
-        // person you're shooting at.
-        TMP_Text combo = Text(centre.transform, "Combo", font, 46f,
-                              TextAlignmentOptions.Left, Center,
-                              new Vector2(90f, -70f), new Vector2(200f, 60f));
+        // Under the crosshair and centred, which is the only place on the screen you are
+        // reliably looking. It used to sit off to the right at 46 point, on the theory that
+        // directly under the crosshair would cover whoever you were shooting at - but well
+        // below the aim point covers nothing, and a counter nobody notices is a counter that
+        // may as well not exist.
+        TMP_Text combo = Text(centre.transform, "Combo", font, 76f,
+                              TextAlignmentOptions.Center, Center,
+                              new Vector2(0f, -170f), new Vector2(400f, 96f));
         combo.text = "x4";
         combo.color = new Color(1f, 0.95f, 0.25f);
 
@@ -300,6 +311,7 @@ public static class HudBuilder
         Wire(so, "centreTitle", title);
         Wire(so, "centreSubtitle", subtitle);
         Wire(so, "comboText", combo);
+        Wire(so, "resultsBackdrop", results);
 
         Wire(so, "ladder", ladder);
         Wire(so, "ladderLabel", ladderLabel);
@@ -375,6 +387,38 @@ public static class HudBuilder
             }
         }
 
+        // The results curtain, which arrived with the win screen rework.
+        SerializedProperty curtain = so.FindProperty("resultsBackdrop");
+
+        if (curtain != null && curtain.objectReferenceValue == null)
+        {
+            SerializedProperty titleSlot = so.FindProperty("centreTitle");
+            TMP_Text title = titleSlot != null ? titleSlot.objectReferenceValue as TMP_Text : null;
+
+            if (title != null && title.transform.parent != null)
+            {
+                GameObject made = Panel(title.transform.parent, "ResultsBackdrop",
+                                        Vector2.zero, Vector2.one, Center, Vector2.zero,
+                                        Vector2.zero, new Color(0f, 0f, 0f, 0.72f));
+
+                // Behind its siblings, or it covers the winner's name it is meant to sit under.
+                made.transform.SetAsFirstSibling();
+                made.SetActive(false);
+
+                curtain.objectReferenceValue = made;
+                added++;
+
+                Debug.Log("[hud] added the results backdrop");
+            }
+        }
+
+        // Sizes and positions that changed after the HUD was first built. Applied by name so a
+        // scene built by an older version catches up without being replaced - the alternative
+        // is telling Ryaan to rebuild and lose whatever he has moved.
+        added += Retune(so, "centreTitle", 130f, new Vector2(0f, 230f), new Vector2(1600f, 150f));
+        added += Retune(so, "centreSubtitle", 42f, new Vector2(0f, 148f), new Vector2(1600f, 56f));
+        added += Retune(so, "comboText", 76f, new Vector2(0f, -170f), new Vector2(400f, 96f));
+
         if (added == 0)
         {
             Debug.Log("[hud] nothing missing");
@@ -389,6 +433,38 @@ public static class HudBuilder
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);
+    }
+
+    /// <summary>
+    /// Resizes and repositions one referenced label, if it isn't already where it should be.
+    ///
+    /// Returns whether anything changed, so a repair run that finds everything correct can say
+    /// so rather than reporting work it didn't do.
+    /// </summary>
+    static int Retune(SerializedObject so, string field, float size, Vector2 position, Vector2 dimensions)
+    {
+        SerializedProperty slot = so.FindProperty(field);
+        TMP_Text text = slot != null ? slot.objectReferenceValue as TMP_Text : null;
+
+        if (text == null)
+            return 0;
+
+        RectTransform rect = (RectTransform)text.transform;
+
+        if (Mathf.Approximately(text.fontSize, size)
+            && rect.anchoredPosition == position
+            && rect.sizeDelta == dimensions)
+            return 0;
+
+        text.fontSize = size;
+        text.alignment = TextAlignmentOptions.Center;
+        rect.anchoredPosition = position;
+        rect.sizeDelta = dimensions;
+
+        EditorUtility.SetDirty(text);
+        Debug.Log($"[hud] resized {field} to {size:F0} point at {position}");
+
+        return 1;
     }
 
     static void Wire(SerializedObject so, string field, Object value)

@@ -21,7 +21,10 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public static RoomManager Instance;
 
     const string playerPrefab = "PhotonPrefabs/PlayerController";
-    const int gameSceneIndex = 1;
+    /// The map. Public because MatchState needs to know whether the game has actually started
+    /// or whether everyone is still standing in the lobby, and the answer is "which scene are
+    /// we in".
+    public const int gameSceneIndex = 1;
 
     public const string KillsKey = "kills";
     public const string DeathsKey = "deaths";
@@ -136,12 +139,21 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (scene.buildIndex == gameSceneIndex)
-            TrySpawn();
+        if (scene.buildIndex != gameSceneIndex)
+            return;
+
+        TrySpawn();
     }
 
     public override void OnLeftRoom()
     {
+        // Leaving from inside a match has to physically get you out of the game scene. The
+        // Launcher handles this when you leave from the lobby, but the Launcher only exists in
+        // the menu scene - leave from the game and nothing was listening, so you sat in an empty
+        // level with no room and no way back.
+        if (SceneManager.GetActiveScene().buildIndex != 0)
+            SceneManager.LoadScene(0);
+
         // Leaving while dead used to leave the respawn coroutine running, so it would come back
         // a few seconds later and try to spawn a player into a room we were no longer in.
         if (deathRoutine != null)
