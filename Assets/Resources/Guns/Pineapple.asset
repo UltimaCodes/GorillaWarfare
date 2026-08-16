@@ -37,6 +37,9 @@ MonoBehaviour:
   magazineSize: 4
   spareMagazines: 4
   reloadTime: 2.6
+  layeredAbove: 0.45
+  reticle: 1
+  reticleSpreadScale: 0.45
   ripens: 0
   unripe: {r: 0.42, g: 0.78, b: 0.28, a: 1}
   ripe: {r: 0.96, g: 0.78, b: 0.22, a: 1}

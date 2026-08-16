@@ -421,6 +421,7 @@ public class SettingsMenu : MonoBehaviour
         Toggle("centre dot", GameSettings.CrosshairDot, GameSettings.SetCrosshairDot);
         Toggle("outline", GameSettings.CrosshairOutline, GameSettings.SetCrosshairOutline);
         Toggle("opens with spread", GameSettings.CrosshairDynamic, GameSettings.SetCrosshairDynamic);
+        Toggle("use on every weapon", GameSettings.CrosshairOverride, GameSettings.SetCrosshairOverride);
 
         Color colour = GameSettings.CrosshairColour;
 

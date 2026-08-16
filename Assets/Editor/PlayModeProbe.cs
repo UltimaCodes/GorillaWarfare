@@ -147,6 +147,7 @@ public class ProbeRunner : MonoBehaviour
 
         CheckWeapons(player);
         CheckHitboxes(player);
+        ReportHitboxCoverage(player);
         ReportScales(player);
 
         // The one thing no amount of measuring settles: what it actually looks like down the
@@ -1332,10 +1333,17 @@ public class ProbeRunner : MonoBehaviour
             yield return null;
             yield return null;
 
-            Check(tick != null && Mathf.Abs(tick.sizeDelta.x - 7f) < 0.01f
-                  && Mathf.Abs(tick.sizeDelta.y - 21f) < 0.01f,
+            // Which axis is which depends on the reticle: a cross mark stands along the radius
+            // and a triangle mark lies across it, so a shotgun legitimately reports the two
+            // swapped. The setting is respected either way, and that is what this is asking -
+            // the first version pinned the axes and failed the moment a weapon used a triangle.
+            Vector2 size = tick != null ? tick.sizeDelta : Vector2.zero;
+            float thin = Mathf.Min(size.x, size.y);
+            float longest = Mathf.Max(size.x, size.y);
+
+            Check(tick != null && Mathf.Abs(thin - 7f) < 0.01f && Mathf.Abs(longest - 21f) < 0.01f,
                   "the crosshair takes its size from settings",
-                  tick == null ? "no tick" : tick.sizeDelta.ToString());
+                  tick == null ? "no tick" : $"{thin} thick, {longest} long");
 
             Image dot = Get<Image>(hud, "crosshairDot");
             GameSettings.SetCrosshairDot(true);
@@ -1504,6 +1512,106 @@ public class ProbeRunner : MonoBehaviour
                 Check(lit > 0, "a damage bearing reaches the screen", $"{lit} marks up");
             }
         }
+    }
+
+    /// <summary>
+    /// How much of the body you can actually hit.
+    ///
+    /// Samples the skinned mesh and asks, for each vertex, whether any hitbox collider contains
+    /// it. That turns "the hitboxes feel off" into a percentage, which is the only way to tell
+    /// a fix from a change - and it points at *where* the holes are, which hand-tuning radii by
+    /// eye never would.
+    ///
+    /// Convex colliders only, which spheres and capsules both are: ClosestPoint returns the
+    /// point itself when it is inside, and something else when it is not.
+    /// </summary>
+    void ReportHitboxCoverage(PlayerController player)
+    {
+        Collider[] boxes = player.GetComponentsInChildren<Collider>(true);
+        List<Collider> hit = new List<Collider>();
+
+        foreach (Collider c in boxes)
+        {
+            if (c.GetComponent<Hitbox>() != null)
+                hit.Add(c);
+        }
+
+        if (hit.Count == 0)
+        {
+            Check(false, "the body has hitboxes at all", "none found");
+            return;
+        }
+
+        int inside = 0;
+        int total = 0;
+        Dictionary<string, int> missedNear = new Dictionary<string, int>();
+
+        foreach (SkinnedMeshRenderer skin in player.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            Mesh baked = new Mesh();
+            skin.BakeMesh(baked, true);
+
+            Vector3[] verts = baked.vertices;
+
+            // Every eleventh vertex. The mesh has thousands and the answer does not change.
+            for (int i = 0; i < verts.Length; i += 11)
+            {
+                Vector3 world = skin.transform.TransformPoint(verts[i]);
+                total++;
+
+                bool covered = false;
+                float nearest = float.MaxValue;
+                string nearestName = "?";
+
+                foreach (Collider c in hit)
+                {
+                    Vector3 closest = c.ClosestPoint(world);
+                    float gap = Vector3.Distance(closest, world);
+
+                    if (gap < 0.001f)
+                    {
+                        covered = true;
+                        break;
+                    }
+
+                    if (gap < nearest)
+                    {
+                        nearest = gap;
+                        nearestName = c.name;
+                    }
+                }
+
+                if (covered)
+                {
+                    inside++;
+                }
+                else
+                {
+                    missedNear.TryGetValue(nearestName, out int count);
+                    missedNear[nearestName] = count + 1;
+                }
+            }
+
+            Object.DestroyImmediate(baked);
+        }
+
+        float coverage = total > 0 ? inside / (float)total : 0f;
+
+        // Where the holes are, biggest first. This is the part that tells you what to build.
+        List<KeyValuePair<string, int>> holes = new List<KeyValuePair<string, int>>(missedNear);
+        holes.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+        System.Text.StringBuilder where = new System.Text.StringBuilder();
+
+        for (int i = 0; i < holes.Count && i < 4; i++)
+            where.Append($"{holes[i].Key.Replace("hitbox_", "")}:{holes[i].Value} ");
+
+        log.AppendLine($"  ..    hitbox coverage {coverage:P0} of {total} sampled points"
+                       + $" | uncovered nearest to {where}");
+
+        // Two thirds is not a target, it is a floor. Below that and shots are visibly passing
+        // through people, which is what started this.
+        Check(coverage > 0.66f, "most of the body can be hit", $"{coverage:P0}");
     }
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't

@@ -501,24 +501,55 @@ public class GameHud : MonoBehaviour
         SingleShotGun gun = player != null ? player.ActiveGun : null;
         GunInfo info = gun != null ? gun.Info : null;
 
-        // Opens with the cone the weapon actually fires into, so an inaccurate gun looks
-        // inaccurate before you've missed with it. Switchable, because some people would rather
-        // have a reticle that never moves than one that tells them the truth.
-        float spread = GameSettings.CrosshairDynamic && info != null ? info.spread : 0f;
-        float gap = GameSettings.CrosshairGap + spread * crosshairSpread;
+        // Which reticle. The weapon picks unless the player has said they want one crosshair
+        // everywhere, which is a fair thing to want - otherwise a shotgun and a sniper are two
+        // separate tuning jobs.
+        GunInfo.Reticle style = GameSettings.CrosshairOverride || info == null
+            ? GunInfo.Reticle.Cross
+            : info.reticle;
 
+        // Opens with the cone the weapon actually fires into, so an inaccurate gun looks
+        // inaccurate before you've missed with it - but scaled, because a shotgun's real cone
+        // drawn at full size is a reticle the size of a dinner plate, which is what made it feel
+        // hopelessly inaccurate rather than merely wide.
+        float scale = GameSettings.CrosshairOverride || info == null ? 1f : info.reticleSpreadScale;
+        float spread = GameSettings.CrosshairDynamic && info != null ? info.spread * scale : 0f;
+
+        float gap = GameSettings.CrosshairGap + spread * crosshairSpread;
         float length = GameSettings.CrosshairSize;
         float thickness = GameSettings.CrosshairThickness;
         Color colour = GameSettings.CrosshairColour;
 
-        Tick(crosshairUp, new Vector2(0f, gap + length * 0.5f),
-             new Vector2(thickness, length), colour, !aiming);
-        Tick(crosshairDown, new Vector2(0f, -gap - length * 0.5f),
-             new Vector2(thickness, length), colour, !aiming);
-        Tick(crosshairLeft, new Vector2(-gap - length * 0.5f, 0f),
-             new Vector2(length, thickness), colour, !aiming);
-        Tick(crosshairRight, new Vector2(gap + length * 0.5f, 0f),
-             new Vector2(length, thickness), colour, !aiming);
+        if (style == GunInfo.Reticle.Dot)
+        {
+            // Nothing but the centre. For weapons where the spread is the whole point and
+            // drawing it would only be noise.
+            Tick(crosshairUp, Vector2.zero, Vector2.zero, colour, false);
+            Tick(crosshairDown, Vector2.zero, Vector2.zero, colour, false);
+            Tick(crosshairLeft, Vector2.zero, Vector2.zero, colour, false);
+            Tick(crosshairRight, Vector2.zero, Vector2.zero, colour, false);
+        }
+        else if (style == GunInfo.Reticle.Triangle)
+        {
+            // Three marks on a circle rather than four on the axes. Reads as a spread weapon
+            // without being an enormous cross, and the flat bottom edge sits under what you are
+            // aiming at instead of across it.
+            TickAt(crosshairUp, 90f, gap, length, thickness, colour, !aiming);
+            TickAt(crosshairLeft, 210f, gap, length, thickness, colour, !aiming);
+            TickAt(crosshairRight, 330f, gap, length, thickness, colour, !aiming);
+            Tick(crosshairDown, Vector2.zero, Vector2.zero, colour, false);
+        }
+        else
+        {
+            Tick(crosshairUp, new Vector2(0f, gap + length * 0.5f),
+                 new Vector2(thickness, length), colour, !aiming);
+            Tick(crosshairDown, new Vector2(0f, -gap - length * 0.5f),
+                 new Vector2(thickness, length), colour, !aiming);
+            Tick(crosshairLeft, new Vector2(-gap - length * 0.5f, 0f),
+                 new Vector2(length, thickness), colour, !aiming);
+            Tick(crosshairRight, new Vector2(gap + length * 0.5f, 0f),
+                 new Vector2(length, thickness), colour, !aiming);
+        }
 
         if (crosshairDot != null)
         {
@@ -554,6 +585,28 @@ public class GameHud : MonoBehaviour
     /// starts, not to where its centre happens to land, and getting that wrong makes the gap
     /// slider do something subtly different from what it says.
     /// </summary>
+    /// <summary>
+    /// One mark placed on a circle at a bearing, lying across the radius rather than along it.
+    ///
+    /// Tangential on purpose: three bars pointing outward read as a star, three bars lying
+    /// across the circle read as the corners of a triangle, which is what was asked for.
+    /// </summary>
+    static void TickAt(RectTransform tick, float degrees, float radius, float length,
+                       float thickness, Color colour, bool visible)
+    {
+        if (tick == null)
+            return;
+
+        float radians = degrees * Mathf.Deg2Rad;
+        Vector2 at = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * (radius + thickness);
+
+        Tick(tick, at, new Vector2(length, thickness), colour, visible);
+
+        // Rotated so the bar is perpendicular to the radius. Zero degrees already lies flat, so
+        // the mark at the top needs no roll and the two lower ones tilt to match the corners.
+        tick.localRotation = Quaternion.Euler(0f, 0f, degrees - 90f);
+    }
+
     static void Tick(RectTransform tick, Vector2 position, Vector2 size, Color colour, bool visible)
     {
         if (tick == null)
@@ -562,6 +615,10 @@ public class GameHud : MonoBehaviour
         tick.gameObject.SetActive(visible);
         tick.anchoredPosition = position;
         tick.sizeDelta = size;
+
+        // Cleared here rather than in the cross branch, so switching from a triangle weapon back
+        // to a rifle does not leave two ticks permanently askew.
+        tick.localRotation = Quaternion.identity;
 
         Image image = tick.GetComponent<Image>();
 
