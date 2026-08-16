@@ -39,11 +39,20 @@ public static class PlayerColours
         new Color(0.10f, 0.90f, 0.85f),  // mint
         new Color(0.45f, 1.00f, 0.15f),  // lime
         new Color(0.98f, 0.98f, 0.98f),  // albino
+
+        // Four more, added when rooms went from eight to twelve. Every one of them had to be
+        // far from all eight above as well as from each other, which is most of why they are an
+        // odd set - the easy colours were already taken.
+        new Color(1.00f, 0.10f, 0.75f),  // dragonfruit
+        new Color(0.05f, 0.45f, 0.42f),  // jade
+        new Color(0.13f, 0.13f, 0.16f),  // charcoal
+        new Color(0.62f, 0.86f, 1.00f),  // frost
     };
 
     public static readonly string[] Names =
     {
         "banana", "orange", "raspberry", "grape", "blueberry", "mint", "lime", "albino",
+        "dragonfruit", "jade", "charcoal", "frost",
     };
 
     /// <summary>

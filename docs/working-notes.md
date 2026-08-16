@@ -185,6 +185,24 @@ is no PlayerController in the menu scene - so whatever state the game left it in
 path back to the title has to free it explicitly or the menu is unclickable, which reads as a
 hang.
 
+## Everybody has to be on one Photon region
+
+**Rooms exist per region.** With no `FixedRegion`, PUN connects each client to its own nearest
+cluster - so a player in Italy and a player in Pakistan sit on different servers and each sees an
+empty room browser. That reads as the game being broken, not as a setting.
+
+`FixedRegion` is `uae`, chosen because the testers are in Pakistan, the UAE and Italy and it is
+the only cluster that is not badly unfair to one of them. `SceneCheck` fails if it is ever blank.
+
+**The region token is not the dashboard name.** It is `uae`, not `mea`. Photon's docs are behind
+a bot check from here, so `Tools/Gorilla Warfare/List Photon regions` asks the account directly
+and prints every enabled token with its ping. Run that rather than guessing - a wrong token does
+not error, it just finds no rooms.
+
+Also worth knowing: `Launcher` falls back to best-region once if the fixed one is unreachable,
+and logs the region it actually landed on. If two people ever cannot see each other's lobbies,
+compare those two log lines first.
+
 ## Where input is read
 
 Four separate scripts read the mouse and keyboard, and every one of them has to be told when the

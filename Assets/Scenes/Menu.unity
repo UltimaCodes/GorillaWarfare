@@ -2120,7 +2120,7 @@ MonoBehaviour:
   playerListItemPrefab: {fileID: 4832290263261711499, guid: 652f9d520cd3e534390806f80224bb18, type: 3}
   playerListContent: {fileID: 1666230742}
   startGameButton: {fileID: 1949649195}
-  maxPlayersPerRoom: 8
+  maxPlayersPerRoom: 12
 --- !u!114 &578454208
 MonoBehaviour:
   m_ObjectHideFlags: 0

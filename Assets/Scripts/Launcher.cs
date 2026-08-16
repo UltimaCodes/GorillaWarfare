@@ -18,7 +18,9 @@ public class Launcher : MonoBehaviourPunCallbacks
     [SerializeField] Transform playerListContent;
     [SerializeField] GameObject startGameButton;
 
-    [SerializeField] byte maxPlayersPerRoom = 8;
+    [SerializeField] byte maxPlayersPerRoom = 12;
+
+    bool triedFallbackRegion;
 
 
     // Used to be static and never cleared, so dead rooms hung around in the browser for
@@ -58,6 +60,13 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnConnectedToMaster()
     {
+        // Which server everybody actually landed on. Printed because the failure mode of a
+        // fixed region is not an error - it is an empty room browser, which looks identical to
+        // nobody being online. If two people ever cannot see each other's lobbies, this line is
+        // the first thing to compare.
+        Debug.Log($"[net] connected to region '{PhotonNetwork.CloudRegion}' "
+                  + $"as version '{PhotonNetwork.AppVersion}'");
+
         PhotonNetwork.AutomaticallySyncScene = true;
         PhotonNetwork.JoinLobby();
     }
@@ -77,6 +86,29 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnDisconnected(DisconnectCause cause)
     {
+        // The room is pinned to one region so that friends in different countries end up on the
+        // same server - Photon keeps rooms per region, and without this an Italian player and a
+        // Pakistani player would each connect to their own nearest cluster and never see each
+        // other's lobbies.
+        //
+        // If that region is ever unreachable, falling back to the nearest one is much better
+        // than refusing to start: everyone can at least play with whoever else defaults the same
+        // way. Once, so a genuinely dead connection does not spin.
+        if (!triedFallbackRegion
+            && !string.IsNullOrEmpty(PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion)
+            && cause != DisconnectCause.DisconnectByClientLogic)
+        {
+            triedFallbackRegion = true;
+
+            Debug.LogWarning($"[net] could not reach the fixed region "
+                             + $"'{PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion}' ({cause}) - "
+                             + "falling back to the nearest one, which may mean not seeing your friends' rooms");
+
+            PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = string.Empty;
+            PhotonNetwork.ConnectUsingSettings();
+            return;
+        }
+
         cachedRoomList.Clear();
         ClearList(roomListItems);
         ClearList(playerListItems);
