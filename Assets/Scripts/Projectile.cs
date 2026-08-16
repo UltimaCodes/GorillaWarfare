@@ -79,6 +79,21 @@ public class Projectile : MonoBehaviour
 
         foreach (Collider stray in visual.GetComponentsInChildren<Collider>(true))
             Destroy(stray);
+
+        // The material has to be applied by hand. The weapon does it when it builds its own
+        // model and the projectile never did, so the thrown fruit arrived untextured - the FBX
+        // carries a material slot but not the material, and an unassigned slot renders white.
+        Material skin = Resources.Load<Material>($"Models/Weapons/{info.name}Mat")
+                        ?? Resources.Load<Material>($"Models/Weapons/Banana{info.name}Mat");
+
+        if (skin == null)
+        {
+            Debug.LogWarning($"[projectile] no material for {info.name} - it will render untextured");
+            return;
+        }
+
+        foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))
+            r.sharedMaterial = skin;
     }
 
     void Update()

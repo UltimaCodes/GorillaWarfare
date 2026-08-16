@@ -97,6 +97,15 @@ public static class GameSettings
     public static bool CrosshairOutline { get; private set; } = true;
     public static Color CrosshairColour { get; private set; } = Color.white;
 
+    /// <summary>
+    /// Use one crosshair for everything, rather than each weapon's own.
+    ///
+    /// Off by default, because a shotgun and a sniper wanting different reticles is a feature.
+    /// On for anyone who has a crosshair they like and does not want to retune it five times -
+    /// which was the complaint, and it is a fair one.
+    /// </summary>
+    public static bool CrosshairOverride { get; private set; }
+
     /// Whether the crosshair opens with the weapon's spread. On by default because it tells you
     /// something true, off for anyone who wants a fixed reticle to aim with.
     public static bool CrosshairDynamic { get; private set; } = true;
@@ -131,6 +140,7 @@ public static class GameSettings
         CrosshairDot = Get(nameof(CrosshairDot), false);
         CrosshairOutline = Get(nameof(CrosshairOutline), true);
         CrosshairDynamic = Get(nameof(CrosshairDynamic), true);
+        CrosshairOverride = Get(nameof(CrosshairOverride), false);
         CrosshairColour = new Color(Get("CrosshairR", 1f), Get("CrosshairG", 1f), Get("CrosshairB", 1f));
 
         ApplyAudio();
@@ -293,6 +303,13 @@ public static class GameSettings
         Announce();
     }
 
+    public static void SetCrosshairOverride(bool value)
+    {
+        CrosshairOverride = value;
+        Put(nameof(CrosshairOverride), value);
+        Announce();
+    }
+
     public static void SetCrosshairColour(Color value)
     {
         CrosshairColour = value;
@@ -346,6 +363,7 @@ public static class GameSettings
             nameof(QualityLevel), nameof(Shaders), nameof(MotionBlur),
             nameof(CrosshairSize), nameof(CrosshairThickness), nameof(CrosshairGap),
             nameof(CrosshairDot), nameof(CrosshairOutline), nameof(CrosshairDynamic),
+            nameof(CrosshairOverride),
             "CrosshairR", "CrosshairG", "CrosshairB",
         })
         {

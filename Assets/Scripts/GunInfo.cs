@@ -84,6 +84,43 @@ public class GunInfo : ItemInfo
 
     public float reloadTime = 1.8f;
 
+    [Header("Feel")]
+    /// <summary>
+    /// What one trigger pull is worth, for shake, punch and the low layer under the shot.
+    ///
+    /// Derived rather than typed, because the shotgun proved that a hand-entered number and the
+    /// weapon it describes drift apart: shake was computed from `damage`, which on a shotgun is
+    /// the damage of one pellet out of nine. It shook a fifth as hard as the sniper while
+    /// hitting three times harder per pull, which is exactly why it did not feel like a shotgun.
+    /// </summary>
+    public float PullDamage => damage * Mathf.Max(1, pelletsPerShot);
+
+    /// Normalised weight, where a rifle round is light and a shotgun pull is heavy.
+    public float Weight => Mathf.Clamp01(PullDamage / 110f);
+
+    [Tooltip("Shots this heavy get a second, lower layer under them. Below it, one sound is "
+             + "plenty - a rifle at ten rounds a second does not want two samples per shot.")]
+    public float layeredAbove = 0.45f;
+
+    public enum Reticle
+    {
+        /// Four ticks. Everything that fires one accurate round.
+        Cross,
+
+        /// Three marks in a triangle. Reads as a spread weapon without being a huge cross.
+        Triangle,
+
+        /// Just the dot, for weapons where the spread is the whole point and drawing it is noise.
+        Dot,
+    }
+
+    [Tooltip("Which reticle this weapon draws, unless the player has overridden crosshairs.")]
+    public Reticle reticle = Reticle.Cross;
+
+    [Tooltip("How much of this weapon's spread the crosshair shows. A shotgun's cone is real but "
+             + "drawing all of it makes a reticle the size of a dinner plate.")]
+    [Range(0f, 1f)] public float reticleSpreadScale = 1f;
+
     [Header("Ripeness")]
     [Tooltip("Bananas go green to brown as the magazine empties. Nothing else does - a pineapple "
              + "that ripens as you fire it is a banana mechanic wearing a pineapple.")]

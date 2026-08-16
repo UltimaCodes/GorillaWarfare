@@ -265,6 +265,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             }
 
             gameObject.AddComponent<PlayerMovement>();
+
+            // Only on your own body. Wind lines around somebody else's gorilla would be drawn
+            // in their peripheral vision, not yours.
+            gameObject.AddComponent<SpeedRush>();
             PlaceViewModel();
 
             // The HUD is a scene object now rather than something bolted onto the player, so
@@ -670,6 +674,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", origin, GameAudio.ShotVolume);
 
+        if (gun.Weight >= gun.layeredAbove)
+        {
+            GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", origin,
+                                    GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
+        }
+
         Projectile.Launch(gun, origin, direction, this, PV.IsMine);
     }
 
@@ -679,6 +689,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // The bang happens whether or not you connected. It used to be inside the hit path, so
         // missing was completely silent.
         GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, GameAudio.ShotVolume);
+
+        // A second layer, pitched down and a hair late, on anything heavy. It is what separates
+        // a shotgun from a loud click: the crack says it fired, the body says how big it was.
+        // Light weapons skip it - a rifle at ten rounds a second does not want two samples per
+        // shot fighting each other.
+        GunInfo fired = Resources.Load<GunInfo>($"Guns/{weaponName}");
+
+        if (fired != null && fired.Weight >= fired.layeredAbove)
+        {
+            GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", transform.position,
+                                    GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
+        }
 
         if (hit)
             GameAudio.PlayAt(GameAudio.Impact, endPoint, GameAudio.ImpactVolume);

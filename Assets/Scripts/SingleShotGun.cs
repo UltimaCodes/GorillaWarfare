@@ -296,10 +296,12 @@ public class SingleShotGun : Gun
         // rifle at ten rounds a second would stutter permanently if it did.
         if (!Info.melee)
         {
-            Juice.Shake(Mathf.Clamp01(Info.damage / 60f));
+            // Weight, not per-pellet damage. A shotgun pull is 108 damage across nine pellets;
+            // reading `damage` here got 12 and shook a fifth as hard as the sniper.
+            Juice.Shake(Info.Weight);
 
             if (owner != null)
-                owner.AddFirePunch(Mathf.Clamp01(Info.damage / 90f));
+                owner.AddFirePunch(Info.Weight * 0.85f);
         }
 
         if (!Info.melee && Ammo > 0)

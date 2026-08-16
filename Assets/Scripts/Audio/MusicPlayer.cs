@@ -117,7 +117,10 @@ public class MusicPlayer : MonoBehaviour
         // The live one comes up, the other goes down and stops once it's silent.
         // The serialized figure is the track's own level in the mix - some of these were
         // mastered louder than others - and the slider scales all of them together.
-        float target = volume * GameSettings.MusicVolume;
+        // Ducked while the player is genuinely flying. Not while running - SpeedRush only
+        // reports anything above a threshold well past ground speed, so crossing a room leaves
+        // the music exactly where it was.
+        float target = volume * GameSettings.MusicVolume * (1f - 0.45f * SpeedRush.Intensity);
 
         live.volume = Mathf.MoveTowards(live.volume, wanted != null ? target : 0f,
                                         step * Mathf.Max(0.01f, target));
