@@ -191,6 +191,13 @@ public static class GameAudio
     public static void PlayAt(string bank, Vector3 position, float volume = 1f, float pitchJitter = 0.08f)
     {
         AudioClip clip = Pick(bank);
+
+        // An empty bank borrows from one that has something in it. The slide folder is waiting
+        // for a real scrape; until then a footstep does the job badly rather than silently,
+        // which is the difference between "not finished" and "broken".
+        if (clip == null && bank == Slide)
+            clip = Pick(Footstep);
+
         if (clip == null)
             return;
 

@@ -324,6 +324,14 @@ public static class HudBuilder
         Wire(so, "centreTitle", title);
         Wire(so, "centreSubtitle", subtitle);
         Wire(so, "comboText", combo);
+
+        // The slide chain, under the hit combo on the same side. Ranked rather than counted.
+        TMP_Text slideRank = Text(centre.transform, "SlideCombo", font, 54f,
+                                  TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
+                                  new Vector2(-70f, 120f), new Vector2(620f, 80f));
+        slideRank.text = "SLIDE";
+        slideRank.gameObject.SetActive(false);
+        Wire(so, "slideCombo", slideRank);
         Wire(so, "resultsBackdrop", results);
 
         // Full screen, behind the rest of the HUD. Red and pulsing when you are nearly dead.
@@ -487,6 +495,29 @@ public static class HudBuilder
             added++;
 
             Debug.Log("[hud] added the adrenaline edge");
+        }
+
+        // The slide rank, which arrived with the chain.
+        SerializedProperty comboSlot = so.FindProperty("slideCombo");
+
+        if (comboSlot != null && comboSlot.objectReferenceValue == null)
+        {
+            SerializedProperty hitSlot = so.FindProperty("comboText");
+            TMP_Text sibling = hitSlot != null ? hitSlot.objectReferenceValue as TMP_Text : null;
+
+            if (sibling != null && sibling.transform.parent != null)
+            {
+                TMP_Text made = Text(sibling.transform.parent, "SlideCombo", sibling.font, 54f,
+                                     TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
+                                     new Vector2(-70f, 120f), new Vector2(620f, 80f));
+                made.text = "SLIDE";
+                made.gameObject.SetActive(false);
+
+                comboSlot.objectReferenceValue = made;
+                added++;
+
+                Debug.Log("[hud] added the slide rank");
+            }
         }
 
         // Sizes and positions that changed after the HUD was first built. Applied by name so a

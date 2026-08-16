@@ -142,6 +142,11 @@ public class SpeedRush : MonoBehaviour
         slideRoll = Mathf.Lerp(slideRoll, sideways * slideLean * depth, Time.deltaTime * slideEase);
         slideDrop = Mathf.Lerp(slideDrop, sliding ? -slideDip : 0f, Time.deltaTime * slideEase);
 
+        // Dust off the floor while sliding, thrown backwards along the direction of travel. This
+        // and the sound are what make it read as scraping the ground rather than as gliding.
+        if (sliding)
+            ThrowDust();
+
         // Applied to the camera's local transform, on top of whatever the look angles did. The
         // holder carries the pitch; this only ever adds roll and a small drop.
         camera.transform.localRotation = Quaternion.Euler(0f, 0f, slideRoll);
@@ -151,14 +156,73 @@ public class SpeedRush : MonoBehaviour
     [Tooltip("Degrees the view rolls at full sideways speed in a slide.")]
     [SerializeField] float slideLean = 9f;
 
-    [Tooltip("Metres the camera drops during a slide, on top of the capsule getting shorter.")]
-    [SerializeField] float slideDip = 0.18f;
+    [Tooltip("Metres the camera drops during a slide. Large on purpose - the capsule shrinking "
+             + "does not move the camera at all, because the camera hangs off a fixed holder "
+             + "rather than off the controller's centre. This is the entire drop, and at 0.18 it "
+             + "read as ducking your head rather than as hitting the deck.")]
+    [SerializeField] float slideDip = 0.95f;
 
     [SerializeField] float slideEase = 9f;
 
     float slideRoll;
     float slideDrop;
     Vector3 baseCameraLocal;
+
+    /// <summary>
+    /// Grit kicked up behind a slide.
+    ///
+    /// Spawned at the feet rather than at the camera, and thrown backwards, so it reads as
+    /// contact with the ground - the single thing that separates a slide from floating along
+    /// crouched. Rate is tied to how fast you are actually going, so a slide that has run out of
+    /// speed stops throwing anything.
+    /// </summary>
+    void ThrowDust()
+    {
+        if (streaks == null || streaks.Length == 0)
+        {
+            streaks = Resources.LoadAll<Sprite>("Particles/Boom");
+
+            if (streaks.Length == 0)
+                return;
+        }
+
+        Vector3 flat = movement.Velocity;
+        flat.y = 0f;
+
+        float speed = flat.magnitude;
+
+        if (speed < 2f)
+            return;
+
+        dustDebt += speed * 3.5f * Time.deltaTime;
+
+        while (dustDebt >= 1f)
+        {
+            dustDebt -= 1f;
+
+            Vector3 feet = transform.position - Vector3.up * 0.85f;
+            Vector3 back = -flat.normalized;
+
+            FlashSprite.Spawn(streaks[Random.Range(0, streaks.Length)],
+                              feet + back * Random.Range(0.1f, 0.6f)
+                                   + Vector3.right * Random.Range(-0.4f, 0.4f),
+                              0.25f, 0.7f, 0.4f,
+                              new Color(0.72f, 0.62f, 0.48f, 0.5f));
+        }
+
+        // A continuous scrape while it lasts, retriggered rather than looped so it needs no
+        // dedicated source. Pitched by speed, so slowing down is audible.
+        if (Time.time >= nextScrape)
+        {
+            nextScrape = Time.time + 0.16f;
+
+            GameAudio.PlayAt(GameAudio.Slide, transform.position,
+                             GameAudio.SlideVolume * Mathf.Clamp01(speed / 12f), 0.05f);
+        }
+    }
+
+    float dustDebt;
+    float nextScrape;
 
     void SpawnLines()
     {

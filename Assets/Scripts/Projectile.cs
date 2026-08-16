@@ -188,25 +188,31 @@ public class Projectile : MonoBehaviour
             // Damage from the shooter's client only, same as every other weapon here.
             float damage = info.damage * strength * (self ? info.selfDamageScale : 1f);
 
-            if (damage > 0.5f)
-                player.TakeDamage(damage, info.name, false);
+            if (damage <= 0.5f)
+                continue;
 
-                // The same confirmation every other weapon gives. The launcher was silent on a
-                // hit - no marker, no number, no stop - so the only way to know you had killed
-                // somebody was the feed telling you afterwards, which is why it felt weightless
-                // no matter how big the explosion was.
-                if (shooter != null && shooter.Hud != null && !self)
-                {
-                    shooter.Hud.ShowHit(false);
-                    shooter.Hud.ShowDamage(player.transform.position + Vector3.up, damage, false);
+            player.TakeDamage(damage, info.name, false);
 
-                    GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
-                                          1f + Mathf.Min(shooter.RegisterHit() - 1, 9) * 0.055f);
+            // The same confirmation every other weapon gives. The launcher was silent on a hit -
+            // no marker, no number, no stop - so the only way to learn you had killed somebody
+            // was reading it in the feed afterwards.
+            //
+            // This block was already here and did nothing, because the line above it had no
+            // braces: `if (damage > 0.5f) TakeDamage(...)` conditionally called one statement and
+            // everything after it ran regardless, at an indentation that claimed otherwise. The
+            // structure now matches what it looks like.
+            if (shooter == null || shooter.Hud == null || self)
+                continue;
 
-                    // A heavier stop than a bullet. A direct hit with a rocket launcher is the
-                    // single biggest thing that happens in a fight and it should land like it.
-                    Juice.Hit(0.6f);
-                }
+            shooter.Hud.ShowHit(false);
+            shooter.Hud.ShowDamage(player.transform.position + Vector3.up, damage, false);
+
+            GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
+                                  1f + Mathf.Min(shooter.RegisterHit() - 1, 9) * 0.055f);
+
+            // A heavier stop than a bullet. A direct hit with a launcher is the biggest thing
+            // that happens in a fight and it should land like it.
+            Juice.Hit(0.6f);
         }
     }
 
