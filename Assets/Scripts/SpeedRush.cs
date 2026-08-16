@@ -86,6 +86,7 @@ public class SpeedRush : MonoBehaviour
 
         ApplyFov();
         ApplySlideLean();
+        UpdateScrape();
         SpawnLines();
     }
 
@@ -210,19 +211,62 @@ public class SpeedRush : MonoBehaviour
                               new Color(0.72f, 0.62f, 0.48f, 0.5f));
         }
 
-        // A continuous scrape while it lasts, retriggered rather than looped so it needs no
-        // dedicated source. Pitched by speed, so slowing down is audible.
-        if (Time.time >= nextScrape)
-        {
-            nextScrape = Time.time + 0.16f;
+    }
 
-            GameAudio.PlayAt(GameAudio.Slide, transform.position,
-                             GameAudio.SlideVolume * Mathf.Clamp01(speed / 12f), 0.05f);
+    /// <summary>
+    /// The scrape, on a source of its own that loops.
+    ///
+    /// Retriggering one-shots was wrong for this. The clips are nearly two seconds long and the
+    /// retrigger was every 0.16, which would have stacked eleven copies on top of each other -
+    /// a sustained sound wants a sustained source, and a slide is one continuous noise rather
+    /// than a series of taps.
+    ///
+    /// Volume and pitch both follow speed, so a slide running out is audible before it is
+    /// visible - which is the cue for when to hop into the next one.
+    /// </summary>
+    void UpdateScrape()
+    {
+        bool sliding = movement != null && movement.Sliding;
+
+        if (scrape == null)
+        {
+            AudioClip[] clips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Slide);
+
+            if (clips.Length == 0)
+                return;
+
+            scrape = gameObject.AddComponent<AudioSource>();
+            scrape.clip = clips[Random.Range(0, clips.Length)];
+            scrape.loop = true;
+            scrape.playOnAwake = false;
+
+            // Flat, because it is your own body. Everybody else's slide is heard through the
+            // pooled positional sources like any other world sound.
+            scrape.spatialBlend = 0f;
+            scrape.volume = 0f;
         }
+
+        Vector3 flat = movement != null ? movement.Velocity : Vector3.zero;
+        flat.y = 0f;
+
+        float speed = flat.magnitude;
+        float wanted = sliding ? GameAudio.SlideVolume * Mathf.Clamp01(speed / 11f) : 0f;
+
+        scrape.volume = Mathf.MoveTowards(scrape.volume, wanted * GameSettings.SfxVolume,
+                                          Time.deltaTime * 6f);
+
+        // Slowing down drops the pitch, which is most of what makes a scrape read as friction
+        // rather than as a texture being played at you.
+        scrape.pitch = 0.75f + Mathf.Clamp01(speed / 14f) * 0.5f;
+
+        if (scrape.volume > 0.001f && !scrape.isPlaying)
+            scrape.Play();
+        else if (scrape.volume <= 0.001f && scrape.isPlaying)
+            scrape.Stop();
     }
 
     float dustDebt;
-    float nextScrape;
+    AudioSource scrape;
 
     void SpawnLines()
     {

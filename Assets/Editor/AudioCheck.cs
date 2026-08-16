@@ -47,6 +47,26 @@ public static class AudioCheck
 
     }
 
+    /// <summary>
+    /// The slide scrape has to be a scrape rather than an impact.
+    ///
+    /// Length is the checkable part: a slide loops for as long as you are sliding, so anything
+    /// under half a second turns into a stutter no matter how good the recording is. Whether it
+    /// is continuous is judged from the envelope, which the measuring tool prints.
+    /// </summary>
+    static void SlideIsAScrape()
+    {
+        AudioClip[] slide = Resources.LoadAll<AudioClip>("Audio/Slide");
+
+        Check(slide.Length > 0, "the slide bank has something in it", $"{slide.Length} clips");
+
+        foreach (AudioClip clip in slide)
+        {
+            Check(clip.length > 0.5f, $"{clip.name} is long enough to loop without stuttering",
+                  $"{clip.length:F2}s");
+        }
+    }
+
     public static void Run()
     {
         failures = 0;
@@ -59,6 +79,7 @@ public static class AudioCheck
         NothingIsSilentOrClipped();
         MusicLoopsCleanly();
         ShieldIsTheRightShape();
+        SlideIsAScrape();
 
         Debug.Log("[audio] banks\n" + Log);
         Debug.Log(failures == 0 ? "[audio] ===== ALL PASS =====" : $"[audio] {failures} FAILURES");
