@@ -85,6 +85,10 @@ public class GunInfo : ItemInfo
     public float reloadTime = 1.8f;
 
     [Header("Ripeness")]
+    [Tooltip("Bananas go green to brown as the magazine empties. Nothing else does - a pineapple "
+             + "that ripens as you fire it is a banana mechanic wearing a pineapple.")]
+    public bool ripens = true;
+
     [Tooltip("Green when full, yellow as you fire, brown when nearly out.")]
     public Color unripe = new Color(0.55f, 0.78f, 0.22f);
     public Color ripe = new Color(0.96f, 0.82f, 0.16f);

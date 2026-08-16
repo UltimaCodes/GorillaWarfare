@@ -74,15 +74,39 @@ public class PlayerMovement : MonoBehaviour
     /// Grounded is cleared as well. The air control rules read it, and a launch that leaves the
     /// player believing they are still standing on something gets damped away in a single frame.
     /// </summary>
+    /// <summary>
+    /// Throws the player, and makes the throw survive the next frame.
+    ///
+    /// Setting `grounded = false` here was not enough and this is why the pineapple felt like
+    /// nothing. The very next Update does `grounded = controller.isGrounded`, which is still
+    /// true because the character has not physically moved yet - so GroundMove ran, applied
+    /// friction to the launch and clamped it back to walking pace. A fifteen metre a second
+    /// blast became a shuffle before a single frame had been drawn.
+    ///
+    /// The window is what fixes it: for a tenth of a second after an impulse the mover is
+    /// treated as airborne no matter what the controller says, which is long enough to
+    /// physically leave the floor.
+    /// </summary>
     public void AddImpulse(Vector3 impulse)
     {
         velocity += impulse;
         grounded = false;
+        launchedUntil = Time.time + launchWindow;
 
         // Past the jump buffer, so the ground move that runs next frame cannot decide you
         // wanted to jump and stomp the launch with its own vertical speed.
         jumpPressedAt = -99f;
     }
+
+    [Tooltip("Seconds after a blast during which friction is ignored, so the launch survives "
+             + "long enough to leave the ground.")]
+    [SerializeField] float launchWindow = 0.12f;
+
+    float launchedUntil = -99f;
+
+    /// Whether a blast is still carrying the player. Public so anything that cares about speed
+    /// - the field of view kick, the wind lines - can tell a launch from a sprint.
+    public bool Launched => Time.time < launchedUntil;
     public bool Grounded => grounded;
     public float HorizontalSpeed => new Vector3(velocity.x, 0f, velocity.z).magnitude;
 
@@ -129,7 +153,9 @@ public class PlayerMovement : MonoBehaviour
                              ? KeyBinds.Held(KeyBinds.Action.Jump)
                              : Time.time - jumpPressedAt <= jumpBufferTime);
 
-        grounded = controller.isGrounded;
+        // The launch window overrides the controller. Without it a blast that has not yet moved
+        // you off the floor is treated as a walk and its speed is thrown away by friction.
+        grounded = controller.isGrounded && !Launched;
 
         Vector3 wishDir = WishDirection();
         float wishSpeed = KeyBinds.Held(KeyBinds.Action.Walk) ? walkSpeed : maxGroundSpeed;

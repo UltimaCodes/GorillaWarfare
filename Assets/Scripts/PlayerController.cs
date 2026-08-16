@@ -371,6 +371,16 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 stowed.TickReloadWhileStowed();
         }
 
+        // Nothing below this line happens while the settings screen is up. The guard used to sit
+        // further down, under the weapon cycling, so scrolling a list of key bindings also
+        // scrolled through your weapons - which is the same leak as the camera and the trigger,
+        // one line higher up than I put the fix.
+        if (!cursorLocked)
+        {
+            FallOutOfTheWorldCheck();
+            return;
+        }
+
         // Cycling rather than number keys. Both modes hand out a single weapon now, so slots
         // one through five addressed a rack that no longer exists - and the two people who
         // still want to flick between things want it bound to something they chose.
@@ -382,14 +392,6 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             EquipItem(itemIndex <= 0 ? items.Length - 1 : itemIndex - 1);
 
         Item held = items[Mathf.Clamp(itemIndex, 0, items.Length - 1)];
-
-        // Every one of these is gated on the cursor being captured, so clicking a button on the
-        // settings screen doesn't also empty a magazine into the wall behind it.
-        if (!cursorLocked)
-        {
-            FallOutOfTheWorldCheck();
-            return;
-        }
 
         if (KeyBinds.Pressed(KeyBinds.Action.Fire))
         {

@@ -178,9 +178,65 @@ public class Projectile : MonoBehaviour
         }
     }
 
+    static Sprite[] boomShapes;
+
+    /// <summary>
+    /// The bang, in layers.
+    ///
+    /// A single sprite and a single sample is a firework. What reads as an explosion is several
+    /// things arriving in a deliberate order: a white core that is gone almost immediately, a
+    /// fireball that outlives it, sparks thrown outward, and smoke that hangs around after
+    /// everything else has finished. Nothing here is clever - it is just more than one thing.
+    /// </summary>
     void Effects(Vector3 at, float radius)
     {
+        // The crack, then the body a beat later. The delay is the point: sound arriving all at
+        // once is a sample, and sound arriving in two parts is an event with a size.
         GameAudio.PlayAt(GameAudio.Explosion, at, GameAudio.ExplosionVolume, 0.06f);
+        GameAudio.PlayAtDelayed(GameAudio.Explosion, at, GameAudio.ExplosionBodyVolume, 0.55f, 0.05f);
+
+        if (boomShapes == null || boomShapes.Length == 0)
+            boomShapes = Resources.LoadAll<Sprite>("Particles/Boom");
+
+        if (boomShapes.Length > 0)
+        {
+            Sprite core = Pick("circle");
+            Sprite fire = Pick("fire");
+            Sprite smoke = Pick("smoke");
+            Sprite spark = Pick("spark");
+
+            // Core: small, white hot, over in three frames.
+            FlashSprite.Spawn(core, at, radius * 0.5f, radius * 1.6f, 0.09f,
+                              new Color(1f, 0.98f, 0.85f, 1f));
+
+            // Fireball: the shape you actually read as the explosion.
+            FlashSprite.Spawn(fire, at, radius * 0.7f, radius * 2.3f, 0.32f,
+                              new Color(1f, 0.62f, 0.18f, 1f));
+
+            // Smoke, drifting up and outliving the rest. Placed slightly high so it reads as
+            // rising out of the blast rather than sitting in it.
+            FlashSprite.Spawn(smoke, at + Vector3.up * radius * 0.35f,
+                              radius * 0.9f, radius * 2.8f, 0.85f,
+                              new Color(0.35f, 0.32f, 0.30f, 0.75f));
+
+            // Sparks thrown outward. Random directions rather than a ring, because a ring reads
+            // as a shockwave decal and this should read as debris.
+            for (int i = 0; i < 6; i++)
+            {
+                Vector3 away = Random.onUnitSphere;
+                away.y = Mathf.Abs(away.y) * 0.6f + 0.15f;
+
+                FlashSprite.Spawn(spark, at + away * radius * 0.45f,
+                                  radius * 0.22f, radius * 0.05f, 0.28f,
+                                  new Color(1f, 0.85f, 0.4f, 1f));
+            }
+        }
+
+        // Scorch on whatever it went off against, so the explosion leaves the world changed
+        // rather than only the screen.
+        if (Physics.Raycast(at + Vector3.up * 0.4f, Vector3.down, out RaycastHit ground,
+                            radius, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            BulletDecal.Spawn(ground.point, ground.normal, Hitbox.WorldMask);
 
         // Shake scaled by how close it went off, so somebody else's pineapple across the map is
         // a thump and your own at your feet is an event.
@@ -193,5 +249,23 @@ public class Projectile : MonoBehaviour
         }
 
         Destroy(gameObject);
+    }
+
+    /// Picks a sprite whose name starts with a prefix, so the pack can gain variants without
+    /// this needing to know their numbers.
+    static Sprite Pick(string prefix)
+    {
+        Sprite fallback = null;
+
+        for (int i = 0; i < boomShapes.Length; i++)
+        {
+            if (fallback == null)
+                fallback = boomShapes[i];
+
+            if (boomShapes[i].name.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+                return boomShapes[i];
+        }
+
+        return fallback;
     }
 }
