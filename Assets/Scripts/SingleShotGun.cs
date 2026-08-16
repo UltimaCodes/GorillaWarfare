@@ -106,6 +106,12 @@ public class SingleShotGun : Gun
                 r.sharedMaterial = mat;
         }
 
+        visualRoot = visual.transform;
+
+        // Melee is carried point-down from the moment it is drawn, not only while swinging.
+        if (Info != null && Info.melee)
+            visualRoot.localRotation *= Quaternion.Euler(155f, 0f, 25f);
+
         visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
         block = new MaterialPropertyBlock();
         ApplyRipeness();
@@ -522,12 +528,75 @@ public class SingleShotGun : Gun
         return hitView != null && owner.View != null && hitView.Owner == owner.View.Owner;
     }
 
+    /// <summary>
+    /// The peel swing: a fast jab forward and a slower settle back.
+    ///
+    /// Driven by maths rather than a clip, like everything else that moves on this rig. The
+    /// weapon is held point-down like a karambit, so the swing is a stab toward whatever is in
+    /// front of you rather than a slash across it - and a stab reads at close range where a
+    /// slash mostly leaves the screen.
+    ///
+    /// Unscaled time, so a kill's hitstop does not leave the arm frozen mid-jab.
+    /// </summary>
+    void Stab()
+    {
+        if (stabRoutine != null)
+            StopCoroutine(stabRoutine);
+
+        stabRoutine = StartCoroutine(StabSwing());
+    }
+
+    Coroutine stabRoutine;
+
+    System.Collections.IEnumerator StabSwing()
+    {
+        Transform blade = visualRoot != null ? visualRoot : transform;
+
+        Vector3 restPosition = blade.localPosition;
+        Quaternion restRotation = blade.localRotation;
+
+        // Point down and rolled over, the way a karambit is held. Done here rather than in the
+        // model so the peel still reads as a banana when it is lying on the ground.
+        Quaternion held = restRotation * Quaternion.Euler(155f, 0f, 25f);
+        Quaternion driven = held * Quaternion.Euler(-70f, 0f, 0f);
+
+        const float outFor = 0.06f;
+        const float backFor = 0.14f;
+
+        for (float t = 0f; t < outFor; t += Time.unscaledDeltaTime)
+        {
+            float k = t / outFor;
+            blade.localRotation = Quaternion.Slerp(held, driven, k);
+            blade.localPosition = restPosition + Vector3.forward * (0.28f * k);
+            yield return null;
+        }
+
+        for (float t = 0f; t < backFor; t += Time.unscaledDeltaTime)
+        {
+            float k = t / backFor;
+            blade.localRotation = Quaternion.Slerp(driven, held, k);
+            blade.localPosition = Vector3.Lerp(restPosition + Vector3.forward * 0.28f, restPosition, k);
+            yield return null;
+        }
+
+        blade.localRotation = held;
+        blade.localPosition = restPosition;
+        stabRoutine = null;
+    }
+
+    Transform visualRoot;
+
     /// Visual side of a shot. Driven from PlayerController's RPC so every client runs it, not
     /// just the shooter. Audio is played there too, since it needs the weapon's name.
     public void PlayFireEffects(Vector3 endPoint, Vector3 endNormal, bool hit)
     {
-        if (muzzle != null)
+        // Not for melee. A peel has no barrel, no powder and nothing to flash - lighting one up
+        // made it read as a very short gun, which is exactly what it was not supposed to be.
+        if (muzzle != null && Info != null && !Info.melee)
             muzzle.Fire();
+
+        if (Info != null && Info.melee)
+            Stab();
 
         // Melee doesn't fire anything, so a streak across the room would be a lie.
         if (Info != null && !Info.melee)

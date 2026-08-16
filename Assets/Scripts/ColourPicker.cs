@@ -34,6 +34,11 @@ public class ColourPicker : MonoBehaviourPunCallbacks
             swatchTemplate.gameObject.SetActive(false);
 
         Build();
+
+        // Everybody's property defaults to zero, so without this the first two people into a
+        // room are both banana until one of them notices.
+        if (PhotonNetwork.InRoom && PlayerColours.Taken(PlayerColours.IndexOf(PhotonNetwork.LocalPlayer)))
+            PlayerColours.Choose(PlayerColours.FirstFree());
     }
 
     void Build()
@@ -58,7 +63,14 @@ public class ColourPicker : MonoBehaviourPunCallbacks
 
             swatch.onClick.AddListener(() =>
             {
-                PlayerColours.Choose(index);
+                if (!PlayerColours.Choose(index))
+                {
+                    // Somebody already has it. A refused click still makes a noise, because a
+                    // button that does nothing at all reads as broken rather than as denied.
+                    GameAudio.Play2D(GameAudio.UI, "back", GameAudio.UiVolume);
+                    return;
+                }
+
                 GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
 
                 // Drawn immediately rather than waiting for the property to come back from the
@@ -111,8 +123,10 @@ public class ColourPicker : MonoBehaviourPunCallbacks
             bool taken = PlayerColours.Taken(i);
             bool chosen = i == mine;
 
-            // Dimmed rather than disabled. A taken colour is discouraged, not forbidden, and a
-            // dead button gives no way to find that out.
+            // Taken colours are properly disabled now that they are actually refused. A button
+            // that highlights and then declines is worse than one that never offered.
+            swatches[i].interactable = !taken || chosen;
+
             Image face = swatches[i].GetComponent<Image>();
 
             if (face != null)

@@ -111,14 +111,43 @@ public static class PlayerColours
         return left >= 0 && left == TeamOf(b);
     }
 
-    /// Picks a colour for the local player. Anyone may call this; it is a preference, not a rule.
-    public static void Choose(int index)
+    /// <summary>
+    /// Picks a colour, if nobody else has it.
+    ///
+    /// Enforced now rather than merely discouraged. Two gorillas the same colour defeats the
+    /// only thing colours are for, and with twelve players and twelve colours there is exactly
+    /// one of each to go round - a duplicate does not just confuse those two, it takes a colour
+    /// out of circulation for everybody.
+    /// </summary>
+    public static bool Choose(int index)
     {
         if (!PhotonNetwork.InRoom)
-            return;
+            return false;
 
         int clamped = ((index % Palette.Length) + Palette.Length) % Palette.Length;
+
+        if (Taken(clamped))
+            return false;
+
         PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable { { ColourKey, clamped } });
+        return true;
+    }
+
+    /// <summary>
+    /// A colour nobody has yet, for somebody arriving.
+    ///
+    /// Everyone defaults to index zero, so without this the first two people in a room are both
+    /// banana until one of them thinks to change.
+    /// </summary>
+    public static int FirstFree()
+    {
+        for (int i = 0; i < Palette.Length; i++)
+        {
+            if (!Taken(i))
+                return i;
+        }
+
+        return 0;
     }
 
     /// <summary>
