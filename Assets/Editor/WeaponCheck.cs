@@ -459,6 +459,33 @@ public static class WeaponCheck
                   $"{plain:F1}");
         }
 
+        // ---- the weapon table must not be corruptible ----
+        //
+        // This is a real bug that shipped, not a hypothetical. LoadoutFor returned the shared
+        // AllWeapons array as its fallback and the HUD wrote display names into it in place,
+        // which permanently replaced every weapon key with its display name and broke the game
+        // until Unity reloaded. Handing out a copy is the fix; this is the guard.
+        {
+            string[] first = WeaponLoadout.AllWeapons;
+            string[] second = WeaponLoadout.AllWeapons;
+
+            Check(sb, !ReferenceEquals(first, second), "AllWeapons hands out a copy",
+                  "callers must not be able to reach the shared array");
+
+            for (int i = 0; i < first.Length; i++)
+                first[i] = "RUINED";
+
+            Check(sb, WeaponLoadout.AllWeapons[0] != "RUINED",
+                  "and writing to it changes nothing",
+                  "a caller scribbling on the result must not affect the next reader");
+
+            foreach (string key in WeaponLoadout.AllWeapons)
+            {
+                Check(sb, Resources.Load<GunInfo>("Guns/" + key) != null,
+                      $"{key} is a real weapon key", "not a display name");
+            }
+        }
+
         // ---- who is allowed to hand out weapons ----
         //
         // None of this is reachable from a test. Photon's offline mode updates the local

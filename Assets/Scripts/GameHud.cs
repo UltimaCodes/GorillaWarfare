@@ -775,10 +775,14 @@ public class GameHud : MonoBehaviour
 
         if (phase == MatchPhase.Warmup)
         {
-            string[] carrying = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+            // Built into its own list rather than written back over the loadout. Rewriting what
+            // LoadoutFor handed us corrupted the weapon table for the entire session - what it
+            // returns is not always a copy, and a display name is not a weapon key.
+            string[] loadout = PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer);
+            string[] carrying = new string[loadout.Length];
 
-            for (int i = 0; i < carrying.Length; i++)
-                carrying[i] = WeaponLoadout.DisplayName(carrying[i]).ToUpper();
+            for (int i = 0; i < loadout.Length; i++)
+                carrying[i] = WeaponLoadout.DisplayName(loadout[i]).ToUpper();
 
             SetCentre(MatchState.Mode == MatchMode.GunGame ? "CLIMB THE LADDER" : "GET READY", hurt,
                       $"{string.Join("   ", carrying)}   -   LIVE IN {Mathf.CeilToInt(left)}");
