@@ -63,7 +63,15 @@ public static class GameAudio
     public const float ShieldVolume = 0.55f;
 
     // Above everything. It is the loudest thing that happens and it should be.
-    public const float ExplosionVolume = 1f;
+    // Was 1.0, which is full scale - the loudest thing the game can produce, louder than the
+    // kill sound, and with nothing above it to make it feel big by comparison. Loud is not the
+    // same as heavy: weight comes from the low end, the shake and the tail, not from the meter
+    // pinning. Pulled down so there is somewhere for it to be big.
+    public const float ExplosionVolume = 0.62f;
+
+    /// The low thump under the crack, played a beat later and further out. Two layers is what
+    /// makes an explosion feel like it displaced air rather than like a sample.
+    public const float ExplosionBodyVolume = 0.5f;
 
     const int poolSize = 16;
 
@@ -112,18 +120,56 @@ public static class GameAudio
             Object.DontDestroyOnLoad(host);
 
             pool = new AudioSource[poolSize];
+
             for (int i = 0; i < poolSize; i++)
             {
-                AudioSource src = host.AddComponent<AudioSource>();
+                // One GameObject each, and this is the whole reason positional audio did not
+                // work. Every source used to be a component on this same host, so moving one to
+                // where an explosion happened moved all sixteen - and every 3D sound in the game
+                // played from wherever the most recent one had been placed. An explosion thirty
+                // metres behind a wall arrived directly in front of you, because by then the
+                // shared transform had been dragged to your feet by a footstep.
+                GameObject seat = new GameObject($"~Audio{i}");
+                seat.transform.SetParent(host.transform, false);
+
+                AudioSource src = seat.AddComponent<AudioSource>();
                 src.playOnAwake = false;
                 src.rolloffMode = AudioRolloffMode.Linear;
-                src.maxDistance = 60f;
+
+                // Full volume out to a couple of metres, then falling away to nothing at fifty
+                // five. Linear rather than logarithmic because it is predictable: a sound at
+                // half the max distance is at half volume, which is easy to reason about when
+                // balancing a mix by ear.
+                src.minDistance = 2f;
+                src.maxDistance = 55f;
+
+                // No doppler. These sources teleport across the map between one sound and the
+                // next, and Unity reads that jump as enormous velocity - which pitch shifts the
+                // clip by a random amount every time. Nothing in this game moves fast enough for
+                // real doppler to be worth that.
+                src.dopplerLevel = 0f;
+
                 pool[i] = src;
             }
         }
 
+        // Prefer one that is not busy. Round robin alone will happily hand back a source that
+        // is still playing an explosion and then change its spatial blend out from under it,
+        // which turns a 3D sound 2D halfway through.
+        for (int i = 0; i < poolSize; i++)
+        {
+            AudioSource candidate = pool[next];
+            next = (next + 1) % poolSize;
+
+            if (!candidate.isPlaying)
+                return candidate;
+        }
+
+        // Everything is busy, so something has to be interrupted. The one that has been going
+        // longest is the least missed.
         AudioSource chosen = pool[next];
         next = (next + 1) % poolSize;
+
         return chosen;
     }
 
@@ -137,12 +183,42 @@ public static class GameAudio
         AudioSource src = NextSource();
         src.transform.position = position;
         src.spatialBlend = 1f;
+        src.minDistance = 2f;
+        src.maxDistance = 55f;
         src.volume = volume * GameSettings.SfxVolume;
         src.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
         src.PlayOneShot(clip);
     }
 
     /// Non-positional. Menus, and anything that happened to you rather than near you.
+    /// <summary>
+    /// The same as PlayAt, a moment later and at a different pitch.
+    ///
+    /// Used to put a low body under an explosion's crack. Scheduled on the source rather than
+    /// run from a coroutine, because there is nothing here that owns a MonoBehaviour and
+    /// PlayScheduled is sample accurate where a coroutine is frame accurate.
+    /// </summary>
+    public static void PlayAtDelayed(string bank, Vector3 position, float volume, float pitch,
+                                     float delay)
+    {
+        AudioClip clip = Pick(bank);
+        if (clip == null)
+            return;
+
+        AudioSource src = NextSource();
+        src.transform.position = position;
+        src.spatialBlend = 1f;
+        src.minDistance = 2f;
+        src.maxDistance = 55f;
+        src.clip = clip;
+        src.volume = volume * GameSettings.SfxVolume;
+
+        // Pitched down rather than a second recording. Dropping the same bang an octave or so
+        // is what a big version of it sounds like, and it costs nothing.
+        src.pitch = pitch;
+        src.PlayDelayed(delay);
+    }
+
     public static void Play2D(string bank, float volume = 1f, float pitchJitter = 0f)
     {
         AudioClip clip = Pick(bank);

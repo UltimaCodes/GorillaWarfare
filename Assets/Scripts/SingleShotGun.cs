@@ -187,6 +187,12 @@ public class SingleShotGun : Gun
         if (visualRenderers == null || Info == null || block == null)
             return;
 
+        // Bananas only. Everything else keeps whatever colour its own material gives it - and
+        // the pineapple has a texture, so tinting it green as the magazine emptied was not just
+        // thematically wrong, it was painting over the artwork.
+        if (!Info.ripens)
+            return;
+
         Color c = Info.RipenessFor(Ammo);
         foreach (Renderer r in visualRenderers)
         {
