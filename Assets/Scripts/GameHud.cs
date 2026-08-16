@@ -62,6 +62,9 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text centreSubtitle;
     [SerializeField] TMP_Text comboText;
 
+    /// The slide chain, rank and all. Filled in at runtime if the scene has not got one.
+    [SerializeField] TMP_Text slideCombo;
+
     /// Drawn behind the winner's name when the round is over. Without it the result was a line
     /// of text floating over a firefight that had visibly stopped mattering, which is not what
     /// winning should look like.
@@ -208,6 +211,29 @@ public class GameHud : MonoBehaviour
         }
 
         adrenalineEdge.gameObject.SetActive(false);
+
+        // Built here if the scene predates it, same as the dot and the edge. Sits under the
+        // combo counter on the right, where nothing else lives.
+        if (slideCombo == null && comboText != null)
+        {
+            GameObject made = new GameObject("SlideCombo", typeof(RectTransform));
+            made.transform.SetParent(comboText.transform.parent, false);
+
+            slideCombo = made.AddComponent<TextMeshProUGUI>();
+            slideCombo.font = comboText.font;
+            slideCombo.fontSize = 54f;
+            slideCombo.alignment = TextAlignmentOptions.Right;
+            slideCombo.enableWordWrapping = false;
+            slideCombo.raycastTarget = false;
+
+            RectTransform rect = (RectTransform)made.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0.5f);
+            rect.anchoredPosition = new Vector2(-70f, 120f);
+            rect.sizeDelta = new Vector2(620f, 80f);
+        }
+
+        if (slideCombo != null)
+            slideCombo.gameObject.SetActive(false);
 
         HideTemplate(feedTemplate);
         HideTemplate(standingsTemplate);
@@ -434,6 +460,7 @@ public class GameHud : MonoBehaviour
         UpdateDamageNumbers();
         UpdateDamageArrows();
         UpdateAdrenaline();
+        UpdateSlideCombo();
     }
 
     void UpdateHealth()
@@ -1041,6 +1068,59 @@ public class GameHud : MonoBehaviour
         // Swelling slightly with the beat, so the edge breathes inward rather than only
         // brightening. Subtle, because a pumping screen is nauseating at any real size.
         adrenalineEdge.rectTransform.localScale = Vector3.one * (1f + (1f - beat) * 0.04f);
+    }
+
+    /// <summary>
+    /// The slide chain, and whether you have burned it out.
+    ///
+    /// Ranked rather than counted, because a number tells you how many and a rank tells you how
+    /// well - which is the whole appeal of the thing it is copied from. It climbs while you keep
+    /// the rhythm and says so plainly when you have spent it.
+    ///
+    /// The exhausted state is the important half. Being unable to slide with no explanation is
+    /// the worst possible version of this feature, so it counts down in front of you.
+    /// </summary>
+    void UpdateSlideCombo()
+    {
+        if (slideCombo == null)
+            return;
+
+        PlayerMovement mover = player != null ? player.GetComponent<PlayerMovement>() : null;
+
+        if (mover == null)
+        {
+            slideCombo.gameObject.SetActive(false);
+            return;
+        }
+
+        if (mover.Exhausted)
+        {
+            slideCombo.gameObject.SetActive(true);
+            slideCombo.text = $"SPENT  {mover.ExhaustedFor:F1}";
+
+            // Grey and steady. It is not a rank any more, it is a wait.
+            slideCombo.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
+            slideCombo.rectTransform.localScale = Vector3.one;
+            return;
+        }
+
+        int rank = mover.SlideChain;
+
+        slideCombo.gameObject.SetActive(rank > 0);
+
+        if (rank <= 0)
+            return;
+
+        string[] ranks = { "SLIDE", "SLIDE!", "SMOOTH!!", "BANANAS!!!" };
+        slideCombo.text = ranks[Mathf.Clamp(rank - 1, 0, ranks.Length - 1)];
+
+        // Hotter and bigger the deeper you are, so the fourth one looks like the fourth one.
+        float heat = (rank - 1) / 3f;
+        slideCombo.color = Color.Lerp(Color.white, killColour, heat);
+
+        // A small throb so it reads as live rather than printed.
+        float throb = 1f + heat * 0.25f + Mathf.Sin(Time.unscaledTime * 9f) * 0.03f;
+        slideCombo.rectTransform.localScale = Vector3.one * throb;
     }
 
     static Color Fade(Color colour, float alpha) =>

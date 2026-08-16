@@ -22,7 +22,7 @@ MonoBehaviour:
   spread: 0
   pelletsPerShot: 1
   melee: 0
-  fireKnockback: 26
+  fireKnockback: 18
   twoHanded: 1
   canAim: 0
   aimFov: 26

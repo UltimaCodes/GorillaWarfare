@@ -258,6 +258,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         spawnedAt = Time.time;
         gaveUpProtection = false;
 
+        // Dying is enough of a reset. Respawning still spent from a chain you took before you
+        // died would be a punishment carried across a life you did not have.
+        if (movement != null)
+            movement.ClearExhaustion();
+
         // The movement capsule goes on Player, which weapons don't trace against. Otherwise the
         // capsule is a single volume around the whole body and every part of a player is worth
         // the same - there'd be nowhere to aim.

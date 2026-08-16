@@ -203,12 +203,35 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Speed you get when you jump straight out of a slide, on top of what you had.")]
     [SerializeField] float slideJumpBoost = 1.6f;
 
+    [Tooltip("Seconds you cannot slide for after topping out the chain.")]
+    [SerializeField] float exhaustion = 10f;
+
+    [Tooltip("How long before landing a slide press still counts, in seconds. This is what makes "
+             + "chaining possible - you press it in the air and it fires on touchdown.")]
+    [SerializeField] float slideBuffer = 0.22f;
+
     int chain;
     float chainExpires = -99f;
+    float exhaustedUntil = -99f;
+    float slidePressedAt = -99f;
+
+    /// Whether sliding is currently locked out, and for how much longer. Both public because the
+    /// HUD has to be able to say so - being unable to slide with no explanation is the worst
+    /// possible version of this.
+    public bool Exhausted => Time.time < exhaustedUntil;
+    public float ExhaustedFor => Mathf.Max(0f, exhaustedUntil - Time.time);
+
+    /// Cleared on respawn. Dying is enough of a reset.
+    public void ClearExhaustion()
+    {
+        exhaustedUntil = -99f;
+        chain = 0;
+        chainExpires = -99f;
+    }
 
     /// How many slides deep the current chain is, for the camera and the effects. Zero when
     /// nothing is going on.
-    public int SlideChain => Time.time < chainExpires ? chain : 0;
+    public int SlideChain => Time.time < chainExpires || Exhausted ? chain : 0;
 
     bool sliding;
     bool crouching;
@@ -302,7 +325,18 @@ public class PlayerMovement : MonoBehaviour
     /// </summary>
     void UpdateStance(bool listening, float dt)
     {
-        bool wants = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
+        bool held = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
+
+        // Remembered on the press, so hitting slide just before you touch down still slides when
+        // you land. Without this, chaining was impossible by design: you have to press it while
+        // airborne to catch the landing, and the check only ever looked at whether you were
+        // holding it on a frame where you happened to already be on the floor.
+        if (!listening && KeyBinds.Pressed(KeyBinds.Action.Walk))
+            slidePressedAt = Time.time;
+
+        bool buffered = Time.time - slidePressedAt <= slideBuffer;
+        bool wants = held || buffered;
+
         float speed = HorizontalSpeed;
 
         if (!wants)
@@ -319,16 +353,26 @@ public class PlayerMovement : MonoBehaviour
         {
             // Which one you get is decided once, on the press, by how fast you were already
             // going. Deciding it every frame would flicker between the two at the boundary.
-            if (grounded && speed >= slideEntrySpeed)
+            if (grounded && speed >= slideEntrySpeed && !Exhausted)
             {
                 sliding = true;
+                slidePressedAt = -99f;
 
                 // Chaining. Each slide taken shortly after the last one pays a little more, up
                 // to a ceiling - so slide, hop, slide, hop builds speed and is worth learning,
                 // but it tops out rather than turning into infinite acceleration. Break the
                 // rhythm and you start again from the base kick.
-                chain = Time.time < chainExpires ? Mathf.Min(chain + 1, maxChain) : 1;
+                chain = Time.time < chainExpires ? chain + 1 : 1;
                 chainExpires = Time.time + chainWindow;
+
+                // Past the ceiling you are spent. Ten seconds of no sliding at all, which is
+                // long enough to be a real cost and short enough that it is not a punishment -
+                // and it is the thing that stops the chain being infinite speed.
+                if (chain >= maxChain)
+                {
+                    exhaustedUntil = Time.time + exhaustion;
+                    chain = maxChain;
+                }
 
                 float kick = slideKick + chainBonus * (chain - 1);
 
