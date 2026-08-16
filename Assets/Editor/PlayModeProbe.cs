@@ -178,6 +178,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- the HUD is showing what the game thinks is true ----
         yield return CheckHudReadsTheGame(player);
 
+        // ---- joining mid match ----
+        yield return CheckLateJoinGetsWeapons(player);
+
         // ---- a loadout that resolves to nothing still arms you ----
         yield return CheckEmptyLoadoutFallsBack(player);
 
@@ -1613,6 +1616,67 @@ public class ProbeRunner : MonoBehaviour
         // through people, which is what started this.
         Check(coverage > 0.66f, "most of the body can be hit", $"{coverage:P0}");
     }
+
+    /// <summary>
+    /// Arriving in a match already in progress has to leave you holding something.
+    ///
+    /// The master issues loadouts when somebody joins the room, but that fires the moment they
+    /// connect - well before they have loaded the map and spawned a body. So the interesting
+    /// case is a player who builds their weapons with no loadout property at all, and then
+    /// receives one a moment later. Both halves have to work: the build has to arm them with
+    /// something, and the late property has to replace it.
+    /// </summary>
+    IEnumerator CheckLateJoinGetsWeapons(PlayerController player)
+    {
+        // Wipe it, the way a fresh arrival has nothing.
+        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable
+        {
+            { PlayerController.LoadoutKey, string.Empty },
+        });
+
+        yield return null;
+        yield return null;
+
+        // Rebuild from that empty state, which is what spawning before the property lands does.
+        typeof(PlayerController)
+            .GetMethod("BuildLoadout", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.Invoke(player, null);
+
+        yield return null;
+
+        int armed = player.GetComponentsInChildren<SingleShotGun>(true).Length;
+        Check(armed > 0, "spawning before your loadout arrives still arms you", $"{armed} weapons");
+
+        SingleShotGun holding = player.ActiveGun;
+        Check(holding != null, "and one of them is actually in your hands",
+              holding != null ? holding.name : "nothing equipped");
+
+        // Now the master's answer turns up late, exactly as it does over a real connection.
+        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable
+        {
+            { PlayerController.LoadoutKey, MatchState.Rules.Serialise(new[] { "Sniper" }) },
+        });
+
+        yield return Until(() => PlayerController.LoadoutFor(PhotonNetwork.LocalPlayer)[0] == "Sniper",
+                           "receive the loadout the master sent");
+
+        yield return null;
+        yield return null;
+
+        SingleShotGun after = player.ActiveGun;
+        Check(after != null && after.name == "Sniper",
+              "and a late loadout replaces what you were given",
+              after == null ? "nothing equipped" : after.name);
+    }
+
+    // Leaving a room and rejoining it cannot be checked here, and it is worth saying why rather
+    // than leaving a gap. Offline mode has no server: leaving destroys the only room that
+    // exists, and returning to the menu makes the Launcher reconnect, which tears down anything
+    // staged afterwards. A test that works around all of that is testing the workaround.
+    //
+    // What the rejoin path has instead is diagnostics. RoomManager says which of the four
+    // conditions a stuck spawn is waiting on, which turns "I rejoined and had nothing" into a
+    // line naming the cause.
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't
     /// be seen composited, but it can be checked on its own and written out to look at.

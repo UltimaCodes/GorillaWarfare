@@ -140,6 +140,22 @@ public class RoomManager : MonoBehaviourPunCallbacks
     // and TrySpawn is idempotent.
     public override void OnJoinedRoom()
     {
+        // Somebody who joins while a match is already running has to end up in the map.
+        //
+        // AutomaticallySyncScene handles this when there is a master already there to copy, but
+        // it does nothing at all in offline mode and nothing if the phase says a match is live
+        // while this client is still sitting in the menu. Asking for the level directly is
+        // harmless when PUN was going to do it anyway - LoadLevel on the scene you are already
+        // in is a no-op.
+        if (!PhotonNetwork.IsMasterClient
+            && SceneManager.GetActiveScene().buildIndex != gameSceneIndex
+            && PhotonNetwork.CurrentRoom != null
+            && PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(MatchState.PhaseKey))
+        {
+            Debug.Log("[room] joined a match already in progress, loading the map");
+            PhotonNetwork.LoadLevel(gameSceneIndex);
+        }
+
         TrySpawn();
 
         if (Sandbox.Active)
@@ -201,6 +217,19 @@ public class RoomManager : MonoBehaviourPunCallbacks
             deathRoutine = null;
         }
 
+        // And the same for the spawn routine, which was the bug behind rejoining with nothing.
+        //
+        // SpawnWhenReady spends nearly all its life in a wait loop, so leaving almost always
+        // leaves one in flight. It was never stopped - and because TrySpawn refuses to start a
+        // second while `spawnRoutine` is non-null, the stale one held the slot shut. Coming back
+        // then found the door already occupied by a coroutine belonging to a room that no longer
+        // existed, and nothing ever spawned.
+        if (spawnRoutine != null)
+        {
+            StopCoroutine(spawnRoutine);
+            spawnRoutine = null;
+        }
+
         ClearDeathState();
         localController = null;
 
@@ -226,6 +255,20 @@ public class RoomManager : MonoBehaviourPunCallbacks
     {
         yield return null;
 
+        // Hand scene control back before touching SceneManager.
+        //
+        // AutomaticallySyncScene makes PUN watch the room's level and load it on every client.
+        // Loading a scene behind its back while that is on leaves PUN's idea of the current
+        // level disagreeing with reality, and it complains about it every time anything asks -
+        // which is the error spam on the way out of a match. The Launcher turns it back on when
+        // it reconnects.
+        PhotonNetwork.AutomaticallySyncScene = false;
+
+        // The sandbox is a room like any other and leaving one has to end it, or offline mode
+        // stays engaged and the next attempt to play with anybody is silently local.
+        if (Sandbox.Active)
+            Sandbox.Leave();
+
         // The menu is clicked, not aimed. Whatever the game left the cursor in has to be undone
         // here, because there is no PlayerController in the menu scene to keep managing it - so
         // a cursor still locked from the match stays locked, and a title screen you cannot click
@@ -233,13 +276,27 @@ public class RoomManager : MonoBehaviourPunCallbacks
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
+        // Statics outlive the scene, so anything that describes the match has to be put back by
+        // hand. A speed intensity left high keeps the menu music ducked; a camera reference left
+        // pointing at a destroyed object is a null every frame in whatever reads it next.
+        PlayerController.ForgetLocals();
+
         SceneManager.LoadScene(0);
+
+        // PUN pauses its message queue whenever a level is loading and turns it back on from its
+        // own sceneLoaded handler. With AutomaticallySyncScene switched off a moment ago that
+        // handler no longer runs, so the queue would stay shut - and a client with a shut queue
+        // is deaf to everything, including its own room join. That is a spawn that never comes.
+        yield return null;
+        PhotonNetwork.IsMessageQueueRunning = true;
     }
 
     void TrySpawn()
     {
         if (spawnRoutine == null && localController == null && deathRoutine == null)
             spawnRoutine = StartCoroutine(SpawnWhenReady());
+        else if (localController == null && deathRoutine == null)
+            Debug.Log("[room] a spawn is already pending, not starting another");
     }
 
     IEnumerator SpawnWhenReady()
@@ -247,13 +304,36 @@ public class RoomManager : MonoBehaviourPunCallbacks
         // LoadLevel sets IsMessageQueueRunning false and PUN turns it back on from its own
         // sceneLoaded handler, which is registered after ours - so raising a spawn straight
         // out of OnSceneLoaded happened while we weren't sending anything.
+        float waited = 0f;
+        bool complained = false;
+
         while (PhotonNetwork.InRoom == false
                || PhotonNetwork.IsMessageQueueRunning == false
                || SceneManager.GetActiveScene().buildIndex != gameSceneIndex
                || SpawnManager.Instance == null)
         {
+            waited += Time.unscaledDeltaTime;
+
+            // Says what it is waiting for, once, after long enough that it is clearly stuck
+            // rather than merely loading. Every one of these four conditions has been the reason
+            // somebody did not spawn at some point, and without this the symptom is identical in
+            // all four cases: standing in a map with no body and no explanation.
+            if (waited > 3f && !complained)
+            {
+                complained = true;
+
+                Debug.LogWarning("[room] still waiting to spawn - "
+                                 + $"inRoom {PhotonNetwork.InRoom}, "
+                                 + $"queue {PhotonNetwork.IsMessageQueueRunning}, "
+                                 + $"scene {SceneManager.GetActiveScene().buildIndex}, "
+                                 + $"spawner {(SpawnManager.Instance != null)}");
+            }
+
             yield return null;
         }
+
+        if (complained)
+            Debug.Log($"[room] cleared to spawn after {waited:F1}s");
 
         spawnRoutine = null;
 

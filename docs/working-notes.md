@@ -203,6 +203,33 @@ Also worth knowing: `Launcher` falls back to best-region once if the fixed one i
 and logs the region it actually landed on. If two people ever cannot see each other's lobbies,
 compare those two log lines first.
 
+## Leaving a room is its own code path, and it breaks things
+
+**Never `SceneManager.LoadScene` while `AutomaticallySyncScene` is on.** PUN watches the room's
+level and loads it on every client; loading one behind its back leaves its idea of the current
+level disagreeing with reality and it complains constantly. Turn the sync off first - the
+Launcher turns it back on when it reconnects.
+
+**PUN shuts its message queue while a level loads** and reopens it from its own `sceneLoaded`
+handler. Turn `AutomaticallySyncScene` off and that handler stops running, so the queue stays
+shut - and a client with a shut queue is deaf to everything, including its own room join.
+Reopen it by hand after the load.
+
+**Coroutines outlive the room.** `SpawnWhenReady` spends nearly all its life waiting, so leaving
+almost always leaves one in flight. It was never stopped, and because `TrySpawn` refuses to start
+a second while one exists, the stale one held the slot shut and nothing ever spawned again. Stop
+every routine in `OnLeftRoom`.
+
+**Statics outlive the scene**, which is the point of them and also the problem. `PlayerController`
+has a `ForgetLocals` that clears the lot; call it on the way out rather than making every reader
+defend itself.
+
+**What no check can reach:** a genuine disconnect and rejoin. Offline mode has no server -
+leaving destroys the only room there is, and returning to the menu makes the Launcher reconnect,
+which tears down anything staged after it. Instead `SpawnWhenReady` logs which of its four
+conditions it is stuck on after three seconds, which turns "I rejoined and had nothing" into a
+line naming the cause.
+
 ## Where input is read
 
 Four separate scripts read the mouse and keyboard, and every one of them has to be told when the
