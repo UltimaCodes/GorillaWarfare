@@ -15,11 +15,8 @@ public static class ShieldSoundPick
     [MenuItem("Tools/Gorilla Warfare/Measure the shield sounds")]
     public static void Run()
     {
-        foreach (string bank in new[] { "Shield", "Ambience" })
-        {
-            foreach (AudioClip clip in Resources.LoadAll<AudioClip>("Audio/" + bank))
-                Report(clip);
-        }
+        foreach (AudioClip clip in Resources.LoadAll<AudioClip>("Audio/Shield"))
+            Report(clip);
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);
@@ -118,7 +115,15 @@ public static class ShieldSoundPick
         float seam = last > 0 ? Mathf.Abs(samples[last] - samples[0]) : 0f;
         float local = Mathf.Max(0.0001f, (Mathf.Abs(samples[0]) + Mathf.Abs(samples[last])) * 0.5f + rms);
 
+        // Crest factor is what separates a bed from a bed with things in it. A dense wall of
+        // insects sits close to its own average, so peak over RMS is small. A wind chime, a
+        // single bird, a car door - anything you would notice - spikes far above the bed and
+        // pushes it up. That number, and how many transients there are per second, is the whole
+        // difference between ambience you stop hearing and ambience that becomes a metronome.
+        float crest = rms > 0.0001f ? peak / rms : 0f;
+        float perSecond = onsets / Mathf.Max(0.01f, clip.length);
+
         Debug.Log($"[shield] {clip.name,-26} {clip.length:F2}s  peak {peak:F2}  rms {rms:F3}  "
-                  + $"breaks {onsets}  seam {seam / local:F2}  |{shape}|");
+                  + $"crest {crest:F1}  events/s {perSecond:F2}  seam {seam / local:F2}  |{shape}|");
     }
 }
