@@ -63,8 +63,13 @@ public class WeaponSway : MonoBehaviour
             return;
 
         // --- sway from looking around
-        float mx = Input.GetAxisRaw("Mouse X");
-        float my = Input.GetAxisRaw("Mouse Y");
+        // The camera already refuses to turn while settings are open; the weapon swaying to a
+        // mouse that is dragging a slider is the same bug one layer down, and it looks like the
+        // gun is trying to follow the cursor.
+        bool free = !SettingsMenu.IsOpen;
+
+        float mx = free ? Input.GetAxisRaw("Mouse X") : 0f;
+        float my = free ? Input.GetAxisRaw("Mouse Y") : 0f;
 
         Vector3 swayOffset = new Vector3(
             Mathf.Clamp(-mx * swayAmount, -maxSway, maxSway),

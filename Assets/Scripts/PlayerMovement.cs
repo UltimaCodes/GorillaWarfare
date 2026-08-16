@@ -93,12 +93,21 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        if (KeyBinds.Pressed(KeyBinds.Action.Jump))
+        // The settings screen is up, so the keyboard belongs to it. Without this you walk off
+        // the map while rebinding your movement keys - every key you press to test a binding is
+        // also still driving the player - and the same WASD that scrolls a list moves you.
+        //
+        // Gravity and collision carry on below regardless. Freezing in mid-air would be a
+        // different kind of wrong.
+        bool listening = SettingsMenu.IsOpen;
+
+        if (KeyBinds.Pressed(KeyBinds.Action.Jump) && !listening)
             jumpPressedAt = Time.time;
 
-        bool wantsJump = autoBhop
-            ? KeyBinds.Held(KeyBinds.Action.Jump)
-            : Time.time - jumpPressedAt <= jumpBufferTime;
+        bool wantsJump = !listening
+                         && (autoBhop
+                             ? KeyBinds.Held(KeyBinds.Action.Jump)
+                             : Time.time - jumpPressedAt <= jumpBufferTime);
 
         grounded = controller.isGrounded;
 
@@ -117,7 +126,7 @@ public class PlayerMovement : MonoBehaviour
     {
         // From the four bound keys rather than the Input Manager's axes, which can only be
         // changed in a project settings window - not by the person playing.
-        Vector2 move = KeyBinds.MoveAxis();
+        Vector2 move = SettingsMenu.IsOpen ? Vector2.zero : KeyBinds.MoveAxis();
         float x = move.x;
         float z = move.y;
 

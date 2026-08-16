@@ -486,6 +486,17 @@ public class MatchState : MonoBehaviourPunCallbacks
             involvesYou = IsLocal(killer) || IsLocal(victim),
         });
 
+        // The feed still says it happened - it did, and hiding it would look like a bug - but
+        // nothing counts until the match is live.
+        //
+        // Warmup kills used to score, which meant the countdown was the best time in the match
+        // to farm: everybody is bunched near a spawn, nobody is expecting it, and in gun game
+        // you could be two rungs up before the word LIVE had left the screen. The warmup exists
+        // so people can land and get their bearings, and it cannot do that while it is also the
+        // most profitable thirty seconds available.
+        if (Phase != MatchPhase.Live)
+            return;
+
         if (Instance != null && PhotonNetwork.IsMasterClient)
             Instance.ScoreKill(killer, victim, weapon);
     }
