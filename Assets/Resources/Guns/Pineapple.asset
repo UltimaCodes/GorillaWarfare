@@ -22,6 +22,7 @@ MonoBehaviour:
   spread: 0
   pelletsPerShot: 1
   melee: 0
+  fireKnockback: 26
   twoHanded: 1
   canAim: 0
   aimFov: 26
@@ -32,7 +33,7 @@ MonoBehaviour:
   armingDistance: 1.2
   blastRadius: 7.5
   knockback: 17
-  selfKnockback: 30
+  selfKnockback: 14
   selfDamageScale: 0
   magazineSize: 4
   spareMagazines: 4

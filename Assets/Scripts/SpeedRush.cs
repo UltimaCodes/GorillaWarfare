@@ -53,6 +53,14 @@ public class SpeedRush : MonoBehaviour
         movement = GetComponent<PlayerMovement>();
     }
 
+    void Start()
+    {
+        // Remembered once, because the lean writes localPosition every frame and needs
+        // something to return to that is not wherever it last left it.
+        if (PlayerController.LocalCamera != null)
+            baseCameraLocal = PlayerController.LocalCamera.transform.localPosition;
+    }
+
     void OnDestroy()
     {
         // The player is destroyed on death and rebuilt on respawn. Leaving this behind means the
@@ -77,6 +85,7 @@ public class SpeedRush : MonoBehaviour
         Intensity = rush;
 
         ApplyFov();
+        ApplySlideLean();
         SpawnLines();
     }
 
@@ -93,6 +102,63 @@ public class SpeedRush : MonoBehaviour
                                         GameSettings.Fov + fovKick * rush,
                                         Time.deltaTime * ease);
     }
+
+    /// <summary>
+    /// Rolls and drops the view during a slide.
+    ///
+    /// A slide with no camera movement is a speed change you have to read off the screen edges.
+    /// The roll is what makes it read as a body going sideways and low - the same trick every
+    /// game with a slide uses, and it is doing most of the work here.
+    ///
+    /// Rolled about the view axis rather than the world's, so it stays a lean whichever way you
+    /// happen to be looking. Eased both in and out, because a snap looks like a glitch.
+    /// </summary>
+    void ApplySlideLean()
+    {
+        Camera camera = PlayerController.LocalCamera;
+
+        if (camera == null || movement == null)
+            return;
+
+        bool sliding = movement.Sliding;
+
+        // Leaning toward whichever side you are actually travelling, so a slide to the left
+        // rolls left. Read off velocity rather than input - you are not steering mid-slide.
+        float sideways = 0f;
+
+        if (sliding)
+        {
+            Vector3 flat = movement.Velocity;
+            flat.y = 0f;
+
+            if (flat.sqrMagnitude > 0.01f)
+                sideways = Mathf.Clamp(Vector3.Dot(flat.normalized, camera.transform.right), -1f, 1f);
+        }
+
+        // A deeper roll the further into a chain you are, so the fourth slide looks like the
+        // fourth slide rather than the first.
+        float depth = sliding ? 1f + Mathf.Min(movement.SlideChain, 4) * 0.16f : 0f;
+
+        slideRoll = Mathf.Lerp(slideRoll, sideways * slideLean * depth, Time.deltaTime * slideEase);
+        slideDrop = Mathf.Lerp(slideDrop, sliding ? -slideDip : 0f, Time.deltaTime * slideEase);
+
+        // Applied to the camera's local transform, on top of whatever the look angles did. The
+        // holder carries the pitch; this only ever adds roll and a small drop.
+        camera.transform.localRotation = Quaternion.Euler(0f, 0f, slideRoll);
+        camera.transform.localPosition = baseCameraLocal + Vector3.up * slideDrop;
+    }
+
+    [Tooltip("Degrees the view rolls at full sideways speed in a slide.")]
+    [SerializeField] float slideLean = 9f;
+
+    [Tooltip("Metres the camera drops during a slide, on top of the capsule getting shorter.")]
+    [SerializeField] float slideDip = 0.18f;
+
+    [SerializeField] float slideEase = 9f;
+
+    float slideRoll;
+    float slideDrop;
+    Vector3 baseCameraLocal;
 
     void SpawnLines()
     {

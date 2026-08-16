@@ -67,6 +67,10 @@ public class GameHud : MonoBehaviour
     /// winning should look like.
     [SerializeField] GameObject resultsBackdrop;
 
+    /// Red round the edges of the screen, pulsing, when you are nearly dead. Filled in at
+    /// runtime if the scene has not got one, so an older HUD picks it up without a rebuild.
+    [SerializeField] Image adrenalineEdge;
+
     [Header("Gun game ladder")]
     [SerializeField] GameObject ladder;
     [SerializeField] TMP_Text ladderLabel;
@@ -176,6 +180,34 @@ public class GameHud : MonoBehaviour
 
         if (arrowTemplate != null)
             arrowTemplate.gameObject.SetActive(false);
+
+        // Made here if the scene has not got one, same as the crosshair dot. A full screen
+        // radial sprite, tinted red and pulsed - it darkens the edges and leaves the middle
+        // clear, which is the only shape that can be loud without covering what you are aiming
+        // at.
+        if (adrenalineEdge == null)
+        {
+            GameObject made = new GameObject("AdrenalineEdge", typeof(RectTransform),
+                                             typeof(CanvasRenderer), typeof(Image));
+            made.transform.SetParent(transform, false);
+            made.transform.SetAsFirstSibling();
+
+            RectTransform rect = (RectTransform)made.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+
+            adrenalineEdge = made.GetComponent<Image>();
+            adrenalineEdge.raycastTarget = false;
+
+            // The scope mask is already a circle that is clear in the middle and opaque at the
+            // edges, which is exactly the shape wanted here. Reused rather than sourced again.
+            Texture2D ring = BuildScopeMask(512);
+            adrenalineEdge.sprite = Sprite.Create(ring, new UnityEngine.Rect(0f, 0f, ring.width, ring.height),
+                                                  new Vector2(0.5f, 0.5f));
+        }
+
+        adrenalineEdge.gameObject.SetActive(false);
 
         HideTemplate(feedTemplate);
         HideTemplate(standingsTemplate);
@@ -401,6 +433,7 @@ public class GameHud : MonoBehaviour
         UpdateFeed();
         UpdateDamageNumbers();
         UpdateDamageArrows();
+        UpdateAdrenaline();
     }
 
     void UpdateHealth()
@@ -975,6 +1008,39 @@ public class GameHud : MonoBehaviour
 
         for (int i = shown; i < feedRows.Count; i++)
             feedRows[i].gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// The edges go red and beat when you are nearly dead.
+    ///
+    /// Two things at once, which is the point: it is a warning you cannot miss and it is the tell
+    /// that you are currently faster than everybody else. Beating rather than steady, and beating
+    /// harder the worse it gets, so it reads as a pulse rather than as damage on the lens.
+    ///
+    /// Unscaled, so it keeps beating through a kill's hitstop - a heartbeat that stops when the
+    /// world does is a strange thing to watch.
+    /// </summary>
+    void UpdateAdrenaline()
+    {
+        if (adrenalineEdge == null)
+            return;
+
+        float amount = player != null ? player.Adrenaline : 0f;
+
+        adrenalineEdge.gameObject.SetActive(amount > 0.01f);
+
+        if (amount <= 0.01f)
+            return;
+
+        // Faster the closer to death, from about one beat a second to nearly three.
+        float rate = 3f + amount * 5f;
+        float beat = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * rate));
+
+        adrenalineEdge.color = new Color(0.75f, 0.03f, 0.06f, amount * beat * 0.72f);
+
+        // Swelling slightly with the beat, so the edge breathes inward rather than only
+        // brightening. Subtle, because a pumping screen is nauseating at any real size.
+        adrenalineEdge.rectTransform.localScale = Vector3.one * (1f + (1f - beat) * 0.04f);
     }
 
     static Color Fade(Color colour, float alpha) =>

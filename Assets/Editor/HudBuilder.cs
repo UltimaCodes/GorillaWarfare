@@ -326,6 +326,14 @@ public static class HudBuilder
         Wire(so, "comboText", combo);
         Wire(so, "resultsBackdrop", results);
 
+        // Full screen, behind the rest of the HUD. Red and pulsing when you are nearly dead.
+        GameObject edge = Panel(rootObject.transform, "AdrenalineEdge", Vector2.zero, Vector2.one,
+                                Center, Vector2.zero, Vector2.zero,
+                                new Color(0.75f, 0.03f, 0.06f, 0f));
+        edge.transform.SetAsFirstSibling();
+        edge.SetActive(false);
+        Wire(so, "adrenalineEdge", edge.GetComponent<Image>());
+
         Wire(so, "ladder", ladder);
         Wire(so, "ladderLabel", ladderLabel);
 
@@ -454,6 +462,31 @@ public static class HudBuilder
 
             added++;
             Debug.Log("[hud] added the damage bearing ring");
+        }
+
+        // The adrenaline edge, which arrived with the near-death speed boost. GameHud builds
+        // its own if the slot is empty, but SceneCheck wants every reference filled - and an
+        // authored one can be restyled, which a runtime one cannot.
+        SerializedProperty edgeSlot = so.FindProperty("adrenalineEdge");
+
+        if (edgeSlot != null && edgeSlot.objectReferenceValue == null)
+        {
+            GameObject made = Panel(hud.transform, "AdrenalineEdge", Vector2.zero, Vector2.one,
+                                    Center, Vector2.zero, Vector2.zero,
+                                    new Color(0.75f, 0.03f, 0.06f, 0f));
+
+            // Behind everything else in the HUD. It is a warning at the edge of vision, not a
+            // thing to read.
+            made.transform.SetAsFirstSibling();
+            made.SetActive(false);
+
+            Image image = made.GetComponent<Image>();
+            image.raycastTarget = false;
+
+            edgeSlot.objectReferenceValue = image;
+            added++;
+
+            Debug.Log("[hud] added the adrenaline edge");
         }
 
         // Sizes and positions that changed after the HUD was first built. Applied by name so a

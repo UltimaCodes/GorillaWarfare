@@ -22,6 +22,7 @@ MonoBehaviour:
   spread: 0.15
   pelletsPerShot: 1
   melee: 0
+  fireKnockback: 0
   twoHanded: 0
   magazineSize: 12
   spareMagazines: 6

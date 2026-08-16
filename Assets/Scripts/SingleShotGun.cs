@@ -115,7 +115,7 @@ public class SingleShotGun : Gun
         // pose was applied twice and every swing left the peel further round than it started.
         if (Info != null && Info.melee)
         {
-            meleeHeld = visualRoot.localRotation * Quaternion.Euler(155f, 0f, 25f);
+            meleeHeld = visualRoot.localRotation * Quaternion.Euler(Info.meleeHold);
             visualRoot.localRotation = meleeHeld;
         }
 
@@ -565,7 +565,7 @@ public class SingleShotGun : Gun
         // the live rotation meant an interrupted swing became the new rest, and the peel walked
         // a little further round with every stab until it was upside down.
         Quaternion held = meleeHeld;
-        Quaternion driven = held * Quaternion.Euler(-70f, 0f, 0f);
+        Quaternion driven = held * Quaternion.Euler(-Info.meleeSwing, 0f, 0f);
 
         const float outFor = 0.06f;
         const float backFor = 0.14f;
