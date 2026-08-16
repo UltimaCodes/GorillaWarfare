@@ -36,6 +36,7 @@ public class SettingsMenu : MonoBehaviour
     [SerializeField] Button closeButton;
     [SerializeField] Button resetButton;
     [SerializeField] Button quitButton;
+    [SerializeField] Button sandboxButton;
 
     [Header("Tabs")]
     [SerializeField] RectTransform tabBar;
@@ -104,6 +105,9 @@ public class SettingsMenu : MonoBehaviour
         if (quitButton != null)
             quitButton.onClick.AddListener(LeaveToMenu);
 
+        if (sandboxButton != null)
+            sandboxButton.onClick.AddListener(EnterSandbox);
+
         BuildTabs();
         Hide();
     }
@@ -115,13 +119,45 @@ public class SettingsMenu : MonoBehaviour
     /// from inside a match used to leave you standing in an empty level - the Launcher handles
     /// that transition and the Launcher only exists in the menu.
     /// </summary>
+    /// <summary>
+    /// Into a room of your own with every weapon in it.
+    ///
+    /// Closed first, because the sandbox loads a map and arriving in it with the settings screen
+    /// still up and the cursor still free would leave you unable to move until you pressed
+    /// escape twice.
+    /// </summary>
+    public void EnterSandbox()
+    {
+        if (Photon.Pun.PhotonNetwork.InRoom)
+            return;
+
+        Close();
+        Sandbox.Enter(this);
+    }
+
     public void LeaveToMenu()
     {
+        // Hidden rather than Closed. Close hands the cursor back to the game, which is right
+        // when you are returning to a match and exactly wrong when you are leaving one - it
+        // locked the mouse a moment before the title screen appeared, and a title screen you
+        // cannot click looks like the game has hung.
+        leaving = true;
         Close();
+        leaving = false;
 
-        if (Photon.Pun.PhotonNetwork.InRoom)
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Sandbox.Leave clears offline mode as well as leaving the room. Without that the next
+        // attempt to play with anybody stays stubbornly local, which looks exactly like the
+        // game failing to connect.
+        if (Sandbox.Active)
+            Sandbox.Leave();
+        else if (Photon.Pun.PhotonNetwork.InRoom)
             Photon.Pun.PhotonNetwork.LeaveRoom();
     }
+
+    bool leaving;
 
     void OnDestroy()
     {
@@ -225,6 +261,11 @@ public class SettingsMenu : MonoBehaviour
         if (quitButton != null)
             quitButton.gameObject.SetActive(Photon.Pun.PhotonNetwork.InRoom);
 
+        // And the sandbox is the exact opposite: menu only. Starting one from inside a match
+        // would mean walking out on four other people to go and shoot at cardboard.
+        if (sandboxButton != null)
+            sandboxButton.gameObject.SetActive(!Photon.Pun.PhotonNetwork.InRoom);
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -247,7 +288,7 @@ public class SettingsMenu : MonoBehaviour
         // Handing the cursor back is PlayerController's job in the game - it captures whenever
         // this screen is down - but in the menu there is no player, so nothing would ever put
         // it back and the title screen would be unclickable.
-        if (!Photon.Pun.PhotonNetwork.InRoom || PlayerController.Local == null)
+        if (leaving || !Photon.Pun.PhotonNetwork.InRoom || PlayerController.Local == null)
             return;
 
         Cursor.lockState = CursorLockMode.Locked;

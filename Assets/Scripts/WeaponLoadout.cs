@@ -25,6 +25,15 @@ public class WeaponLoadout : MonoBehaviour
     // The launcher sits second from the top: harder than everything before it and a genuine
     // reward for getting there, but still not the peel, because ending a gun game on anything
     // other than beating somebody to death with rubbish would be a waste.
+    /// <summary>
+    /// Literally everything, melee included. Only the sandbox uses this.
+    ///
+    /// Built from the ladder rather than listed again, so a weapon added to the game turns up
+    /// here without anybody remembering to add it - which is exactly the sort of thing nobody
+    /// remembers.
+    /// </summary>
+    public static string[] Everything => (string[])GunGameLadder.Clone();
+
     public static readonly string[] GunGameLadder =
         { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple", "Peel" };
 

@@ -383,6 +383,23 @@ public class MatchState : MonoBehaviourPunCallbacks
         if (!PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom)
             return;
 
+        // No clock in the sandbox. A match that ends and starts a scoreboard countdown while
+        // you are measuring a weapon is an interruption, not a game.
+        if (Sandbox.Active)
+        {
+            if (Phase != MatchPhase.Live)
+            {
+                Requested(MatchPhase.Live);
+                SetRoom(new Hashtable
+                {
+                    { PhaseKey, (int)MatchPhase.Live },
+                    { EndsAtKey, PhotonNetwork.Time + 99999.0 },
+                });
+            }
+
+            return;
+        }
+
         // No phase in the room at all. This is the whole reason there was no warmup.
         //
         // Phase falls back to Warmup when the key is missing and TimeLeft falls back to zero,
@@ -538,6 +555,11 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// </summary>
     public static string[] WeaponsFor(Player player)
     {
+        // The sandbox hands you everything. Its whole job is comparing weapons, and doing that
+        // one respawn at a time would make it useless for the thing it exists for.
+        if (Sandbox.Active)
+            return WeaponLoadout.Everything;
+
         if (Mode == MatchMode.GunGame)
             return Rules.LoadoutForRung(RungFor(player), WeaponLoadout.GunGameLadder);
 
