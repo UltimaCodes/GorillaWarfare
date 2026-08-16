@@ -19,7 +19,23 @@ public class WeaponLoadout : MonoBehaviour
     public const string Fallback = "Pistol";
 
     /// Every weapon in the game, in power order. Gun game walks this list; deathmatch samples it.
-    public static readonly string[] AllWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple" };
+    /// <summary>
+    /// Every shooting weapon, as a fresh array each time.
+    ///
+    /// A property rather than a readonly field, and this is not fussiness. It used to hand out
+    /// the one shared array, PlayerController.LoadoutFor returned it directly as its fallback,
+    /// and the HUD's warmup reveal wrote display names into it in place - so the moment that
+    /// reveal ran before the loadout property arrived, the game's master list of weapons
+    /// permanently became { CAVENDISH, THE SPLIT, THE BUNCH, BIG MIKE }. Every Resources.Load
+    /// after that failed, nobody could switch weapons, and it stayed broken until the domain
+    /// reloaded, because statics outlive a match.
+    ///
+    /// readonly on an array only stops you reassigning the variable. It says nothing whatsoever
+    /// about the contents.
+    /// </summary>
+    public static string[] AllWeapons => (string[])allWeapons.Clone();
+
+    static readonly string[] allWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple" };
 
     /// Gun game order - weakest first, melee last. Killing with the peel wins the match.
     // The launcher sits second from the top: harder than everything before it and a genuine
