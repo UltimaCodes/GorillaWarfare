@@ -162,6 +162,22 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// way to tell whether the game intends to hold the cursor.
     public static bool CursorCaptured { get; private set; }
 
+    /// <summary>
+    /// Clears everything static that describes a match.
+    ///
+    /// These outlive the scene, which is the whole point of them - but that also means a match
+    /// that has ended leaves its leftovers pointing at destroyed objects, and whatever reads
+    /// them next gets a null or a stale answer. Cheaper to have one place that forgets than to
+    /// have every reader defend itself.
+    /// </summary>
+    public static void ForgetLocals()
+    {
+        Local = null;
+        LocalCamera = null;
+        CursorCaptured = false;
+        AimInputOverride = null;
+    }
+
     /// Hands the static over to the death camera while the controller is gone, so nameplates
     /// keep facing the right way instead of hunting for a camera that no longer exists.
     public static void SetLocalCamera(Camera camera) => LocalCamera = camera;

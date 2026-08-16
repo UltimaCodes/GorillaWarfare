@@ -177,6 +177,12 @@ public class SettingsMenu : MonoBehaviour
 
     void Update()
     {
+        // Rebuilt if the rows were lost. The screen lives on RoomManager and survives every
+        // scene change, but the objects it stamped can be destroyed underneath it - and a
+        // panel that opens to nothing looks exactly like the game having broken.
+        if (IsOpen && rows.Count == 0 && content != null)
+            Show(current);
+
         if (listening.HasValue)
         {
             ListenForKey();

@@ -20,6 +20,10 @@ public static class ColourPickerBuilder
     const float SwatchSize = 58f;
     const float Spacing = 10f;
 
+    /// Swatches across before wrapping. Eight is what fitted the panel when there were eight
+    /// colours, and it is still the right width now that there are twelve.
+    const int PerRow = 8;
+
     [MenuItem("Tools/Gorilla Warfare/Build the colour picker")]
     public static void Run()
     {
@@ -51,7 +55,10 @@ public static class ColourPickerBuilder
         rootRect.anchorMin = rootRect.anchorMax = new Vector2(0f, 1f);
         rootRect.pivot = new Vector2(0f, 1f);
         rootRect.anchoredPosition = new Vector2(60f, -900f);
-        rootRect.sizeDelta = new Vector2(600f, 140f);
+        rootRect.sizeDelta = new Vector2(PerRow * (SwatchSize + Spacing),
+                                         140f + Mathf.Max(0, Mathf.CeilToInt(
+                                             PlayerColours.Palette.Length / (float)PerRow) - 1)
+                                         * (SwatchSize + Spacing));
 
         TMP_Text caption = Text(root.transform, "Caption", font, 20f,
                                 new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(400f, 30f));
@@ -67,15 +74,25 @@ public static class ColourPickerBuilder
         rowRect.anchorMin = rowRect.anchorMax = new Vector2(0f, 1f);
         rowRect.pivot = new Vector2(0f, 1f);
         rowRect.anchoredPosition = new Vector2(0f, -38f);
-        rowRect.sizeDelta = new Vector2(600f, SwatchSize);
+        // Tall enough for however many rows the palette needs.
+        int rows = Mathf.CeilToInt(PlayerColours.Palette.Length / (float)PerRow);
+        rowRect.sizeDelta = new Vector2(PerRow * (SwatchSize + Spacing),
+                                        rows * (SwatchSize + Spacing));
 
-        HorizontalLayoutGroup layout = row.AddComponent<HorizontalLayoutGroup>();
-        layout.spacing = Spacing;
-        layout.childForceExpandWidth = false;
-        layout.childForceExpandHeight = false;
-        layout.childControlWidth = false;
-        layout.childControlHeight = false;
-        layout.childAlignment = TextAnchor.MiddleLeft;
+        // A grid rather than a row. Eight swatches fitted across the panel; twelve did not, and
+        // the last four went off the edge of the screen where nobody could click them. A grid
+        // wraps on its own, so the palette can grow again without this needing to know.
+        GridLayoutGroup layout = row.AddComponent<GridLayoutGroup>();
+        layout.cellSize = new Vector2(SwatchSize, SwatchSize);
+        layout.spacing = new Vector2(Spacing, Spacing);
+        layout.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        layout.startAxis = GridLayoutGroup.Axis.Horizontal;
+        layout.childAlignment = TextAnchor.UpperLeft;
+
+        // Fixed at eight across, so the wrap point is a decision rather than whatever the panel
+        // width happens to be this frame - and eight is what already fitted.
+        layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        layout.constraintCount = PerRow;
 
         GameObject swatchObject = new GameObject("SwatchTemplate",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
