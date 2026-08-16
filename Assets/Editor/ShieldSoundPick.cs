@@ -15,8 +15,16 @@ public static class ShieldSoundPick
     [MenuItem("Tools/Gorilla Warfare/Measure the shield sounds")]
     public static void Run()
     {
-        foreach (AudioClip clip in Resources.LoadAll<AudioClip>("Audio/Shield"))
-            Report(clip);
+        // Every bank that has been picked by measurement rather than by ear. Reading them all
+        // in one run means the numbers sit next to each other, which is how you notice that the
+        // "light" glass break was the loudest of its set.
+        foreach (string bank in new[] { "Shield", "Slide" })
+        {
+            Debug.Log($"[shield] ---- {bank} ----");
+
+            foreach (AudioClip clip in Resources.LoadAll<AudioClip>("Audio/" + bank))
+                Report(clip);
+        }
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);
