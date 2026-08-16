@@ -84,8 +84,26 @@ public class ColourPicker : MonoBehaviourPunCallbacks
     public override void OnPlayerEnteredRoom(Player newPlayer) => Draw();
     public override void OnPlayerLeftRoom(Player otherPlayer) => Draw();
 
+    // The mode is a room property, and switching into a team mode is what makes the swatches
+    // irrelevant.
+    public override void OnRoomPropertiesUpdate(Hashtable changed) => Draw();
+
     void Draw()
     {
+        // Nothing to pick in a team mode. Your colour is your side, chosen by clicking your own
+        // name in the list, and leaving eight swatches up that quietly do nothing is a worse
+        // answer than taking them away.
+        bool teams = MatchState.Mode == MatchMode.TeamDeathmatch;
+
+        if (row != null)
+            row.gameObject.SetActive(!teams);
+
+        if (caption != null)
+            caption.text = teams ? "SIDES ARE PICKED IN THE LIST" : string.Empty;
+
+        if (teams)
+            return;
+
         int mine = PhotonNetwork.InRoom ? PlayerColours.IndexOf(PhotonNetwork.LocalPlayer) : 0;
 
         for (int i = 0; i < swatches.Count; i++)

@@ -88,6 +88,12 @@ public static class SettingsMenuBuilder
                            new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
         quit.gameObject.SetActive(false);
 
+        // Same corner as MAIN MENU, because the two are never up at once - one is menu only and
+        // the other match only.
+        Button sandbox = Push(frame.transform, "Sandbox", font, "SANDBOX",
+                              new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
+        sandbox.gameObject.SetActive(false);
+
         // ---------------------------------------------------------------- tabs
         GameObject tabBar = Empty(frame.transform, "Tabs", new Vector2(0f, 1f),
                                   new Vector2(40f, -104f), new Vector2(PanelWidth - 80f, 54f));
@@ -154,6 +160,7 @@ public static class SettingsMenuBuilder
         Wire(so, "closeButton", close);
         Wire(so, "resetButton", reset);
         Wire(so, "quitButton", quit);
+        Wire(so, "sandboxButton", sandbox);
         Wire(so, "tabBar", (RectTransform)tabBar.transform);
         Wire(so, "tabTemplate", tabTemplate);
         Wire(so, "content", contentRect);

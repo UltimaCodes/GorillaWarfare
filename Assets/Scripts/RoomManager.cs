@@ -141,6 +141,46 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public override void OnJoinedRoom()
     {
         TrySpawn();
+
+        if (Sandbox.Active)
+            StartCoroutine(PlaceDummies());
+    }
+
+    /// <summary>
+    /// Stands a row of targets in front of wherever the sandbox drops you.
+    ///
+    /// Placed relative to a spawnpoint rather than at fixed coordinates, so this works on any
+    /// map without knowing anything about it - which matters, because the whole point of the
+    /// sandbox is being able to take it into a map you are still building.
+    /// </summary>
+    IEnumerator PlaceDummies()
+    {
+        // One frame for the map's own SpawnManager to wake up and find its pads.
+        yield return null;
+
+        Transform pad = SpawnManager.Instance != null ? SpawnManager.Instance.GetSpawnpoint() : null;
+        Vector3 origin = pad != null ? pad.position : Vector3.zero;
+        Quaternion facing = pad != null ? pad.rotation : Quaternion.identity;
+
+        // Spread across the view at increasing range, so falloff and travel time are both
+        // visible without having to walk anywhere.
+        float[] ranges = { 10f, 18f, 30f, 45f };
+
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            Vector3 across = facing * Vector3.right * ((i - 1.5f) * 3.5f);
+            Vector3 at = origin + facing * Vector3.forward * ranges[i] + across;
+
+            // Dropped onto whatever is underneath rather than assuming the ground is flat.
+            if (Physics.Raycast(at + Vector3.up * 12f, Vector3.down, out RaycastHit ground, 40f,
+                                Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+                at = ground.point + Vector3.up;
+
+            TrainingDummy.Build(at, Quaternion.LookRotation(origin - at, Vector3.up),
+                                PlayerColours.Palette[i % PlayerColours.Palette.Length]);
+        }
+
+        Debug.Log($"[sandbox] {ranges.Length} dummies up, from {ranges[0]}m to {ranges[ranges.Length - 1]}m");
     }
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -153,13 +193,6 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
-        // Leaving from inside a match has to physically get you out of the game scene. The
-        // Launcher handles this when you leave from the lobby, but the Launcher only exists in
-        // the menu scene - leave from the game and nothing was listening, so you sat in an empty
-        // level with no room and no way back.
-        if (SceneManager.GetActiveScene().buildIndex != 0)
-            SceneManager.LoadScene(0);
-
         // Leaving while dead used to leave the respawn coroutine running, so it would come back
         // a few seconds later and try to spawn a player into a room we were no longer in.
         if (deathRoutine != null)
@@ -170,6 +203,37 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         ClearDeathState();
         localController = null;
+
+        // Leaving from inside a match has to physically get you out of the game scene. The
+        // Launcher handles this when you leave from the lobby, but the Launcher only exists in
+        // the menu scene - leave from the game and nothing is listening.
+        if (SceneManager.GetActiveScene().buildIndex != 0)
+            StartCoroutine(BackToTheMenu());
+    }
+
+    /// <summary>
+    /// Out of the match and back to the title screen, a frame later.
+    ///
+    /// The frame is the whole point. This runs from OnLeftRoom, which PUN dispatches in a bare
+    /// foreach with no try/catch over every callback target it knows about - and loading a
+    /// scene tears down half of those targets while it is still iterating them. Doing it
+    /// synchronously took the game down with it.
+    ///
+    /// Waiting one frame lets PUN finish handing the callback round before anything is
+    /// destroyed, which costs nothing anybody can perceive.
+    /// </summary>
+    IEnumerator BackToTheMenu()
+    {
+        yield return null;
+
+        // The menu is clicked, not aimed. Whatever the game left the cursor in has to be undone
+        // here, because there is no PlayerController in the menu scene to keep managing it - so
+        // a cursor still locked from the match stays locked, and a title screen you cannot click
+        // is indistinguishable from a hang.
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        SceneManager.LoadScene(0);
     }
 
     void TrySpawn()

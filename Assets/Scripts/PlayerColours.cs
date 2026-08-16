@@ -133,6 +133,36 @@ public static class PlayerColours
     }
 
     /// <summary>
+    /// Puts one player on one side.
+    ///
+    /// Anyone may move themselves; only the host may move anybody else. PUN does not enforce
+    /// that - any client can write any player's properties - so it is enforced here, which is
+    /// the same amount of security everything else in this game has and the right amount for
+    /// five friends.
+    /// </summary>
+    public static bool SetTeam(Player player, int team)
+    {
+        if (player == null || !PhotonNetwork.InRoom || MatchState.Mode != MatchMode.TeamDeathmatch)
+            return false;
+
+        if (player != PhotonNetwork.LocalPlayer && !PhotonNetwork.IsMasterClient)
+            return false;
+
+        int clamped = Mathf.Clamp(team, 0, TeamPalette.Length - 1);
+
+        if (TeamOf(player) == clamped)
+            return false;
+
+        player.SetCustomProperties(new Hashtable { { TeamKey, clamped } });
+        return true;
+    }
+
+    /// Whether the local player is allowed to move this one.
+    public static bool CanAssign(Player player) =>
+        MatchState.Mode == MatchMode.TeamDeathmatch
+        && (player == PhotonNetwork.LocalPlayer || PhotonNetwork.IsMasterClient);
+
+    /// <summary>
     /// Splits the room into two sides, as evenly as it can.
     ///
     /// Master only, and recomputed from scratch rather than incrementally: assigning each
@@ -150,14 +180,65 @@ public static class PlayerColours
         Player[] players = PhotonNetwork.PlayerList;
         System.Array.Sort(players, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
 
-        for (int i = 0; i < players.Length; i++)
+        // Outside a team mode nobody has a side. Clearing rather than leaving stale values means
+        // switching modes back and forth cannot leave somebody wearing red in a deathmatch.
+        if (MatchState.Mode != MatchMode.TeamDeathmatch)
         {
-            int team = MatchState.Mode == MatchMode.TeamDeathmatch ? i % TeamPalette.Length : -1;
+            foreach (Player player in players)
+            {
+                if (TeamOf(player) >= 0 || player.CustomProperties.ContainsKey(TeamKey))
+                    player.SetCustomProperties(new Hashtable { { TeamKey, -1 } });
+            }
 
-            if (TeamOf(players[i]) == team && team >= 0)
+            return;
+        }
+
+        // People pick their own sides now, so this fills gaps rather than dealing the room out
+        // from scratch. Reassigning everybody on every join would silently undo a choice
+        // somebody made ten seconds earlier, which is worse than a slightly uneven match.
+        int[] size = new int[TeamPalette.Length];
+
+        foreach (Player player in players)
+        {
+            int team = TeamOf(player);
+
+            if (team >= 0)
+                size[team]++;
+        }
+
+        foreach (Player player in players)
+        {
+            if (TeamOf(player) >= 0)
                 continue;
 
-            players[i].SetCustomProperties(new Hashtable { { TeamKey, team } });
+            int smallest = size[0] <= size[1] ? 0 : 1;
+            player.SetCustomProperties(new Hashtable { { TeamKey, smallest } });
+            size[smallest]++;
+        }
+
+        // Only step in when it has gone properly lopsided. One more on a side is a match; three
+        // against one is nobody's idea of an evening, and at that point being moved is a
+        // kindness rather than an interference.
+        while (Mathf.Abs(size[0] - size[1]) > 1)
+        {
+            int from = size[0] > size[1] ? 0 : 1;
+            int to = 1 - from;
+            Player moved = null;
+
+            // The most recent arrival on the crowded side, so the person who has been there
+            // longest is not the one uprooted.
+            foreach (Player player in players)
+            {
+                if (TeamOf(player) == from)
+                    moved = player;
+            }
+
+            if (moved == null)
+                break;
+
+            moved.SetCustomProperties(new Hashtable { { TeamKey, to } });
+            size[from]--;
+            size[to]++;
         }
     }
 
