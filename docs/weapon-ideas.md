@@ -1,109 +1,162 @@
-# Weapon ideas
+# Weapons, abilities and rewards
 
-Five weapons is too few, especially for gun game — the ladder is five rungs, so a match is over
-in nine kills and you barely meet half of them.
+Rewritten. The first version of this was a list of guns that differed by damage and fire rate,
+and Ryaan's read on it was right: it adds variety without adding a game. A shotgun and an SMG
+are the same decision at different ranges.
 
-Grouped by **what the code already does**, because that's the difference between an afternoon
-and a week. Everything in group A is a ScriptableObject and a model; group B and C need real
-systems built first.
+The pineapple launcher he described is the reason why. It isn't good because it does area
+damage — it's good because **the knockback makes it a movement tool**. It changes where you can
+be, not how fast the health bar goes down. That's the bar everything below has to clear:
 
-Current roster, so nothing below overlaps it — `WeaponCheck` fails the build if two weapons
-share a role:
+> **Does it change how you move, or how the space works?**
+> If the answer is only "it does more damage at this range", it isn't on this list.
 
-| role | on screen | damage | rate | range | what it's for |
-|---|---|---|---|---|---|
-| Pistol | Cavendish | 34 | 5/s | 120 | accurate, 3 shots to kill, everyone starts here |
-| Shotgun | The Split | 108/pull | 1.4/s | 22 | one burst up close |
-| Rifle | The Bunch | 21 | 10/s | 200 | sustained damage, wins a long fight |
-| Sniper | Big Mike | 95 | 0.8/s | 400 | scoped, one mistake kills you |
-| Peel | Slip Hazard | melee | — | 2.4m | gun game's last rung |
+The five existing weapons are the baseline and they're fine as a baseline — you need boring guns
+for the interesting ones to be interesting against. Nothing here replaces them.
 
 ---
 
-## Group A — hitscan, drops straight into what exists
+## 1. Weapons that move you
 
-No new systems. A `GunInfo` asset, a model, an audio bank, a name.
+### The Pineapple — rocket launcher *(Ryaan's, and the anchor for the rest)*
 
-**SMG — "The Finger"** *(a lady finger banana, which is the small one)*
-12 damage, 16/s, automatic, 40 rounds, range ~60, wide spread.
-The gap it fills: closing distance. The shotgun does that in one burst and the rifle does it
-badly; this does it as a stream. It has to fall off hard past 60m or it's just a better rifle.
+Arcing projectile, travel time, bursts on contact. Splash damage falling off with distance, a
+real explosion you can see and hear from across the map, and **knockback applied to the shooter**.
 
-**Marksman rifle — "Plantain"** *(a banana you can't eat raw — it needs work)*
-Three-round burst, 26 a shot, 1 burst/s, range 250, no scope.
-Sits between the rifle and the sniper, which is currently a cliff: you're either spraying at
-200m or you're scoped at 400m. Rewards trigger discipline without the sniper's commitment.
+The whole design is in three numbers:
 
-**Hand cannon — "The Cleaver"**
-70 damage, 1.6/s, 6 rounds, range 90.
-Two shots to kill, and missing genuinely costs you. Distinct from the pistol (three fast shots)
-and the sniper (range, scope). The one to give someone who's good.
+| number | why it matters |
+|---|---|
+| self-damage | TF2 charges you health for a rocket jump. Valorant's Raze doesn't. |
+| self-knockback | how high you can get, and whether it's a movement tool or a nudge |
+| arming distance | stops point-blank suicide, and stops it being a shotgun |
 
-**Light machine gun — "Bad Bunch"**
-18 damage, 8/s, 100 rounds, 4s reload, spread that opens badly while you move.
-Area denial. Nothing in the game currently punishes you for walking into a corridor. The long
-reload is the balance — get caught empty and you're dead.
+**Recommendation: little or no self-damage, large self-knockback.** TF2's health cost exists
+because TF2 has healers and a 12v12 economy. Five friends in a deathmatch don't have that, and
+"I blew myself to the roof and arrived on 30 health" is a worse story than "I blew myself to the
+roof". Keep the cost as *commitment*: you go where the blast sends you, and you can't steer much.
 
-**Auto shotgun — "Overripe"**
-45/pull, 3/s, 8 rounds, range 18.
-The Split rewards one committed shot; this rewards holding the trigger and walking forward. Even
-shorter ranged to keep them apart.
+Direct hits should do noticeably more than splash, so there's a reason to aim rather than to
+spam feet.
 
----
+**What it needs built:** a projectile system (pooled, replicated, travel time, contact test), a
+radial damage query, knockback applied to `PlayerMovement`'s velocity rather than to the
+transform, and an explosion with real weight — screenshake scaled by distance, a light flash, and
+a sound with a tail.
 
-## Group B — needs a projectile system
+That projectile system is the single highest-value thing on this whole document, because it
+unlocks everything in this section.
 
-Right now every weapon is a raycast that lands the instant you click. These need something that
-travels, which means a pooled projectile with a lifetime, a hit test, and replication so
-everyone sees the same thing in the same place. That's the real work; once it exists, all three
-are cheap.
+### The Vine — grapple
 
-**Grenade launcher — "Smoothie"**
-Arcing shell, splash damage, arms after 0.3s so you can't suicide-blast point blank.
-Adds indirect fire: shooting at a place rather than a person, and denying a doorway. It's also
-the funniest thing on this list.
+Fires a vine. Sticks to world geometry, pulls you toward the anchor, cuts if you're shot or if
+you let go. Not a weapon at all — it takes a weapon slot and does no damage.
 
-**Speargun — "Skewer"**
-Fast projectile, slight drop, one-shot on a headshot, 3-round magazine.
-Rewards leading a moving target instead of tracking one. Silent, so it doesn't announce you.
+Pairs with the Pineapple the way a rocket launcher pairs with a grappling hook in every game
+that has both: the launcher gets you height, the vine gets you distance, and putting them
+together is a skill you can spend a year getting good at.
 
-**Boomerang — "Round Trip"**
-Thrown, arcs out and comes back, damages on both legs of the trip.
-Hits people behind cover on the way back, and you have to catch it to throw again. Pure
-gimmick, entirely in keeping.
+Also fixes something the game currently lacks: a reason to look up.
 
----
+### The Blender — vortex
 
-## Group C — needs new firing modes
+Short-range cone that **pulls enemies toward you** rather than pushing them. Almost no damage.
 
-`SingleShotGun` currently understands "one pull, one or more rays". These don't fit that.
+It's an anti-camping tool and a setup tool: yank someone off a ledge, pull them out of cover into
+your friend's line, drag someone into the pineapple you just fired. In a five-player game the
+funniest weapon is the one that makes somebody else's shot land.
 
-**Railgun — "Gros Michel"** *(the cultivar that got wiped out — appropriate)*
-Hold to charge, release to fire. Full charge pierces every player in a line.
-Needs a charge state, a charging sound that rises, and penetration in the raycast. The rising
-pitch while charging is free dopamine and this game already does that trick on hit combos.
+### Coconut Mortar
 
-**Flamethrower / spray — "Rot"**
-Continuous cone, damage over time, no travel.
-Needs a damage-over-time system and continuous fire rather than discrete shots. Also the only
-weapon that would let you kill someone after you're already dead, which is a funny thing to
-have.
+High arc, no direct fire — it physically cannot shoot at someone you can see. Sticks where it
+lands and detonates after a beat.
+
+The point is that it makes **rooms** dangerous rather than **people** dangerous. Nothing in the
+game currently lets you say "you can't go through there for the next three seconds".
 
 ---
 
-## What I'd actually build first
+## 2. Abilities
 
-The five in group A, in one pass. They're all the same shape as what exists, they take the gun
-game ladder from five rungs to ten — which roughly doubles the length of a match and means you
-meet weapons you'd otherwise never see — and none of them need a system that doesn't exist.
+Chosen before you spawn, one per life, on a cooldown. Not earned — the earned things are in the
+next section. Everyone always has one, so it's a loadout decision rather than a reward.
 
-Then the projectile system, because it unlocks three at once and the grenade launcher is worth
-it on its own.
+Gorilla-shaped on purpose: these should read as things an enormous ape can do, not as
+sci-fi powers.
 
-Group C last. Both are good and both are a rewrite of how firing works.
+**Chest Beat** — shockwave in a ring around you. Knocks everyone back, and for about a second
+their screen shakes and their audio ducks. A panic button that solves being surrounded without
+solving being outplayed. Loud enough that everyone in the room knows you used it.
 
-## Naming
+**Knuckle Run** — drop to all fours. Much faster, camera drops to waist height, and **you can't
+shoot**. Pure rotation and escape. The camera drop is half the appeal; it changes what the map
+looks like.
 
-The banana theme is worth keeping for the ones that are bananas, but it shouldn't be a
-straitjacket — "The Cleaver" and "Round Trip" aren't fruit and are better for it. Half the joke
-is a gorilla holding something that clearly isn't a banana.
+**Brachiate** — one mid-air lunge in the direction you're looking. Small, but it turns every gap
+into a decision and every rocket jump into something you can steer.
+
+**Silverback** — a few seconds of heavy damage resistance and immunity to knockback, during
+which **you glow and everybody can see it**. Committing to a fight rather than winning one. The
+tell is the balance.
+
+**Scent** — enemy footprints light up through walls for a few seconds. Information rather than
+force. The counter is standing still, which is its own punishment.
+
+**Peel Trail** — drop peels behind you for a few seconds. Anyone who runs through one slips: no
+damage, they just lose control of their aim for a moment. Chase-breaking, and it makes the Slip
+Hazard's whole joke into a mechanic.
+
+---
+
+## 3. Earned rewards
+
+Ryaan's brief was killstreaks, minus the copy-paste. Two things worth saying before the list.
+
+**There is already a killstreak system.** Kills heal you, and past full health they give
+overshield up to 200. It works, it's invisible, and it's the model everything here should follow:
+the reward makes you harder to stop, not able to press a button that wins.
+
+**Snowballing is the real risk.** In a room of five, one person on a streak can end the match on
+their own. So every one of these is **short, loud, and visible**. If somebody is on a streak, the
+other four should know instantly and be able to do something about it.
+
+**3 kills — Banana Rain.** Mark an area; a few seconds later a cluster of bananas falls on it.
+Telegraphed on the ground for everyone, so it denies a space rather than deleting whoever was in
+it. Reuses the projectile system.
+
+**5 kills — Go Ape.** Ten seconds of: faster, melee kills in one hit, screen pushed red, and **a
+roar every player in the match hears wherever they are**. You're genuinely dangerous and
+everybody knows exactly where you are and what you are. High risk both ways, which is the only
+way a rage mode belongs in a five-player game.
+
+**7 kills — The Zookeeper.** Every enemy outlined for a few seconds. The UAV analogue, and the
+one thing on this list that's straight-up strong — which is why it's the last rung.
+
+**Streaks reset on death**, obviously, and the existing heal/overshield keeps running underneath
+all of it.
+
+---
+
+## 4. What to build, in what order
+
+1. **The projectile system.** Nothing else in section 1 exists without it, and the Pineapple
+   alone is worth the work. Pooled, replicated, travel time, contact test, radial damage,
+   knockback into `PlayerMovement`'s velocity.
+2. **The Pineapple**, on top of it. Get the three numbers right by playing, not by reasoning —
+   self-knockback in particular is a feel number and no check will ever tell you it's wrong.
+3. **One ability, to build the ability system.** Chest Beat is the right first one: it needs a
+   cooldown, a radius query, a replicated effect and a sound, which is the whole framework.
+4. **The rest of the abilities**, which are then mostly data.
+5. **Streak rewards**, last, because they need the abilities framework and because they're the
+   easiest thing to ruin the balance with.
+
+The five hitscan guns from the previous version of this document — SMG, marksman rifle, hand
+cannon, LMG, auto shotgun — are still worth having eventually, as ladder filler for gun game.
+But they're filler, and they shouldn't come before any of the above.
+
+---
+
+## 5. Naming
+
+Fruit where it's a fruit, and not otherwise. "The Blender" and "Knuckle Run" aren't fruit and are
+better for it. Half the joke is a gorilla holding something that clearly isn't a banana.
