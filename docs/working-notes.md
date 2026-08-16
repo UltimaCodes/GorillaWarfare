@@ -251,6 +251,11 @@ Anything else that reads a phase or a deadline out of room properties needs to d
 
 ## Open, and known
 
+**`docs/open-issues.md` is the live list.** Anything reported from play and not yet fixed lives
+there with what is suspected and why. The entries below are older and mostly settled.
+
+
+
 - ~~Nothing has been played with two people.~~ Played on 3-4 clients and working, 2026-08-16.
 - Match timings are guesses: warmup 8s, deathmatch 5min, gun game 10min, respawn 3s.
 - `warmup.mp3` is 20s against an 8s phase, so only its opening is ever heard. The crossfade
