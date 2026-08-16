@@ -1396,6 +1396,17 @@ public class ProbeRunner : MonoBehaviour
         SingleShotGun gun = player.ActiveGun;
         int loaded = gun != null ? gun.Ammo : -1;
 
+        // Standing still is part of it. Rebinding your movement keys means pressing them, and
+        // every press was also walking you somewhere.
+        Vector3 stood = player.transform.position;
+
+        yield return null;
+        yield return null;
+        yield return null;
+
+        float wandered = Vector3.Distance(stood, player.transform.position);
+        Check(wandered < 0.05f, "and the player stays put", $"{wandered:F3}m");
+
         menu.Close();
         yield return null;
         yield return null;

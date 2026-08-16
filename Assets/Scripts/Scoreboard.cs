@@ -64,6 +64,9 @@ public class Scoreboard : MonoBehaviourPunCallbacks
 
         // Read every frame rather than on the key events, because rebinding the scoreboard
         // while holding the old key would otherwise leave it stuck open forever.
-        canvasGroup.alpha = KeyBinds.Held(KeyBinds.Action.Scoreboard) ? 1f : 0f;
+        // Not while the settings screen is up, where tab is how you move between fields and
+        // holding it should not also throw the scoreboard over the panel.
+        canvasGroup.alpha = !SettingsMenu.IsOpen && KeyBinds.Held(KeyBinds.Action.Scoreboard)
+            ? 1f : 0f;
     }
 }
