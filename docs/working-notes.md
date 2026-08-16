@@ -157,6 +157,25 @@ assert the method count is unchanged.
 
 ---
 
+## Where input is read
+
+Four separate scripts read the mouse and keyboard, and every one of them has to be told when the
+settings screen is up: `PlayerController` (look, fire, reload, cursor), `PlayerMovement` (walk,
+jump), `Scoreboard` (tab) and `WeaponSway` (mouse). All four were wrong at once, because each was
+written on the assumption that it was the only thing listening.
+
+Anything new that reads input goes on that list. The rule is `SettingsMenu.IsOpen`.
+
+## Phases have a default, and the default is a trap
+
+`MatchState.Phase` falls back to `Warmup` when the room has no phase key, and `TimeLeft` falls
+back to zero. Together that reads as "a warmup that has already run out", so the phase machine
+promotes it straight to Live - which is why there was no warmup for months. A missing phase now
+means "the match has not started" and is handled before the switch.
+
+Anything else that reads a phase or a deadline out of room properties needs to distinguish
+"absent" from "expired". They are not the same and the defaults make them look identical.
+
 ## Open, and known
 
 - Nothing has been played with two people. This is the biggest risk in the project.
