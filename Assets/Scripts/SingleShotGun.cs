@@ -73,7 +73,10 @@ public class SingleShotGun : Gun
     /// Returns how far the muzzle end sits from the grip, so the flash lands on the tip.
     float BuildVisual()
     {
-        GameObject prefab = Resources.Load<GameObject>($"Models/Weapons/Banana{gameObject.name}");
+        // Weapons named after their model rather than always Banana<Name>, because not
+        // everything on the roster is a banana any more.
+        GameObject prefab = Resources.Load<GameObject>($"Models/Weapons/{gameObject.name}")
+                            ?? Resources.Load<GameObject>($"Models/Weapons/Banana{gameObject.name}");
         if (prefab == null)
             return 0.35f;
 
@@ -95,7 +98,8 @@ public class SingleShotGun : Gun
         // same way and a longer one simply reaches further out.
         float tip = AnchorGrip(visual.transform);
 
-        Material mat = Resources.Load<Material>($"Models/Weapons/Banana{gameObject.name}Mat");
+        Material mat = Resources.Load<Material>($"Models/Weapons/{gameObject.name}Mat")
+                       ?? Resources.Load<Material>($"Models/Weapons/Banana{gameObject.name}Mat");
         if (mat != null)
         {
             foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))
@@ -310,6 +314,15 @@ public class SingleShotGun : Gun
 
     void Shoot()
     {
+        // A launcher does not trace at all. Everything below - pellets, spread, falloff, the
+        // endpoint the tracer draws to - describes a shot that has already arrived, and none of
+        // it means anything for something that has to fly there first.
+        if (Info.projectile)
+        {
+            ThrowShell();
+            return;
+        }
+
         // One trace per pellet. A shotgun is just this number going up - each pellet rolls its
         // own spread, so the group is different every shot without any extra machinery.
         int pellets = Mathf.Max(1, Info.pelletsPerShot);
@@ -341,6 +354,28 @@ public class SingleShotGun : Gun
         // what happens in a fight, and it was the one case with no feedback at all.
         if (haveEnd)
             owner.ReportShot(gameObject.name, endPoint, endNormal, anyHit);
+    }
+
+    /// <summary>
+    /// Sends a shell on its way.
+    ///
+    /// Launched from the camera rather than from the muzzle, so it goes exactly where the
+    /// crosshair is pointing. Starting it at the end of the barrel looks more honest and means
+    /// that aiming past the left edge of a doorway puts the shell into the frame - the weapon
+    /// is held to the right of the view, and nobody aims with the barrel.
+    ///
+    /// Nudged forward far enough to clear your own body, since the sweep would otherwise hit
+    /// your own hitboxes on its first frame.
+    /// </summary>
+    void ThrowShell()
+    {
+        if (owner == null || cam == null)
+            return;
+
+        Vector3 direction = cam.transform.forward;
+        Vector3 origin = cam.transform.position + direction * 0.9f;
+
+        owner.ReportProjectile(gameObject.name, origin, direction);
     }
 
     /// <summary>

@@ -1,0 +1,10 @@
+Gamemaster Audio - Explosion Sound Pack, from the Sonniss GDC 2017 Game Audio Bundle.
+Royalty free for commercial use under Sonniss's bundle terms.
+
+blast.wav is explosion_med_long_tail_01 - the launcher going off at the far end.
+The launcher's own report is explosion_large_no_tail_03, in Shoot/Pineapple, chosen because
+"no tail" is exactly what a weapon firing wants: the bang without the three seconds of rumble
+that belongs to the thing it hit.
+
+Both arrived as 24 bit 96kHz stereo, which is a mastering format rather than a game one. The
+importer settings knock them down; see AudioImport.
