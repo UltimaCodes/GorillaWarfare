@@ -228,6 +228,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             rig = null;
         }
 
+        // Both of these belong to every copy, which is why they are here rather than in
+        // AttachWeaponsToHand - that runs for remote players only, and stamping the spawn time
+        // there meant the one player whose immunity actually matters never had any.
+        ApplyColour();
+
+        spawnedAt = Time.time;
+        gaveUpProtection = false;
+
         // The movement capsule goes on Player, which weapons don't trace against. Otherwise the
         // capsule is a single volume around the whole body and every part of a player is worth
         // the same - there'd be nowhere to aim.
@@ -384,9 +392,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
 
         if (KeyBinds.Pressed(KeyBinds.Action.Fire))
+        {
+            DropProtection();
             held.Use();
+        }
         else if (KeyBinds.Held(KeyBinds.Action.Fire) && held is SingleShotGun heldGun)
+        {
+            DropProtection();
             heldGun.UseHeld();
+        }
 
         if (KeyBinds.Pressed(KeyBinds.Action.Reload) && held is SingleShotGun reloadGun)
             reloadGun.Reload();
@@ -433,10 +447,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable { { ItemIndexKey, itemIndex } });
     }
 
+    /// <summary>
+    /// Paints this gorilla whatever colour it should be right now.
+    ///
+    /// Called on spawn and again whenever the colour or the team changes, because both can move
+    /// underneath a player who is already standing there - somebody picks a new colour in the
+    /// lobby, or the host switches to a team mode and everybody is reassigned.
+    /// </summary>
+    public void ApplyColour()
+    {
+        if (rig != null && PV != null && PV.Owner != null)
+            rig.Tint(PlayerColours.For(PV.Owner));
+    }
+
     public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
     {
         if (targetPlayer != PV.Owner)
             return;
+
+        if (changedProps.ContainsKey(PlayerColours.ColourKey)
+            || changedProps.ContainsKey(PlayerColours.TeamKey))
+            ApplyColour();
 
         // A new loadout means new weapon objects on every client, owner included - this is how
         // gun game moves you up a rung without respawning you.
@@ -468,6 +499,24 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     {
         if (rig == null)
             return;
+
+        // Pulsed white while protected, on every client including this one's own shadow. The
+        // shooter has to be able to see that their shots are not landing for a reason.
+        bool shielded = IsProtected;
+
+        if (shielded || wasProtected)
+        {
+            Color colour = PlayerColours.For(PV.Owner);
+
+            if (shielded)
+            {
+                float pulse = 0.45f + Mathf.PingPong(Time.time * 2.4f, 0.45f);
+                colour = Color.Lerp(colour, Color.white, pulse);
+            }
+
+            rig.Tint(colour);
+            wasProtected = shielded;
+        }
 
         rig.LookPitch = verticalLookRotation;
 
@@ -742,10 +791,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (stream.IsWriting)
         {
             stream.SendNext(verticalLookRotation);
+            stream.SendNext(IsProtected);
         }
         else
         {
             remoteVerticalLook = (float)stream.ReceiveNext();
+            remoteProtected = (bool)stream.ReceiveNext();
         }
     }
 
@@ -788,6 +839,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (dead)
             return;
 
+        // Just landed. Being shot before you have finished arriving is the least interesting
+        // way to lose a fight, and no spawn placement can rule it out entirely.
+        if (IsProtected)
+            return;
+
         float shieldBefore = Overshield;
         currentHealth = Absorb(currentHealth, damage);
 
@@ -798,6 +854,22 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         // 2D - this happened to you, not near you.
         GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume, 0.1f);
+
+        // Which way it came from. The shooter's body is looked up rather than sent, because the
+        // position at the moment the shot landed is what matters and they have moved since the
+        // RPC left them.
+        if (Hud != null && info.Sender != null)
+        {
+            foreach (PlayerController other in
+                     FindObjectsByType<PlayerController>(FindObjectsSortMode.None))
+            {
+                if (other != null && other.View != null && other.View.Owner == info.Sender)
+                {
+                    Hud.ShowDamageFrom(other.transform.position);
+                    break;
+                }
+            }
+        }
 
         // Shake without a stop. Being shot shouldn't freeze your game - that's the one moment
         // you most need control, and stealing it turns a fight into a slideshow.
@@ -882,6 +954,46 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         GameAudio.PlayPitched(GameAudio.Impact, null, GameAudio.ShieldVolume, 1.9f);
     }
 
+    [Header("Spawning")]
+    [Tooltip("Seconds of immunity after coming back. Ends early the moment you shoot.")]
+    [SerializeField] float spawnProtectionSeconds = 2f;
+
+    float spawnedAt = -999f;
+    bool gaveUpProtection;
+    bool remoteProtected;
+    bool wasProtected;
+
+    /// <summary>
+    /// Whether this player cannot currently be hurt.
+    ///
+    /// Time based and replicated as a single bool on the existing stream rather than as a
+    /// property, because it changes twice per life and a custom property write is a server round
+    /// trip - and because the visible flash has to agree with the immunity on every screen. A
+    /// shooter emptying a magazine into someone who is not taking damage needs to be able to see
+    /// why, or it reads as the hit registration being broken.
+    /// </summary>
+    public bool IsProtected
+    {
+        get
+        {
+            if (PV == null || !PV.IsMine)
+                return remoteProtected;
+
+            return !gaveUpProtection && !dead
+                   && Time.time < spawnedAt + spawnProtectionSeconds
+                   && MatchState.Phase != MatchPhase.Over;
+        }
+    }
+
+    /// <summary>
+    /// Gives up the shield. Called the moment you fire.
+    ///
+    /// Spawn protection exists so you can land and get your bearings, not so you can walk into a
+    /// fight invulnerable. Shooting is the clearest possible signal that you have stopped
+    /// getting your bearings.
+    /// </summary>
+    public void DropProtection() => gaveUpProtection = true;
+
     public float Overshield => Mathf.Max(0f, currentHealth - maxHealth);
     public float MaxHealth => maxHealth;
 
@@ -941,7 +1053,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot, flavour);
 
         if (RoomManager.Instance != null)
-            RoomManager.Instance.HandleLocalDeath(transform.position, transform.forward);
+            RoomManager.Instance.HandleLocalDeath(transform.position, transform.forward, killer);
     }
 
     [PunRPC]

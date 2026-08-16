@@ -412,6 +412,13 @@ public class SingleShotGun : Gun
         Hitbox box = hit.collider.GetComponent<Hitbox>();
         if (box != null)
         {
+            // Your own side absorbs nothing and hears nothing. Returning true rather than false
+            // so the tracer and the impact mark still land where the shot went - the round
+            // physically stopped in a teammate and pretending it carried on through them would
+            // be a stranger lie than the friendly fire.
+            if (IsTeammate(hit.collider))
+                return true;
+
             box.Apply(damage, gameObject.name);
 
             // Hit confirmation. Without this you're firing into the void and guessing.
@@ -444,6 +451,26 @@ public class SingleShotGun : Gun
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether this collider belongs to somebody on your side.
+    ///
+    /// Always false outside a team mode, so deathmatch and gun game are untouched by any of
+    /// this - and false for your own body too, since the void kill and any future self damage
+    /// have to keep working.
+    /// </summary>
+    bool IsTeammate(Collider other)
+    {
+        if (owner == null || owner.View == null || MatchState.Mode != MatchMode.TeamDeathmatch)
+            return false;
+
+        PlayerController hitPlayer = other.GetComponentInParent<PlayerController>();
+
+        if (hitPlayer == null || hitPlayer == owner || hitPlayer.View == null)
+            return false;
+
+        return PlayerColours.SameTeam(owner.View.Owner, hitPlayer.View.Owner);
     }
 
     bool IsOwnedByShooter(Collider other)

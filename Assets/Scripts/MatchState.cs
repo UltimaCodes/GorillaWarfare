@@ -8,6 +8,10 @@ public enum MatchMode
 {
     Deathmatch = 0,
     GunGame = 1,
+
+    /// Red against blue. Same rules as deathmatch, except your side's kills are what count and
+    /// you cannot shoot the people on it.
+    TeamDeathmatch = 2,
 }
 
 public enum MatchPhase
@@ -36,6 +40,11 @@ public class MatchState : MonoBehaviourPunCallbacks
     public const string PhaseKey = "phase";
     public const string EndsAtKey = "endsAt";
     public const string WinnerKey = "winner";
+
+    /// Which side won, in a team mode, or -1. Separate from WinnerKey rather than overloading
+    /// it - an actor number and a team index are different things and packing both into one
+    /// property is how you end up drawing "player 1 wins" when team 1 won.
+    public const string WinningTeamKey = "winTeam";
 
 
     /// Gun game position, per player.
@@ -92,6 +101,9 @@ public class MatchState : MonoBehaviourPunCallbacks
         /// True when the local player is either end of it, so the HUD can pick it out.
         public bool involvesYou;
 
+        /// True when the killer is getting their own back on whoever last killed them.
+        public bool revenge;
+
         public float at;
     }
 
@@ -139,6 +151,64 @@ public class MatchState : MonoBehaviourPunCallbacks
 
             return 0f;
         }
+    }
+
+    /// The winning side, or -1. Only meaningful in a team mode.
+    public static int WinningTeam => RoomInt(WinningTeamKey, -1);
+
+    public struct Award
+    {
+        public string title;
+        public string who;
+        public string detail;
+    }
+
+    /// <summary>
+    /// A line or two about how the match went, beyond who won.
+    ///
+    /// Computed from replicated properties on whichever client is asking, so everyone sees the
+    /// same list without anything being sent. Every award needs a non-zero winner - handing out
+    /// HEADHUNTER for zero headshots is worse than not handing it out, because it reads as the
+    /// game not having noticed.
+    ///
+    /// Deliberately includes an award for being bad at it. The person who died most is going to
+    /// find out either way and it is funnier coming from the game.
+    /// </summary>
+    public static List<Award> Awards()
+    {
+        List<Award> found = new List<Award>();
+
+        if (!PhotonNetwork.InRoom)
+            return found;
+
+        Add(found, "TOP BANANA", RoomManager.KillsKey, "kills");
+        Add(found, "HEADHUNTER", RoomManager.HeadshotsKey, "headshots");
+        Add(found, "ON A ROLL", RoomManager.BestStreakKey, "in a row");
+        Add(found, "CRASH TEST DUMMY", RoomManager.DeathsKey, "deaths");
+
+        return found;
+    }
+
+    static void Add(List<Award> into, string title, string key, string unit)
+    {
+        Player best = null;
+        int most = 0;
+
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            int value = RoomManager.GetStat(player, key);
+
+            if (value <= most)
+                continue;
+
+            most = value;
+            best = player;
+        }
+
+        if (best == null || most <= 0)
+            return;
+
+        into.Add(new Award { title = title, who = NameOf(best), detail = $"{most} {unit}" });
     }
 
     public static Player Winner
@@ -190,6 +260,7 @@ public class MatchState : MonoBehaviourPunCallbacks
     public override void OnLeftRoom()
     {
         Feed.Clear();
+        lastKilledBy.Clear();
 
         // Reset the echo tracking as well as the tallies. Rejoining with `requested` still
         // pointing at the last match's phase makes the first transition of the next one wait
@@ -247,6 +318,10 @@ public class MatchState : MonoBehaviourPunCallbacks
         if (!PhotonNetwork.IsMasterClient)
             return;
 
+        // Sides only exist in a team mode, and AssignTeams clears them outside one - so this
+        // handles both directions without a special case for either.
+        PlayerColours.AssignTeams();
+
         // Gun game starts everyone at the bottom of the ladder. Carrying a rung over from a
         // deathmatch would be meaningless anyway.
         foreach (Player player in PhotonNetwork.PlayerList)
@@ -276,6 +351,10 @@ public class MatchState : MonoBehaviourPunCallbacks
         newPlayer.SetCustomProperties(new Hashtable { { RungKey, 0 }, { RungKillsKey, 0 } });
         rungs[newPlayer.ActorNumber] = 0;
         rungKills[newPlayer.ActorNumber] = 0;
+
+        // Rebalance rather than dropping them on the smaller side, which drifts badly once
+        // people start leaving and ends in four against one.
+        PlayerColours.AssignTeams();
 
         // No phase guard any more. Skipping this while the scoreboard was up meant anyone who
         // joined between matches stood around with nothing in their hands until the next warmup.
@@ -371,22 +450,34 @@ public class MatchState : MonoBehaviourPunCallbacks
         // Scores are per match, and PUN never clears player properties by itself - they even
         // follow you into the next room you join. Left alone, everyone starts a new match
         // carrying the last one's kills.
+        headshots.Clear();
+        streak.Clear();
+        bestStreak.Clear();
+        lastKilledBy.Clear();
+
         foreach (Player player in PhotonNetwork.PlayerList)
         {
             player.SetCustomProperties(new Hashtable
             {
                 { RoomManager.KillsKey, 0 },
                 { RoomManager.DeathsKey, 0 },
+                { RoomManager.HeadshotsKey, 0 },
+                { RoomManager.BestStreakKey, 0 },
                 { RungKey, 0 },
                 { RungKillsKey, 0 },
             });
         }
+
+        // Sides are picked fresh every match, so nobody is stuck losing with the same four
+        // people all evening.
+        PlayerColours.AssignTeams();
 
         Requested(MatchPhase.Warmup);
         SetRoom(new Hashtable
         {
             { PhaseKey, (int)MatchPhase.Warmup },
             { WinnerKey, -1 },
+            { WinningTeamKey, -1 },
             { EndsAtKey, PhotonNetwork.Time + warmupSeconds },
         });
 
@@ -408,11 +499,27 @@ public class MatchState : MonoBehaviourPunCallbacks
 
     void FinishMatch(Player winner)
     {
+        int team = -1;
+
+        // In a team mode the side is the result and the individual is a footnote. Worked out
+        // here rather than read off a running counter, so the number on the results screen is
+        // the same sum the scoreboard has been showing all match.
+        if (Mode == MatchMode.TeamDeathmatch)
+        {
+            int red = PlayerColours.TeamScore(0);
+            int blue = PlayerColours.TeamScore(1);
+
+            // A draw stays a draw. Inventing a winner out of a tie is worse than saying nobody
+            // won, and in a room of four people a tie happens often enough to matter.
+            team = red == blue ? -1 : red > blue ? 0 : 1;
+        }
+
         Requested(MatchPhase.Over);
         SetRoom(new Hashtable
         {
             { PhaseKey, (int)MatchPhase.Over },
             { WinnerKey, winner != null ? winner.ActorNumber : -1 },
+            { WinningTeamKey, team },
             { EndsAtKey, PhotonNetwork.Time + scoreboardSeconds },
         });
     }
@@ -472,9 +579,35 @@ public class MatchState : MonoBehaviourPunCallbacks
     /// Called on every client from the victim's death RPC. Only the master acts on it; everyone
     /// runs the feed side so the message appears at the same moment for all of them.
     /// </summary>
+    /// <summary>
+    /// Who last killed whom, kept by every client rather than replicated.
+    ///
+    /// Every client sees every kill in the same order, so every client can work out on its own
+    /// that this kill is a reprisal - and they will all agree, which is the only property that
+    /// matters. Replicating it would be a property write per kill to compute something everyone
+    /// already knows.
+    /// </summary>
+    static readonly Dictionary<int, int> lastKilledBy = new Dictionary<int, int>();
+
     public static void ReportKill(Player killer, Player victim, string weapon, bool headshot,
                                  byte flavour = 0)
     {
+        bool revenge = killer != null && victim != null
+                       && lastKilledBy.TryGetValue(killer.ActorNumber, out int owed)
+                       && owed == victim.ActorNumber;
+
+        if (victim != null)
+        {
+            if (killer != null && killer != victim)
+                lastKilledBy[victim.ActorNumber] = killer.ActorNumber;
+            else
+                lastKilledBy.Remove(victim.ActorNumber);
+        }
+
+        // Settled, so the next kill between these two is not also revenge.
+        if (revenge)
+            lastKilledBy.Remove(killer.ActorNumber);
+
         Push(new FeedEntry
         {
             kind = FeedKind.Kill,
@@ -483,6 +616,7 @@ public class MatchState : MonoBehaviourPunCallbacks
             weapon = weapon,
             headshot = headshot,
             flavour = flavour,
+            revenge = revenge,
             involvesYou = IsLocal(killer) || IsLocal(victim),
         });
 
@@ -498,18 +632,26 @@ public class MatchState : MonoBehaviourPunCallbacks
             return;
 
         if (Instance != null && PhotonNetwork.IsMasterClient)
-            Instance.ScoreKill(killer, victim, weapon);
+            Instance.ScoreKill(killer, victim, weapon, headshot);
     }
 
     static bool IsLocal(Player player) => player != null && player.IsLocal;
 
-    void ScoreKill(Player killer, Player victim, string weapon)
+    readonly Dictionary<int, int> headshots = new Dictionary<int, int>();
+    readonly Dictionary<int, int> streak = new Dictionary<int, int>();
+    readonly Dictionary<int, int> bestStreak = new Dictionary<int, int>();
+
+    void ScoreKill(Player killer, Player victim, string weapon, bool headshot)
     {
         if (Phase != MatchPhase.Live)
             return;
 
         if (victim != null)
         {
+            // Dying ends a run. Kept on the master rather than read back off the property,
+            // because the property has not echoed yet at this point.
+            streak[victim.ActorNumber] = 0;
+
             deaths[victim.ActorNumber] = Bump(deaths, victim.ActorNumber);
             victim.SetCustomProperties(new Hashtable { { RoomManager.DeathsKey, deaths[victim.ActorNumber] } });
 
@@ -529,7 +671,25 @@ public class MatchState : MonoBehaviourPunCallbacks
             return;
 
         kills[killer.ActorNumber] = Bump(kills, killer.ActorNumber);
-        killer.SetCustomProperties(new Hashtable { { RoomManager.KillsKey, kills[killer.ActorNumber] } });
+
+        if (headshot)
+            headshots[killer.ActorNumber] = Bump(headshots, killer.ActorNumber);
+
+        streak.TryGetValue(killer.ActorNumber, out int run);
+        run++;
+        streak[killer.ActorNumber] = run;
+
+        bestStreak.TryGetValue(killer.ActorNumber, out int best);
+        bestStreak[killer.ActorNumber] = Mathf.Max(best, run);
+
+        headshots.TryGetValue(killer.ActorNumber, out int heads);
+
+        killer.SetCustomProperties(new Hashtable
+        {
+            { RoomManager.KillsKey, kills[killer.ActorNumber] },
+            { RoomManager.HeadshotsKey, heads },
+            { RoomManager.BestStreakKey, bestStreak[killer.ActorNumber] },
+        });
 
         if (Mode == MatchMode.GunGame)
             AdvanceLadder(killer, weapon);

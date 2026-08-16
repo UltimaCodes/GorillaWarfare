@@ -79,10 +79,31 @@ public static class KillFeedLines
     /// <param name="flavour">
     /// The roll the dying player sent. Same number everywhere, so the same sentence everywhere.
     /// </param>
-    public static string For(string killer, string victim, string weaponKey, bool headshot, byte flavour)
+    /// <summary>
+    /// Getting your own back on whoever killed you last.
+    ///
+    /// Beats every other line including the headshot one. Between two people who keep killing
+    /// each other, the fact that it is the fourth time running is funnier than where the shot
+    /// landed.
+    /// </summary>
+    static readonly string[] Revenge =
+    {
+        "{0} finally got {1} back",
+        "{0} settled up with {1}",
+        "{0} returned the favour to {1}",
+        "{0} was not letting that go, {1}",
+        "{0} remembered exactly what {1} did",
+        "{1} should have run when they had the chance ({0})",
+    };
+
+    public static string For(string killer, string victim, string weaponKey, bool headshot,
+                             byte flavour, bool revenge = false)
     {
         if (string.IsNullOrEmpty(killer))
             return Format(SelfInflicted, flavour, killer, victim);
+
+        if (revenge)
+            return Format(Revenge, flavour, killer, victim);
 
         // A headshot is the more interesting fact, so it wins over the weapon - except for the
         // peel, where being beaten to death with rubbish is funnier than where it landed.

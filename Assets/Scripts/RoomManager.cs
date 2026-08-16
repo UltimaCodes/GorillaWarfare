@@ -29,6 +29,11 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public const string KillsKey = "kills";
     public const string DeathsKey = "deaths";
 
+    /// Kills that landed on a head, and the longest run without dying. Both only exist so the
+    /// end of a match can say something about how you played rather than only how much.
+    public const string HeadshotsKey = "hs";
+    public const string BestStreakKey = "streak";
+
     GameObject localController;
     GameObject spectatorCamera;
     Coroutine spawnRoutine;
@@ -102,6 +107,11 @@ public class RoomManager : MonoBehaviourPunCallbacks
         // restarts the track every time you join a room.
         if (GetComponent<MusicPlayer>() == null)
             gameObject.AddComponent<MusicPlayer>();
+
+        // Same reasoning as the music: a loop that restarts with the scene is a loop everybody
+        // notices.
+        if (GetComponent<Ambience>() == null)
+            gameObject.AddComponent<Ambience>();
     }
 
     public override void OnEnable()
@@ -202,13 +212,13 @@ public class RoomManager : MonoBehaviourPunCallbacks
     /// the controller in the same frame, which meant death had no weight at all - you barely
     /// registered it had happened.
     /// </summary>
-    public void HandleLocalDeath(Vector3 where, Vector3 facing)
+    public void HandleLocalDeath(Vector3 where, Vector3 facing, Player killer)
     {
         if (deathRoutine == null)
-            deathRoutine = StartCoroutine(DieThenRespawn(where, facing));
+            deathRoutine = StartCoroutine(DieThenRespawn(where, facing, killer));
     }
 
-    IEnumerator DieThenRespawn(Vector3 where, Vector3 facing)
+    IEnumerator DieThenRespawn(Vector3 where, Vector3 facing, Player killer)
     {
         AwaitingRespawn = true;
         RespawnAt = Time.time + MatchState.RespawnDelay;
@@ -220,7 +230,7 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         localController = null;
 
-        spectatorCamera = BuildSpectatorCamera(where, facing);
+        spectatorCamera = BuildSpectatorCamera(where, facing, killer);
 
         while (Time.time < RespawnAt)
             yield return null;
@@ -233,17 +243,25 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     // Something has to keep rendering while the controller is gone, or death is a black screen.
     // Sits slightly above where you fell and looks down at it, which reads as a body cam.
-    GameObject BuildSpectatorCamera(Vector3 where, Vector3 facing)
+    GameObject BuildSpectatorCamera(Vector3 where, Vector3 facing, Player killer)
     {
         GameObject host = new GameObject("~DeathCamera");
 
         // Up and behind where you were looking, then pointed back at the spot. A random yaw
-        // was cheaper and half the time showed you a wall.
-        host.transform.position = where + Vector3.up * 3.5f - facing * 2.5f;
-        host.transform.LookAt(where);
+        // was cheaper and half the time showed you a wall. This is now the fallback rather than
+        // the whole behaviour - it is where the camera sits when there is nobody to watch.
+        Vector3 rest = where + Vector3.up * 3.5f - facing * 2.5f;
+        Quaternion resting = Quaternion.LookRotation(where - rest, Vector3.up);
+
+        host.transform.SetPositionAndRotation(rest, resting);
 
         Camera camera = host.AddComponent<Camera>();
         host.AddComponent<AudioListener>();
+
+        // Watching your own killer only makes sense if somebody else killed you. Falling off
+        // the map and shooting yourself both arrive here with no killer at all.
+        host.AddComponent<KillCam>().Watch(
+            killer != null && killer != PhotonNetwork.LocalPlayer ? killer : null, rest, resting);
 
         // Nameplates find the camera through here, so they keep facing the right way while dead.
         PlayerController.SetLocalCamera(camera);

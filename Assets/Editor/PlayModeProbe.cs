@@ -140,6 +140,11 @@ public class ProbeRunner : MonoBehaviour
         yield return null;
         yield return null;
 
+        // Before anything else that takes time. Spawn protection lasts two seconds and this is
+        // the only moment in the run that is reliably inside that window - the first version of
+        // this check sat after the screenshot pass and was measuring an expired shield.
+        yield return CheckSpawnProtection(player);
+
         CheckWeapons(player);
         CheckHitboxes(player);
         ReportScales(player);
@@ -198,6 +203,15 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- dying ----
         yield return CheckDeathAndRespawn();
+
+        // ---- the match has something to say about how it went ----
+        List<MatchState.Award> awards = MatchState.Awards();
+
+        // A kill has definitely happened by now - the death check made one - so at least the top
+        // scorer award has to have a name on it. An empty list here means the stats never
+        // reached the properties the awards are computed from.
+        Check(awards.Count > 0, "the match hands out awards",
+              awards.Count > 0 ? $"{awards.Count}: {awards[0].title} - {awards[0].who}" : "none");
 
         // ---- gun game hands out one weapon ----
         yield return CheckGunGameLoadout();
@@ -1424,6 +1438,72 @@ public class ProbeRunner : MonoBehaviour
         if (gun != null)
             Check(gun.Ammo == loaded, "and nothing was fired through the panel",
                   $"{loaded} rounds before, {gun.Ammo} after");
+    }
+
+    /// <summary>
+    /// You cannot be shot for a moment after you land, and the moment ends when you shoot.
+    ///
+    /// Both halves matter. Immunity that never ends is a way to walk into a fight invulnerable,
+    /// and immunity that does not exist is the spawn kill it was added to stop.
+    /// </summary>
+    IEnumerator CheckSpawnProtection(PlayerController player)
+    {
+        // Freshly spawned by this point in the run, so the shield should still be up.
+        Check(player.IsProtected, "you land protected",
+              player.IsProtected ? "immune" : "already exposed");
+
+        int before = player.HealthPoints;
+        player.TakeDamage(40f, "Rifle", false);
+
+        yield return null;
+        yield return null;
+
+        Check(player.HealthPoints == before, "and nothing lands while it is up",
+              $"{before} then {player.HealthPoints}");
+
+        // Shooting is the clearest possible signal that you have stopped getting your bearings.
+        player.DropProtection();
+        yield return null;
+
+        Check(!player.IsProtected, "shooting gives it up",
+              player.IsProtected ? "still immune" : "exposed");
+
+        player.TakeDamage(40f, "Rifle", false);
+
+        yield return null;
+        yield return null;
+
+        Check(player.HealthPoints < before, "and then damage lands normally",
+              $"{before} down to {player.HealthPoints}");
+
+        player.Heal(999f);
+        yield return null;
+
+        // ---- and the HUD says which way it came from ----
+        GameHud hud = GameHud.Instance;
+
+        if (hud != null)
+        {
+            RectTransform ring = Get<RectTransform>(hud, "arrowContainer");
+
+            if (ring != null)
+            {
+                hud.ShowDamageFrom(player.transform.position + player.transform.right * 8f);
+
+                yield return null;
+                yield return null;
+
+                int lit = 0;
+
+                foreach (Image mark in ring.GetComponentsInChildren<Image>(true))
+                {
+                    if (mark.gameObject.activeInHierarchy)
+                        lit++;
+                }
+
+                Check(lit > 0, "a damage bearing reaches the screen", $"{lit} marks up");
+            }
+        }
     }
 
     /// The scope overlay is a generated texture: opaque outside a circle, clear inside. Can't

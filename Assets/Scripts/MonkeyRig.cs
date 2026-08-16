@@ -102,6 +102,38 @@ public class MonkeyRig : MonoBehaviour
 
     public Transform RightHand { get; private set; }
 
+    /// <summary>
+    /// Paints the body.
+    ///
+    /// Through a MaterialPropertyBlock rather than by touching the material, because assigning
+    /// to `renderer.material` instantiates a copy per player - five gorillas would mean five
+    /// materials, five draw call batches broken, and five leaks when they respawn. A property
+    /// block overrides the colour for one renderer and shares everything else.
+    ///
+    /// Only the body. The weapons have their own colours and a banana that turned team red
+    /// would stop reading as a banana.
+    /// </summary>
+    public void Tint(Color colour)
+    {
+        if (model == null)
+            return;
+
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+
+        foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
+        {
+            r.GetPropertyBlock(block);
+
+            // Both names: the built-in pipeline's standard shader calls it _Color and most
+            // everything since calls it _BaseColor. Setting a property a shader does not have
+            // is free, so this does not need to know which one it got.
+            block.SetColor("_Color", colour);
+            block.SetColor("_BaseColor", colour);
+
+            r.SetPropertyBlock(block);
+        }
+    }
+
     public bool Build(bool hideFromOwner)
     {
         GameObject prefab = Resources.Load<GameObject>(modelResource);
