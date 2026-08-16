@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -125,9 +126,26 @@ public static class SceneCheck
         if (points.Length == 0)
             Failures.Add("no spawnpoints under SpawnManager - nobody can spawn");
 
-        // Everyone landing on one pad is a spawn kill waiting to happen.
-        if (points.Length < 4)
-            Failures.Add($"only {points.Length} spawnpoints for an 8 player room");
+        // Everyone landing on one pad is a spawn kill waiting to happen, and the number that
+        // matters is how many people can be in the room - which is now twelve, not eight.
+        Launcher launcher = Object.FindFirstObjectByType<Launcher>(FindObjectsInactive.Include);
+        int seats = 12;
+
+        if (launcher != null)
+        {
+            System.Reflection.FieldInfo field = typeof(Launcher).GetField("maxPlayersPerRoom",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            if (field != null)
+                seats = (byte)field.GetValue(launcher);
+        }
+
+        // Half the room, so at worst two people share a pad. Below that and a full game starts
+        // with several players inside each other.
+        int wanted = Mathf.Max(4, seats / 2);
+
+        if (points.Length < wanted)
+            Failures.Add($"only {points.Length} spawnpoints for a {seats} player room - want {wanted}");
 
         // The game scene must be build index 1 - RoomManager hard codes it.
         if (scene.buildIndex != 1)
@@ -135,6 +153,7 @@ public static class SceneCheck
 
         CheckHud();
         CheckNothingIsOnTheDefaultFont();
+        CheckEveryoneMeetsOnOneServer();
     }
 
     /// <summary>
@@ -207,6 +226,30 @@ public static class SceneCheck
                                  + "default font - run Tools/Gorilla Warfare/Retarget default fonts");
             }
         }
+    }
+
+    /// <summary>
+    /// Friends in different countries have to land on the same Photon cluster.
+    ///
+    /// Rooms exist per region. With no fixed region PUN connects everybody to their own nearest
+    /// one, so a player in Italy and a player in Pakistan sit on different servers and each sees
+    /// an empty room browser - which reads as the game being broken rather than as a setting.
+    /// </summary>
+    static void CheckEveryoneMeetsOnOneServer()
+    {
+        string region = PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion;
+
+        if (string.IsNullOrEmpty(region))
+        {
+            Failures.Add("no FixedRegion - players in different countries will connect to "
+                         + "different clusters and never see each other's rooms");
+            return;
+        }
+
+        Notes.Add($"Net: everybody meets on '{region}'");
+
+        if (string.IsNullOrEmpty(PhotonNetwork.PhotonServerSettings.AppSettings.AppVersion))
+            Failures.Add("AppVersion is empty - mismatched builds will share rooms and desync");
     }
 
     static void CheckMenuScene()
