@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
+  m_Name: Pineapple
+  m_EditorClassIdentifier: Assembly-CSharp::GunInfo
+  itemName: The Grenada
+  damage: 105
+  maxRange: 120
+  falloffStart: 120
+  falloffFloor: 1
+  fireRate: 0.9
+  automatic: 0
+  spread: 0
+  pelletsPerShot: 1
+  melee: 0
+  twoHanded: 1
+  canAim: 0
+  aimFov: 26
+  aimSpreadScale: 0.15
+  projectile: 1
+  projectileSpeed: 34
+  projectileGravity: 0.55
+  armingDistance: 1.2
+  blastRadius: 5
+  knockback: 9
+  selfKnockback: 15
+  selfDamageScale: 0
+  magazineSize: 4
+  spareMagazines: 4
+  reloadTime: 2.6
+  unripe: {r: 0.42, g: 0.78, b: 0.28, a: 1}
+  ripe: {r: 0.96, g: 0.78, b: 0.22, a: 1}
+  overripe: {r: 0.72, g: 0.45, b: 0.13, a: 1}
+  verticalKick: 1.4
+  horizontalKick: 0.5
+  patternLength: 8
+  recoilRecovery: 0.75
+  recoverySpeed: 6

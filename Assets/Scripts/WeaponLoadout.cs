@@ -19,10 +19,14 @@ public class WeaponLoadout : MonoBehaviour
     public const string Fallback = "Pistol";
 
     /// Every weapon in the game, in power order. Gun game walks this list; deathmatch samples it.
-    public static readonly string[] AllWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper" };
+    public static readonly string[] AllWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple" };
 
     /// Gun game order - weakest first, melee last. Killing with the peel wins the match.
-    public static readonly string[] GunGameLadder = { "Pistol", "Shotgun", "Rifle", "Sniper", "Peel" };
+    // The launcher sits second from the top: harder than everything before it and a genuine
+    // reward for getting there, but still not the peel, because ending a gun game on anything
+    // other than beating somebody to death with rubbish would be a waste.
+    public static readonly string[] GunGameLadder =
+        { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple", "Peel" };
 
     // Resolved from the asset the first time anything asks, then kept. The HUD asks every
     // frame and Resources.Load is not free.

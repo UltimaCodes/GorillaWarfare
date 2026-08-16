@@ -1,0 +1,17 @@
+Where this art came from, and why these two kits.
+
+Kenney Nature Kit          https://kenney.nl/assets/nature-kit          CC0
+Kenney Food Kit            https://kenney.nl/assets/food-kit            CC0
+
+Both are CC0 - public domain, no attribution required. Credited anyway.
+
+Picked for performance as much as for looks. The nature models carry no textures at all: they
+are flat shaded and coloured by material, and the whole 329 model kit uses 23 material names
+between them, so a map made of hundreds of props still runs on about ten materials and samples
+no textures. The food models share one 10.7 KB atlas.
+
+Measured before importing rather than after. The heaviest jungle model in the set is 564 faces
+and most are between 200 and 400, so a few hundred props is on the order of a hundred thousand
+triangles - nothing for a machine that runs this game at all.
+
+The pineapple is 96 verts, 392 faces, one material, and 0.24 x 0.47 x 0.25m, upright on Y.

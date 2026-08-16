@@ -44,6 +44,37 @@ public class GunInfo : ItemInfo
     [Tooltip("Spread while aiming, as a fraction of the hip fired figure.")]
     [Range(0f, 1f)] public float aimSpreadScale = 0.15f;
 
+    [Header("Projectile")]
+    [Tooltip("Fires a thing that travels instead of a raycast that arrives. Turns the whole "
+             + "weapon into a different kind of problem for whoever is being shot at.")]
+    public bool projectile;
+
+    [Tooltip("Metres per second. Slow enough to see and dodge is the point; much past 60 and it "
+             + "may as well be hitscan.")]
+    public float projectileSpeed = 34f;
+
+    [Tooltip("How much of normal gravity the shell feels. The arc is what lets you drop one "
+             + "behind cover, and a launcher that fires flat is just a slow rifle.")]
+    public float projectileGravity = 0.55f;
+
+    [Tooltip("Metres it must travel before it will detonate on anything. Stops firing at a wall "
+             + "you are touching from killing you instead of launching you.")]
+    public float armingDistance = 1.2f;
+
+    [Tooltip("Blast radius in metres. Damage falls off linearly to nothing at the edge.")]
+    public float blastRadius = 5f;
+
+    [Tooltip("How hard the blast throws other people.")]
+    public float knockback = 9f;
+
+    [Tooltip("How hard it throws you. Larger than the figure above on purpose - this is the "
+             + "number that decides whether the weapon is a mobility tool or a nudge.")]
+    public float selfKnockback = 15f;
+
+    [Tooltip("Fraction of the damage you take from your own blast. Zero means rocket jumping "
+             + "costs you nothing but commitment, which is the right trade for five friends.")]
+    [Range(0f, 1f)] public float selfDamageScale;
+
     [Header("Ammo")]
     [Tooltip("Shots per banana.")]
     public int magazineSize = 30;

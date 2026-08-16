@@ -35,6 +35,11 @@ public static class GameAudio
     /// </summary>
     public const string Shield = "Shield";
 
+    /// A pineapple going off. Its own bank rather than the generic impact, which is the sound a
+    /// bullet makes hitting a wall - reusing it would make the loudest thing in the game sound
+    /// like the smallest.
+    public const string Explosion = "Explosion";
+
     /// Eating one banana and pulling out another. Used to borrow a random UI click.
     public const string Reload = "Reload";
 
@@ -56,6 +61,9 @@ public static class GameAudio
     // Under the hit and kill sounds on purpose. It is meant to be noticed, not to interrupt -
     // a shield break that drowns out the gunfire is worse than one you miss.
     public const float ShieldVolume = 0.55f;
+
+    // Above everything. It is the loudest thing that happens and it should be.
+    public const float ExplosionVolume = 1f;
 
     const int poolSize = 16;
 

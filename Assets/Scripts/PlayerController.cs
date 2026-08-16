@@ -631,6 +631,46 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         PV.RPC(nameof(RPC_WeaponFired), RpcTarget.All, weaponName, endPoint, endNormal, hit);
     }
 
+    /// <summary>
+    /// Throws this player. Explosions and grapples both come through here.
+    ///
+    /// Only ever called on the client that owns the body - movement is simulated locally and a
+    /// remote client pushing somebody else's character would be overwritten by the next
+    /// transform update anyway.
+    /// </summary>
+    public void Launch(Vector3 impulse)
+    {
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+
+        if (movement != null)
+            movement.AddImpulse(impulse);
+    }
+
+    /// <summary>
+    /// A shell is in the air. Everybody simulates it; only the shooter's copy deals damage.
+    ///
+    /// Sent as an origin and a direction rather than as a position every frame, because the
+    /// flight is deterministic - given those two numbers every client draws the same arc, and
+    /// there is nothing left worth sending.
+    /// </summary>
+    public void ReportProjectile(string weaponName, Vector3 origin, Vector3 direction)
+    {
+        PV.RPC(nameof(RPC_ProjectileFired), RpcTarget.All, weaponName, origin, direction);
+    }
+
+    [PunRPC]
+    void RPC_ProjectileFired(string weaponName, Vector3 origin, Vector3 direction, PhotonMessageInfo info)
+    {
+        GunInfo gun = Resources.Load<GunInfo>($"Guns/{weaponName}");
+
+        if (gun == null)
+            return;
+
+        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", origin, GameAudio.ShotVolume);
+
+        Projectile.Launch(gun, origin, direction, this, PV.IsMine);
+    }
+
     [PunRPC]
     void RPC_WeaponFired(string weaponName, Vector3 endPoint, Vector3 endNormal, bool hit)
     {

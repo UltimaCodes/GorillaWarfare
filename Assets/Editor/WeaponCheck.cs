@@ -19,6 +19,20 @@ public static class WeaponCheck
         sb.AppendLine($"[gun] {(ok ? "PASS" : "FAIL")}  {label,-30} {detail}");
     }
 
+    /// <summary>
+    /// Finds a weapon's model or material under either naming.
+    ///
+    /// Everything on the roster used to be a banana, so the loader and this check both spelled
+    /// the path Banana&lt;Name&gt;. The pineapple launcher is not a banana, and hardcoding the
+    /// prefix here meant the check reported a perfectly present model as missing - the check was
+    /// wrong, not the asset. SingleShotGun resolves it the same way at runtime.
+    /// </summary>
+    static T Weapon<T>(string name, string suffix = "") where T : Object
+    {
+        return Resources.Load<T>($"Models/Weapons/{name}{suffix}")
+               ?? Resources.Load<T>($"Models/Weapons/Banana{name}{suffix}");
+    }
+
     public static void Run()
     {
         StringBuilder sb = new StringBuilder();
@@ -113,7 +127,7 @@ public static class WeaponCheck
 
         foreach ((string weapon, float min, float max) in models)
         {
-            GameObject banana = Resources.Load<GameObject>($"Models/Weapons/Banana{weapon}");
+            GameObject banana = Weapon<GameObject>(weapon);
             Check(sb, banana != null, $"banana{weapon} model", banana == null ? "missing" : "loaded");
 
             if (banana != null)
@@ -138,7 +152,7 @@ public static class WeaponCheck
         var seenVerts = new System.Collections.Generic.List<int>();
         foreach (string name in WeaponLoadout.GunGameLadder)
         {
-            Material wm = Resources.Load<Material>($"Models/Weapons/Banana{name}Mat");
+            Material wm = Weapon<Material>(name, "Mat");
             Check(sb, wm != null, $"{name} has its own material", wm == null ? "missing" : wm.name);
 
             if (wm != null)
@@ -150,13 +164,18 @@ public static class WeaponCheck
                 seenColours.Add(wm.color);
             }
 
-            GameObject bmesh = Resources.Load<GameObject>($"Models/Weapons/Banana{name}");
+            GameObject bmesh = Weapon<GameObject>(name);
             MeshFilter bmf = bmesh != null ? bmesh.GetComponentInChildren<MeshFilter>(true) : null;
             if (bmf != null)
                 seenVerts.Add(bmf.sharedMesh.vertexCount);
         }
 
-        Check(sb, seenColours.Count == 5, "five distinct colours", $"{seenColours.Count}");
+        // One per weapon on the ladder, however long the ladder gets. This used to be a
+        // literal five, so adding the pineapple launcher failed a check about colours
+        // being distinct - which they were. The expectation was stale, not the data.
+        Check(sb, seenColours.Count == WeaponLoadout.GunGameLadder.Length,
+              "every weapon has a colour of its own",
+              $"{seenColours.Count} distinct across {WeaponLoadout.GunGameLadder.Length} weapons");
 
         // ---- the whole roster ----
         sb.AppendLine("[gun] ---------- roster ----------");
@@ -170,7 +189,7 @@ public static class WeaponCheck
             sb.AppendLine($"[gun]       {name,-9} {burst,5:F0} per pull, {g.fireRate,4:F1}/s, " +
                           $"range {g.maxRange,5:F0}, {(g.melee ? "melee" : g.automatic ? "auto " : "semi ")}");
 
-            Check(sb, Resources.Load<GameObject>($"Models/Weapons/Banana{name}") != null,
+            Check(sb, Weapon<GameObject>(name) != null,
                   $"{name} has a banana", "model present");
 
             // Nothing should one-pull a full-health player except the sniper, which pays for it
@@ -374,7 +393,7 @@ public static class WeaponCheck
 
         foreach ((string weapon, float _, float __) in models)
         {
-            Material mat = Resources.Load<Material>($"Models/Weapons/Banana{weapon}Mat");
+            Material mat = Weapon<Material>(weapon, "Mat");
             Check(sb, mat != null && mat.mainTexture != null, $"banana{weapon} is textured",
                   mat == null ? "no material" : mat.mainTexture != null ? mat.mainTexture.name : "flat colour");
         }
@@ -563,7 +582,7 @@ public static class WeaponCheck
         var lengths = new System.Collections.Generic.Dictionary<string, float>();
         foreach (string name in WeaponLoadout.GunGameLadder)
         {
-            GameObject m = Resources.Load<GameObject>($"Models/Weapons/Banana{name}");
+            GameObject m = Weapon<GameObject>(name);
             MeshFilter mf3 = m != null ? m.GetComponentInChildren<MeshFilter>(true) : null;
             if (mf3 == null) continue;
             Bounds b3 = mf3.sharedMesh.bounds;

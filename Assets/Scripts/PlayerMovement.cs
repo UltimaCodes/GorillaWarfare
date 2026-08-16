@@ -63,6 +63,26 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float jumpBufferTime = 0.1f;
 
     public Vector3 Velocity => velocity;
+
+    /// <summary>
+    /// Throws this player, for explosions and grapples.
+    ///
+    /// Added to the existing velocity rather than replacing it, so a blast taken while already
+    /// moving sends you further - which is the entire skill of rocket jumping, and would be
+    /// thrown away by assigning.
+    ///
+    /// Grounded is cleared as well. The air control rules read it, and a launch that leaves the
+    /// player believing they are still standing on something gets damped away in a single frame.
+    /// </summary>
+    public void AddImpulse(Vector3 impulse)
+    {
+        velocity += impulse;
+        grounded = false;
+
+        // Past the jump buffer, so the ground move that runs next frame cannot decide you
+        // wanted to jump and stomp the launch with its own vertical speed.
+        jumpPressedAt = -99f;
+    }
     public bool Grounded => grounded;
     public float HorizontalSpeed => new Vector3(velocity.x, 0f, velocity.z).magnitude;
 
