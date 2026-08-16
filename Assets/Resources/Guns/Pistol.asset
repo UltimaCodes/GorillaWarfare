@@ -27,6 +27,7 @@ MonoBehaviour:
   spareMagazines: 6
   reloadTime: 1.4
   layeredAbove: 0.45
+  muzzleFlash: 1
   reticle: 0
   reticleSpreadScale: 1.0
   ripens: 1

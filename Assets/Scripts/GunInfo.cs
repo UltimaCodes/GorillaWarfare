@@ -114,6 +114,10 @@ public class GunInfo : ItemInfo
         Dot,
     }
 
+    [Tooltip("Whether a flash appears at the muzzle. Off for anything with no barrel to flash "
+             + "from - a launcher throws its payload out, it does not fire it.")]
+    public bool muzzleFlash = true;
+
     [Tooltip("Which reticle this weapon draws, unless the player has overridden crosshairs.")]
     public Reticle reticle = Reticle.Cross;
 

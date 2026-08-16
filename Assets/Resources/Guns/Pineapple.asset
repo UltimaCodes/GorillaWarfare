@@ -30,14 +30,15 @@ MonoBehaviour:
   projectileSpeed: 34
   projectileGravity: 0.55
   armingDistance: 1.2
-  blastRadius: 5
-  knockback: 9
-  selfKnockback: 15
+  blastRadius: 7.5
+  knockback: 17
+  selfKnockback: 30
   selfDamageScale: 0
   magazineSize: 4
   spareMagazines: 4
   reloadTime: 2.6
   layeredAbove: 0.45
+  muzzleFlash: 0
   reticle: 1
   reticleSpreadScale: 0.45
   ripens: 0

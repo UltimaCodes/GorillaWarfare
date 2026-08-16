@@ -109,8 +109,15 @@ public class SingleShotGun : Gun
         visualRoot = visual.transform;
 
         // Melee is carried point-down from the moment it is drawn, not only while swinging.
+        //
+        // Remembered rather than recomputed. The swing used to multiply the karambit angle onto
+        // whatever rotation it found, and the model had already been rotated once here - so the
+        // pose was applied twice and every swing left the peel further round than it started.
         if (Info != null && Info.melee)
-            visualRoot.localRotation *= Quaternion.Euler(155f, 0f, 25f);
+        {
+            meleeHeld = visualRoot.localRotation * Quaternion.Euler(155f, 0f, 25f);
+            visualRoot.localRotation = meleeHeld;
+        }
 
         visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
         block = new MaterialPropertyBlock();
@@ -553,11 +560,11 @@ public class SingleShotGun : Gun
         Transform blade = visualRoot != null ? visualRoot : transform;
 
         Vector3 restPosition = blade.localPosition;
-        Quaternion restRotation = blade.localRotation;
 
-        // Point down and rolled over, the way a karambit is held. Done here rather than in the
-        // model so the peel still reads as a banana when it is lying on the ground.
-        Quaternion held = restRotation * Quaternion.Euler(155f, 0f, 25f);
+        // The pose the weapon was built with, not whatever it is currently rotated to. Reading
+        // the live rotation meant an interrupted swing became the new rest, and the peel walked
+        // a little further round with every stab until it was upside down.
+        Quaternion held = meleeHeld;
         Quaternion driven = held * Quaternion.Euler(-70f, 0f, 0f);
 
         const float outFor = 0.06f;
@@ -586,13 +593,18 @@ public class SingleShotGun : Gun
 
     Transform visualRoot;
 
+    /// The rotation a melee weapon rests at. Fixed at build time so a swing always returns to
+    /// exactly where it started rather than to wherever it happened to be interrupted.
+    Quaternion meleeHeld = Quaternion.identity;
+
     /// Visual side of a shot. Driven from PlayerController's RPC so every client runs it, not
     /// just the shooter. Audio is played there too, since it needs the weapon's name.
     public void PlayFireEffects(Vector3 endPoint, Vector3 endNormal, bool hit)
     {
-        // Not for melee. A peel has no barrel, no powder and nothing to flash - lighting one up
-        // made it read as a very short gun, which is exactly what it was not supposed to be.
-        if (muzzle != null && Info != null && !Info.melee)
+        // Not for melee, and not for anything else without a barrel. A peel has no powder and a
+        // launcher throws its payload rather than firing it - flashing either made them read as
+        // very short guns, which is exactly what they are not.
+        if (muzzle != null && Info != null && !Info.melee && Info.muzzleFlash)
             muzzle.Fire();
 
         if (Info != null && Info.melee)
