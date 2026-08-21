@@ -94,6 +94,10 @@ public class Projectile : MonoBehaviour
 
         foreach (Renderer r in visual.GetComponentsInChildren<Renderer>(true))
             r.sharedMaterial = skin;
+
+        // No per-object outline here any more - ScreenOutline on the local camera covers every
+        // projectile already, the same way it covers everything else in view. See PlayerController
+        // where it's added, and ScreenOutline.cs for why a screen-space outline won instead.
     }
 
     void Update()

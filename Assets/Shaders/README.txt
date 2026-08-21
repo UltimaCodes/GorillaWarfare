@@ -18,3 +18,40 @@ wrong to have done even though the bug it was aimed at wasn't real - it's simple
 same result. The lesson that mattered: read the pixels before trusting the screenshot.
 
 The material lives at Assets/Resources/Sky/JungleSky.mat, assigned as the scene's skybox.
+
+ToonOutline.shader / ScreenOutline.shader - two different toon outlines, only one of which is
+actually wired into the game. Built the same day, in that order, because the first one turned out
+not to be good enough on the gorilla specifically.
+
+ToonOutline is the classic inverted-hull trick: render a mesh's back faces pushed out along their
+own normals, in a flat colour, with the real mesh drawn on top. Applied as an extra material slot
+on a renderer rather than a shader swap, so it never touches the object's own material - see
+ToonOutline.cs. Looked clean on the pineapple (a simple convex shape) and gappy on the gorilla, and
+the instinct to just widen it made that worse, not better. Isolating the outline pass alone (hiding
+the real mesh) showed why: the shell isn't one continuous surface on this model, it's a lot of
+separately-pushed triangles that overlap and fight each other at nearly equal depth wherever the
+character's own geometry overlaps itself - the arm crossing the torso, fingers, joints. That's a
+property of this specific low-poly, self-overlapping mesh, not a bug in the shader; a simpler
+convex prop doesn't have it, which is exactly why the pineapple looked fine. Not deleted - still a
+real, working technique for a simple prop that doesn't need a full-screen pass for one object - but
+nothing in the game applies it any more.
+
+ScreenOutline is what's actually running, on the local camera (see PlayerController.cs). Reads the
+camera's own depth+normals buffer instead of mesh geometry - draws a line wherever depth or surface
+normal jumps sharply between a pixel and its neighbours - so it can't tear the way the mesh version
+did, by construction: there's no per-vertex push to disagree with itself. One component on one
+camera outlines everything in view - players, projectiles, weapons, world geometry - which is also
+the actual answer to "try it on other things too": there's no per-object step to remember.
+
+Worth recording since it cost real time: the first attempt at testing this looked like it did
+nothing at all, on a re-verified-clean shader, with depthTextureMode forced on, even bypassing
+OnRenderImage with a direct Graphics.Blit. Every variant of that test was a one-shot
+Camera.Render() call from editor script code outside Play Mode - and that turned out to be the
+actual problem, not the shader. The depth+normals prepass and OnRenderImage both appear to be
+scheduled as part of Unity's own per-frame camera pipeline, which a manual Render() call outside
+Play Mode never actually runs. Confirmed by testing inside a real Play Mode session instead (enter
+play mode, let a few real frames pass, then capture) - Tools/Gorilla Warfare/Photograph the screen
+outline (play mode) - where it worked immediately and cleanly, gorilla included. The lesson: a
+one-shot editor render is a fundamentally different code path from a frame that actually played,
+not just a faster version of the same thing, and rendering-pipeline features that hook into the
+per-frame loop need to be tested through it.
