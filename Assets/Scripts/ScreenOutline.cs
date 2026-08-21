@@ -12,7 +12,13 @@ public class ScreenOutline : MonoBehaviour
 {
     [SerializeField] Color outlineColor = new Color(0.04f, 0.04f, 0.04f, 1f);
     [SerializeField] float depthSensitivity = 2.5f;
-    [SerializeField] float normalSensitivity = 3.0f;
+
+    // Low - a hard-faceted low-poly character has small normal jumps at nearly every triangle
+    // boundary, not just real creases, and anything higher lit up every facet on the body as an
+    // interior line instead of reading as a clean border. See ScreenOutline.shader for the fuller
+    // note; this is the value that actually reaches the material, the shader's own Properties
+    // default is only what a fresh material starts at before this runs.
+    [SerializeField] float normalSensitivity = 0.35f;
     [SerializeField] float thickness = 1.5f;
 
     static Material sharedMaterial;
