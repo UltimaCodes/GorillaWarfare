@@ -288,14 +288,15 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float fatigueLimit = 5f;
 
     [Tooltip("Fatigue lost per second, all the time, not only while grounded. Slow on purpose: "
-             + "recovering from a full 3-slide burst (fatigue 3) takes about 15 seconds at this "
-             + "rate, so waiting out chainWindow's 0.9s between bursts barely dents it. Reported "
+             + "recovering from a full 3-slide burst (fatigue 3) takes 8 seconds at this rate "
+             + "(0.375/s - tuned directly to that number rather than the other way round), so "
+             + "waiting out chainWindow's 0.9s between bursts barely dents it. Reported "
              + "2026-08-22: slide three times, wait a few seconds, slide three times, repeat, "
              + "and the chain-only exhaustion check never fires because it never actually hits "
              + "the chain ceiling - each burst starts a fresh chain from 1. That's what this "
              + "field exists to close: fatigue accumulates across bursts even when the chain "
              + "itself keeps resetting, so a few seconds of waiting stops being enough.")]
-    [SerializeField] float fatigueDecay = 0.2f;
+    [SerializeField] float fatigueDecay = 0.375f;
 
     int chain;
     float chainExpires = -99f;
