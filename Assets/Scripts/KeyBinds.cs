@@ -36,6 +36,10 @@ public static class KeyBinds
         PreviousWeapon,
         Scoreboard,
         Menu,
+        /// Fire and hold to latch onto a vantage point or an enemy; release to let go early.
+        /// Appended at the end rather than sorted in with the rest, so every existing binding
+        /// keeps the same enum value.
+        Grapple,
     }
 
     /// Raised when a binding changes, so anything showing one can redraw.
@@ -56,6 +60,7 @@ public static class KeyBinds
         KeyCode.Q,          // PreviousWeapon
         KeyCode.Tab,        // Scoreboard
         KeyCode.Escape,     // Menu
+        KeyCode.G,          // Grapple
     };
 
     static readonly KeyCode[] bound = (KeyCode[])Defaults.Clone();
@@ -224,6 +229,7 @@ public static class KeyBinds
             case Action.PreviousWeapon: return "previous weapon";
             case Action.Scoreboard: return "scoreboard (hold)";
             case Action.Menu: return "menu";
+            case Action.Grapple: return "grapple (hold)";
             default: return action.ToString();
         }
     }

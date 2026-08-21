@@ -242,3 +242,24 @@ the chimp skin is also the game icon. They're ugly, they're in use, and replacin
 **`AppVersion` is empty**, so mismatched builds can still find each other's rooms. Setting it
 would keep them apart but would also mean bumping it on every change. Noted in the roadmap
 instead.
+
+# Third pass — movement retune and the vine, 2026-08-21
+
+## The sandbox handed out deathmatch loadouts until the game restarted
+
+Reported 2026-08-17, fixed 2026-08-21. `MatchState.WeaponsFor` already checked `Sandbox.Active`
+first and returned every weapon — that guard was correct and had been since gamemodes existed.
+The bug was that nothing actually called it. `PlayerController.LoadoutFor`, the method a spawn
+really goes through, read `player.CustomProperties[LoadoutKey]` directly and never asked
+`MatchState` anything at all. A deathmatch's `LoadoutKey` — one random weapon — was still sitting
+on `PhotonNetwork.LocalPlayer` after leaving that room, because PUN does not clear custom
+properties between rooms (the same class of bug as the scores-not-resetting fix in M3, and now
+the third time it's bitten this project). The sandbox's own offline room got created on top of
+that stale value, and every spawn in it read the deathmatch's leftover loadout instead of asking
+whether a match was even running. Only a domain reload actually clears that cache, which is
+exactly why a restart was the only thing that ever fixed it.
+
+Fixed by giving `LoadoutFor` the same `Sandbox.Active` guard `WeaponsFor` already had, checked
+first, before the property is ever read - rather than relying on the property being cleared at
+the right moment, which is precisely the kind of timing PUN has already been shown not to
+guarantee.

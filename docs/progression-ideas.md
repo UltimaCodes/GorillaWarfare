@@ -9,7 +9,8 @@ full design — 3 kills (Banana Rain), 5 kills (Go Ape), 7 kills (The Zookeeper)
 reasoning already worked out (kills already heal and overshield, snowball risk in a five-player
 room, why each rung is short/loud/visible). Repeating it here would just be two copies to keep in
 sync. If what's wanted is different from what's already written there, that's a conversation to
-have against that document, not a reason to draft a second one.
+have against that document, not a reason to draft a second one. Still just planned, not built —
+2026-08-21 built the momentum-melee/vine pair and the sandbox fix, not this.
 
 What's actually new this round is the gambling layer, below.
 

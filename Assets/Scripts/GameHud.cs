@@ -65,6 +65,10 @@ public class GameHud : MonoBehaviour
     /// The slide chain, rank and all. Filled in at runtime if the scene has not got one.
     [SerializeField] TMP_Text slideCombo;
 
+    // Drives the punch on a rank-up. Not serialised - purely runtime state for UpdateSlideCombo.
+    int lastSlideRank;
+    float slidePunchUntil = -99f;
+
     /// Drawn behind the winner's name when the round is over. Without it the result was a line
     /// of text floating over a firefight that had visibly stopped mattering, which is not what
     /// winning should look like.
@@ -1101,6 +1105,7 @@ public class GameHud : MonoBehaviour
             // Grey and steady. It is not a rank any more, it is a wait.
             slideCombo.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
             slideCombo.rectTransform.localScale = Vector3.one;
+            lastSlideRank = 0;
             return;
         }
 
@@ -1109,17 +1114,37 @@ public class GameHud : MonoBehaviour
         slideCombo.gameObject.SetActive(rank > 0);
 
         if (rank <= 0)
+        {
+            lastSlideRank = 0;
             return;
+        }
 
-        string[] ranks = { "SLIDE", "SLIDE!", "SMOOTH!!", "BANANAS!!!" };
+        // Retuned 2026-08-21: reported as too small and not satisfying enough, on top of the
+        // separate movement fix that made the chain worth pursuing at all. Shorter words hit
+        // harder per the HUD's own established rule (see roadmap.md - "type as a weapon"), and
+        // the continuous throb below stayed, but a rank that actually just changed additionally
+        // gets a punch rather than only a slightly different colour - the throb alone read as
+        // decoration, not as a reaction to something you just did.
+        string[] ranks = { "SLIDE", "CHAIN!", "SLICK!!", "BANANAS!!!" };
         slideCombo.text = ranks[Mathf.Clamp(rank - 1, 0, ranks.Length - 1)];
+
+        if (rank > lastSlideRank)
+            slidePunchUntil = Time.unscaledTime + 0.22f;
+
+        lastSlideRank = rank;
 
         // Hotter and bigger the deeper you are, so the fourth one looks like the fourth one.
         float heat = (rank - 1) / 3f;
         slideCombo.color = Color.Lerp(Color.white, killColour, heat);
 
-        // A small throb so it reads as live rather than printed.
-        float throb = 1f + heat * 0.25f + Mathf.Sin(Time.unscaledTime * 9f) * 0.03f;
+        // The punch decays fast and overshoots on the way in - a snap rather than a fade, per
+        // the same "no fades" rule everything else in this HUD already follows.
+        float punchT = Mathf.Clamp01((slidePunchUntil - Time.unscaledTime) / 0.22f);
+        float punch = punchT * punchT * 0.5f;
+
+        // A small continuous throb so it reads as live rather than printed, plus the punch on
+        // top of it for the frames right after a rank-up.
+        float throb = 1f + heat * 0.25f + Mathf.Sin(Time.unscaledTime * 9f) * 0.03f + punch;
         slideCombo.rectTransform.localScale = Vector3.one * throb;
     }
 
