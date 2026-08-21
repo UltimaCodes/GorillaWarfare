@@ -543,9 +543,18 @@ public class PlayerMovement : MonoBehaviour
                 velocity.x = flat.x;
                 velocity.z = flat.z;
 
-                // Rising in pitch with the chain, so the fourth one sounds like the fourth one.
-                GameAudio.PlayAtDelayed(GameAudio.Slide, transform.position,
-                                        GameAudio.SlideVolume, 0.9f + 0.07f * chain, 0f);
+                // No sound triggered here any more - removed 2026-08-22. This fired a full ~1.8s
+                // one-shot off the same long Slide clips SpeedRush's continuous scrape source
+                // already loops, on every single entry, completely independent of how long the
+                // slide actually lasted. A quick slide-hop chain could easily be shorter than
+                // 1.8s, so the one-shot kept audibly running after the slide had already ended -
+                // exactly the bug SpeedRush.UpdateScrape's own doc comment already warns against
+                // ("a sustained sound wants a sustained source"), just reintroduced from a
+                // different call site. It also meant every slide, all match, only ever played
+                // one of two clips chosen once at startup and never varied, which read as static
+                // and repetitive on top of the overlap. The "rising pitch with the chain" feedback
+                // this was for still exists - SpeedRush now sets it on the loop itself, which it
+                // can actually control, instead of firing a second, independent sound alongside it.
             }
             else
             {

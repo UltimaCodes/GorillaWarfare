@@ -267,20 +267,31 @@ public class SpeedRush : MonoBehaviour
     ///
     /// Volume and pitch both follow speed, so a slide running out is audible before it is
     /// visible - which is the cue for when to hop into the next one.
+    ///
+    /// Also owns the chain's pitch-rise feedback now (folded in 2026-08-22) - that used to be a
+    /// second, independent one-shot fired from PlayerMovement on every slide entry, off the same
+    /// long clips this loop already uses, which is exactly the anti-pattern the paragraph above
+    /// warns about. A one-shot plays to the end of its own clip regardless of how long the slide
+    /// actually turns out to be, so a quick slide-hop chain kept audibly running past the slide
+    /// that started it - reported back as "plays even when you exit sliding". Pitch on this
+    /// source can't do that; it only ever exists while the source is actually running.
     /// </summary>
+    bool wasSliding;
+    AudioClip[] scrapeClips;
+
     void UpdateScrape()
     {
         bool sliding = movement != null && movement.Sliding;
 
+        if (scrapeClips == null)
+            scrapeClips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Slide);
+
+        if (scrapeClips.Length == 0)
+            return;
+
         if (scrape == null)
         {
-            AudioClip[] clips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Slide);
-
-            if (clips.Length == 0)
-                return;
-
             scrape = gameObject.AddComponent<AudioSource>();
-            scrape.clip = clips[Random.Range(0, clips.Length)];
             scrape.loop = true;
             scrape.playOnAwake = false;
 
@@ -289,6 +300,18 @@ public class SpeedRush : MonoBehaviour
             scrape.spatialBlend = 0f;
             scrape.volume = 0f;
         }
+
+        // A fresh slide re-picks which clip plays and restarts it from the top, rather than one
+        // clip chosen once at startup and looped for the rest of the match - which is what made
+        // this read as static and repetitive regardless of the one-shot bug above.
+        if (sliding && !wasSliding)
+        {
+            scrape.clip = scrapeClips[Random.Range(0, scrapeClips.Length)];
+            scrape.Stop();
+            scrape.Play();
+        }
+
+        wasSliding = sliding;
 
         Vector3 flat = movement != null ? movement.Velocity : Vector3.zero;
         flat.y = 0f;
@@ -314,8 +337,22 @@ public class SpeedRush : MonoBehaviour
                                           Time.deltaTime * rate);
 
         // Slowing down drops the pitch, which is most of what makes a scrape read as friction
-        // rather than as a texture being played at you.
-        scrape.pitch = 0.75f + Mathf.Clamp01(speed / 14f) * 0.5f;
+        // rather than as a texture being played at you. Chain rank sits on top as a standing
+        // offset (0 at chain 1, up to 0.21 at chain 4) - this is the "rising pitch with the
+        // chain" feedback that used to live on a separate one-shot fired from PlayerMovement;
+        // it belongs here now, added rather than overwriting the speed term, since both are
+        // true at once - a fast slide two links into a chain should sound like both.
+        //
+        // The wobble underneath is new 2026-08-22, for "the same clip repeating" reported
+        // alongside the one-shot bug - even with the bug fixed and the clip varied per slide,
+        // a slide held at a steady speed for a couple of seconds sits at a steady pitch too,
+        // which is still the same ~1.8s loop sounding identical lap after lap. Perlin rather
+        // than Random for the same reason Juice's screenshake uses it: it swings rather than
+        // jittering, so it reads as organic variation instead of static.
+        float chainOffset = 0.07f * (Mathf.Max(1, movement.SlideChain) - 1f);
+        float wobble = (Mathf.PerlinNoise(wobbleSeed, Time.time * 2.2f) - 0.5f) * 0.06f;
+
+        scrape.pitch = 0.75f + Mathf.Clamp01(speed / 14f) * 0.5f + chainOffset + wobble;
 
         if (scrape.volume > 0.001f && !scrape.isPlaying)
             scrape.Play();
@@ -325,6 +362,7 @@ public class SpeedRush : MonoBehaviour
 
     float dustDebt;
     AudioSource scrape;
+    readonly float wobbleSeed = Random.Range(0f, 100f);
 
     void SpawnLines()
     {
