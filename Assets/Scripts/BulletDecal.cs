@@ -40,6 +40,7 @@ public class BulletDecal : MonoBehaviour
     static Material worldMaterial;
     static Material bloodMaterial;
     static Mesh quad;
+    static Sprite[] boomShapes;
 
     Transform anchor;
     Renderer view;
@@ -65,6 +66,8 @@ public class BulletDecal : MonoBehaviour
         }
 
         bool bloody = hit.collider.GetComponentInParent<IDamageable>() != null;
+
+        Puff(hit.point, hit.normal, bloody);
 
         GameObject host = new GameObject(bloody ? "~blood" : "~impact");
         host.transform.position = hit.point + hit.normal * LiftOff;
@@ -138,6 +141,60 @@ public class BulletDecal : MonoBehaviour
         block.SetColor("_TintColor", Color.Lerp(Color.white, tint, strength));
         block.SetColor("_Color", Color.Lerp(Color.white, tint, strength));
         view.SetPropertyBlock(block);
+    }
+
+    /// <summary>
+    /// The moment of the hit, not the mark it leaves - FlashSprite's own doc comment already
+    /// named "the impact puff" as one of its three jobs, alongside the muzzle flash and the
+    /// explosion, but nothing ever actually called it for a bullet impact. The decal alone is a
+    /// multiply blend the same colour as most of what it lands on, which reads as barely there
+    /// on a light surface - reported as the impact "disappearing". This is the part that was
+    /// actually missing: a small, fast burst right at the moment of the hit, the same shapes and
+    /// spawn pattern the grenade's own explosion already uses, just far smaller and quicker.
+    /// </summary>
+    static void Puff(Vector3 point, Vector3 normal, bool bloody)
+    {
+        if (boomShapes == null || boomShapes.Length == 0)
+            boomShapes = Resources.LoadAll<Sprite>("Particles/Boom");
+
+        if (boomShapes.Length == 0)
+            return;
+
+        Sprite spark = Pick("spark");
+        Sprite core = Pick("circle");
+
+        Color tint = bloody ? new Color(0.75f, 0.1f, 0.12f, 1f) : new Color(1f, 0.92f, 0.7f, 1f);
+
+        // A quick bright core right at the surface, gone almost instantly - the same "arrives at
+        // full size and collapses" trick the explosion's own core uses, just a fraction of it.
+        FlashSprite.Spawn(core, point + normal * 0.02f, 0.10f, 0.22f, 0.07f, tint);
+
+        // A handful of sparks kicked off the surface, biased along the normal so they read as
+        // debris leaving the impact rather than a ring painted on it.
+        int count = bloody ? 4 : 6;
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 away = (normal * 0.6f + Random.insideUnitSphere * 0.5f).normalized;
+            FlashSprite.Spawn(spark, point + away * 0.05f, 0.05f, 0.01f,
+                              Random.Range(0.12f, 0.2f), tint);
+        }
+    }
+
+    static Sprite Pick(string prefix)
+    {
+        Sprite fallback = null;
+
+        for (int i = 0; i < boomShapes.Length; i++)
+        {
+            if (fallback == null)
+                fallback = boomShapes[i];
+
+            if (boomShapes[i].name.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+                return boomShapes[i];
+        }
+
+        return fallback;
     }
 
     static void EnsureShared()
