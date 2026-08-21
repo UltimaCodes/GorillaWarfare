@@ -56,35 +56,40 @@ public class Hitbox : MonoBehaviour
         public string to;      // null for a lone sphere
         public float multiplier;
         public string label;
-        public float fatten;   // scales the fitted radius, for parts worth being generous about
     }
 
     static readonly Part[] Parts =
     {
-        new Part { from = "Head",          to = null,            multiplier = 2.0f, label = "head",    fatten = 1.05f },
-        new Part { from = "NECK",          to = "Head",          multiplier = 1.6f, label = "neck",    fatten = 1.0f },
-        new Part { from = "SPINE3",        to = "NECK",          multiplier = 1.0f, label = "chest",   fatten = 1.0f },
-        new Part { from = "SPINE1",        to = "SPINE3",        multiplier = 1.0f, label = "stomach", fatten = 1.0f },
-        new Part { from = "HIPS",          to = "SPINE1",        multiplier = 0.9f, label = "hips",    fatten = 1.0f },
-        new Part { from = "LEFTHIP",       to = "LEFTKNEE",      multiplier = 0.8f, label = "leg",     fatten = 1.0f },
-        new Part { from = "RIGHTHIP",      to = "RIGHTKNEE",     multiplier = 0.8f, label = "leg",     fatten = 1.0f },
-        new Part { from = "LEFTKNEE",      to = null,            multiplier = 0.7f, label = "leg",     fatten = 1.15f },
-        new Part { from = "RIGHTKNEE",     to = null,            multiplier = 0.7f, label = "leg",     fatten = 1.15f },
-        new Part { from = "LEFTSHOULDER",  to = "LEFTELBOW",     multiplier = 0.8f, label = "arm",     fatten = 1.0f },
-        new Part { from = "RIGHTSHOULDER", to = "RIGHTELBOW",    multiplier = 0.8f, label = "arm",     fatten = 1.0f },
-        new Part { from = "LEFTELBOW",     to = null,            multiplier = 0.7f, label = "arm",     fatten = 1.15f },
-        new Part { from = "RIGHTELBOW",    to = null,            multiplier = 0.7f, label = "arm",     fatten = 1.15f },
+        new Part { from = "Head",          to = null,            multiplier = 2.0f, label = "head"    },
+        new Part { from = "NECK",          to = "Head",          multiplier = 1.6f, label = "neck"    },
+        new Part { from = "SPINE3",        to = "NECK",          multiplier = 1.0f, label = "chest"   },
+        new Part { from = "SPINE1",        to = "SPINE3",        multiplier = 1.0f, label = "stomach" },
+        new Part { from = "HIPS",          to = "SPINE1",        multiplier = 0.9f, label = "hips"    },
+        new Part { from = "LEFTHIP",       to = "LEFTKNEE",      multiplier = 0.8f, label = "leg"     },
+        new Part { from = "RIGHTHIP",      to = "RIGHTKNEE",     multiplier = 0.8f, label = "leg"     },
+        new Part { from = "LEFTKNEE",      to = null,            multiplier = 0.7f, label = "leg"     },
+        new Part { from = "RIGHTKNEE",     to = null,            multiplier = 0.7f, label = "leg"     },
+        new Part { from = "LEFTSHOULDER",  to = "LEFTELBOW",     multiplier = 0.8f, label = "arm"     },
+        new Part { from = "RIGHTSHOULDER", to = "RIGHTELBOW",    multiplier = 0.8f, label = "arm"     },
+        new Part { from = "LEFTELBOW",     to = null,            multiplier = 0.7f, label = "arm"     },
+        new Part { from = "RIGHTELBOW",    to = null,            multiplier = 0.7f, label = "arm"     },
     };
 
     /// <summary>
-    /// Radii fitted to the actual mesh, worked out once and reused.
+    /// Radius comes from a hand-edited profile rather than being fitted off the mesh.
     ///
-    /// Every player is the same model, so measuring per spawn would be the same answer computed
-    /// eight times. Cached against the mesh so a different model refits rather than inheriting
-    /// numbers that describe a gorilla.
+    /// Fitting was tried first - for every sampled vertex, find the segment it sits closest to
+    /// and size to a high percentile of those distances. Reasonable in principle, wrong here in
+    /// practice: it trusts the mesh's own skin weights to say which part of the body a vertex
+    /// belongs to, and this model's weights are painted broadly around the shoulder and hip
+    /// joints - a lot of chest and back skin is dominantly weighted to the shoulder bone rather
+    /// than the spine. Even a version that only compared a vertex against segments sharing its
+    /// own dominant bone still measured the arm at 0.66m radius, wider than the torso. That's
+    /// not a fitting bug, it's the source data - no formula run against it was going to land
+    /// somewhere sane. See HitboxProfile.cs.
     /// </summary>
-    static Mesh fittedFor;
-    static float[] fitted;
+    static HitboxProfile profile;
+    static bool profileLoaded;
 
     public static int BuildFor(Transform root, IDamageable owner)
     {
@@ -96,6 +101,18 @@ public class Hitbox : MonoBehaviour
             return 0;
         }
 
+        if (!profileLoaded)
+        {
+            profile = Resources.Load<HitboxProfile>("HitboxProfile");
+            profileLoaded = true;
+
+            if (profile == null)
+            {
+                Debug.LogWarning("[hitbox] no HitboxProfile in Resources - every part will use "
+                                 + "the same 0.15m fallback until Assets/Resources/HitboxProfile.asset exists.");
+            }
+        }
+
         // One traversal, not one per bone. This used to walk the entire rig thirteen times for
         // every player that spawned, and respawns make that a recurring cost.
         Dictionary<string, Transform> bones = new Dictionary<string, Transform>();
@@ -103,7 +120,6 @@ public class Hitbox : MonoBehaviour
         foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
             bones[t.name] = t;
 
-        float[] radii = Fit(root, bones);
         int built = 0;
 
         for (int i = 0; i < Parts.Length; i++)
@@ -126,7 +142,7 @@ public class Hitbox : MonoBehaviour
             // map. Cancel the bone's scale so the radii below mean metres.
             Neutralise(go.transform);
 
-            float radius = Mathf.Max(0.04f, radii[i]);
+            float radius = profile != null ? profile.RadiusFor(part.from, 0.15f) : 0.15f;
 
             if (far == null)
             {
@@ -157,117 +173,6 @@ public class Hitbox : MonoBehaviour
         }
 
         return built;
-    }
-
-    /// <summary>
-    /// Works out how fat each part needs to be by looking at the mesh.
-    ///
-    /// For every sampled vertex, finds the segment it sits closest to and remembers how far away
-    /// it was. The radius for a segment is then a high percentile of those distances - high
-    /// rather than the maximum, so one stray vertex on a finger does not inflate the whole arm.
-    ///
-    /// Fitting beats hand-tuning here for a reason that is worth stating: the previous radii
-    /// were chosen by eye and measured at twenty percent coverage. Nobody was going to spot that
-    /// by looking.
-    /// </summary>
-    static float[] Fit(Transform root, Dictionary<string, Transform> bones)
-    {
-        SkinnedMeshRenderer skin = root.GetComponentInChildren<SkinnedMeshRenderer>(true);
-
-        if (skin == null || skin.sharedMesh == null)
-            return Fallback();
-
-        if (fitted != null && fittedFor == skin.sharedMesh)
-            return fitted;
-
-        Mesh baked = new Mesh();
-        skin.BakeMesh(baked, true);
-
-        Vector3[] verts = baked.vertices;
-        List<float>[] distances = new List<float>[Parts.Length];
-
-        for (int i = 0; i < Parts.Length; i++)
-            distances[i] = new List<float>();
-
-        for (int v = 0; v < verts.Length; v += 3)
-        {
-            Vector3 world = skin.transform.TransformPoint(verts[v]);
-
-            int best = -1;
-            float bestGap = float.MaxValue;
-
-            for (int i = 0; i < Parts.Length; i++)
-            {
-                if (!bones.TryGetValue(Parts[i].from, out Transform a))
-                    continue;
-
-                Vector3 pointA = a.position;
-                Vector3 pointB = Parts[i].to != null && bones.TryGetValue(Parts[i].to, out Transform b)
-                    ? b.position : pointA;
-
-                float gap = Vector3.Distance(world, NearestOnSegment(pointA, pointB, world));
-
-                if (gap >= bestGap)
-                    continue;
-
-                bestGap = gap;
-                best = i;
-            }
-
-            if (best >= 0)
-                distances[best].Add(bestGap);
-        }
-
-        Object.DestroyImmediate(baked);
-
-        float[] result = new float[Parts.Length];
-
-        for (int i = 0; i < Parts.Length; i++)
-        {
-            if (distances[i].Count == 0)
-            {
-                result[i] = 0.12f;
-                continue;
-            }
-
-            distances[i].Sort();
-
-            // Ninetieth percentile. The last ten percent is fingers, ears and the tips of toes,
-            // and sizing for those would swell every capsule until they overlapped into one
-            // undifferentiated blob with no head multiplier worth having.
-            int at = Mathf.Clamp(Mathf.RoundToInt(distances[i].Count * 0.9f), 0, distances[i].Count - 1);
-            result[i] = distances[i][at] * Parts[i].fatten;
-        }
-
-        fitted = result;
-        fittedFor = skin.sharedMesh;
-
-        return result;
-    }
-
-    static Vector3 NearestOnSegment(Vector3 a, Vector3 b, Vector3 point)
-    {
-        Vector3 along = b - a;
-        float length = along.sqrMagnitude;
-
-        if (length < 0.000001f)
-            return a;
-
-        float t = Mathf.Clamp01(Vector3.Dot(point - a, along) / length);
-
-        return a + along * t;
-    }
-
-    /// Used when there is no mesh to measure - a stand-in, a test rig, a model that failed to
-    /// load. Roughly the old hand-picked numbers, which at least produced a playable game.
-    static float[] Fallback()
-    {
-        float[] result = new float[Parts.Length];
-
-        for (int i = 0; i < Parts.Length; i++)
-            result[i] = 0.15f;
-
-        return result;
     }
 
     // Everything except players and their hitboxes.

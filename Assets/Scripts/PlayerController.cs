@@ -447,6 +447,16 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // living anywhere in the loadout.
         bool grappling = vine != null && vine.Attached;
 
+        // The weapon disappears while attached, the same way UpdateAim already hides it while
+        // scoped - your hand is on the vine, not the trigger, and a gun you can't fire but can
+        // still see reads as broken rather than as busy. Only ever forces it hidden, never forces
+        // it visible - UpdateAim's own SetVisible(!wants) already runs every frame and correctly
+        // owns visibility the rest of the time. An unconditional SetVisible(!grappling) here
+        // fought that: on any frame not grappling it forced the weapon back on regardless of aim
+        // state, which is what broke "the weapon is out of the way" while scoped.
+        if (grappling && held is SingleShotGun heldVisual)
+            heldVisual.SetVisible(false);
+
         if (!grappling && KeyBinds.Pressed(KeyBinds.Action.Fire))
         {
             DropProtection();
