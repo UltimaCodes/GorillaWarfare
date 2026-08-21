@@ -15,7 +15,7 @@ Shader "Skybox/JungleSky"
         [Header(Bands)]
         _GroundColor ("Ground (below horizon)", Color) = (0.05, 0.16, 0.07, 1)
         _HorizonColor ("Horizon haze", Color) = (0.85, 0.80, 0.32, 1)
-        _ZenithColor ("Zenith", Color) = (0.16, 0.46, 0.42, 1)
+        _ZenithColor ("Zenith", Color) = (0.09, 0.34, 0.24, 1)
 
         [Header(Shape)]
         // How wide the horizon haze band is. Small = a thin bright line where ground meets sky,
@@ -25,11 +25,26 @@ Shader "Skybox/JungleSky"
         // Where the haze band sits relative to the true horizon (y=0). Jungle haze sits low,
         // under the tree line rather than centred on the horizon itself.
         _HazeHeight ("Haze band centre", Range(-0.3, 0.3)) = -0.04
+        // How far above the haze band the green canopy colour holds before giving way to open
+        // sky at the zenith. Wide on purpose (retuned 2026-08-22, reference was a dense canopy
+        // view, not open sky with a thin tree line at the bottom) - green is most of the dome
+        // now, sky is what's left at the very top rather than the other way round.
+        _CanopyReach ("Canopy reach above haze", Range(0.2, 1.2)) = 0.85
 
         [Header(Sun)]
         _SunColor ("Sun glow", Color) = (1.0, 0.92, 0.55, 1)
         _SunDirection ("Sun direction", Vector) = (0.35, 0.55, -0.4, 0)
         _SunSize ("Sun glow tightness", Range(4, 256)) = 48
+
+        [Header(God rays)]
+        // Retuned 2026-08-22 - the reference was full of visible light shafts breaking through
+        // canopy, which a single sun glow doesn't sell on its own. Procedural rather than a
+        // texture: several sine waves of a per-fragment angle around the sun axis, added
+        // together at different frequencies so the streaks land irregular rather than a perfect
+        // pinwheel, which is what would give away that it's a formula.
+        _RayColor ("Ray colour", Color) = (1.0, 0.88, 0.55, 1)
+        _RayIntensity ("Ray strength", Range(0, 1)) = 0.55
+        _RayFalloff ("Ray falloff from sun", Range(1, 12)) = 3.5
     }
 
     SubShader
@@ -50,9 +65,13 @@ Shader "Skybox/JungleSky"
             fixed4 _ZenithColor;
             float _HazeWidth;
             float _HazeHeight;
+            float _CanopyReach;
             fixed4 _SunColor;
             float3 _SunDirection;
             float _SunSize;
+            fixed4 _RayColor;
+            float _RayIntensity;
+            float _RayFalloff;
 
             struct appdata
             {
@@ -91,15 +110,42 @@ Shader "Skybox/JungleSky"
                 float lowerT = saturate((dir.y - (_HazeHeight - _HazeWidth)) / _HazeWidth);
                 fixed3 col = lerp(_GroundColor.rgb, _HorizonColor.rgb, smoothstep(0.0, 1.0, lowerT));
 
-                float upperWidth = max(0.05, 0.8 - _HazeHeight);
-                float upperT = saturate((dir.y - _HazeHeight) / upperWidth);
+                // Canopy green now carries most of the dome - _CanopyReach is wide by default,
+                // so this second blend doesn't finish (and let open sky take over) until well
+                // above the horizon, rather than a thin green strip under a mostly-blue sky.
+                float upperT = saturate((dir.y - _HazeHeight) / max(0.05, _CanopyReach));
                 col = lerp(col, _ZenithColor.rgb, smoothstep(0.0, 1.0, upperT));
 
-                // Sun glow: a tight power curve on the dot product, the same trick as a Phong
-                // specular highlight, because that's exactly what a glowing disc in the sky is.
-                float sunDot = saturate(dot(dir, normalize(_SunDirection)));
-                float glow = pow(sunDot, _SunSize);
-                col += _SunColor.rgb * glow;
+                float3 sunAxis = normalize(_SunDirection);
+                float sunDot = saturate(dot(dir, sunAxis));
+
+                // God rays: a per-fragment angle measured around the sun axis (project dir onto
+                // the plane perpendicular to it, atan2 the result), run through a few sine waves
+                // at different frequencies and phases so the streaks land irregular rather than
+                // a perfect pinwheel. Masked by both distance from the sun (rays fan out near it,
+                // not opposite it) and height (canopy reads as blocking them low in the sky, so
+                // they fade out approaching the haze band rather than cutting into the ground).
+                float3 arbitraryUp = abs(sunAxis.y) < 0.99 ? float3(0, 1, 0) : float3(1, 0, 0);
+                float3 tangent = normalize(cross(arbitraryUp, sunAxis));
+                float3 bitangent = cross(sunAxis, tangent);
+                float rayAngle = atan2(dot(dir, bitangent), dot(dir, tangent));
+
+                float rays = sin(rayAngle * 9.0 + 1.3) * 0.5 + 0.5;
+                rays += sin(rayAngle * 17.0 + 4.1) * 0.3;
+                rays += sin(rayAngle * 5.0 + 2.7) * 0.2;
+                rays = saturate(rays * 0.55);
+
+                float rayHeightMask = saturate((dir.y - _HazeHeight) / 0.35);
+                float rayMask = pow(sunDot, _RayFalloff) * rayHeightMask;
+
+                col = lerp(col, _RayColor.rgb, rays * rayMask * _RayIntensity);
+
+                // Sun glow: two layers rather than one, a tight hot core plus a much wider, softer
+                // halo - a single tight power curve read as a small clean disc, closer to a clear
+                // sky than to sunlight diffusing through humid, leaf-filtered air.
+                float core = pow(sunDot, _SunSize);
+                float halo = pow(sunDot, max(1.0, _SunSize * 0.06)) * 0.35;
+                col += _SunColor.rgb * (core + halo);
 
                 return fixed4(col, 1);
             }
