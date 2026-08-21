@@ -35,7 +35,7 @@ MonoBehaviour:
   unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}
   ripe: {r: 0.96, g: 0.82, b: 0.16, a: 1}
   overripe: {r: 0.36, g: 0.24, b: 0.12, a: 1}
-  verticalKick: 5
+  verticalKick: 8
   horizontalKick: 1.1
   patternLength: 3
   recoilRecovery: 0.5
