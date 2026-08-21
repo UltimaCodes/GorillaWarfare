@@ -205,12 +205,33 @@ public class PlayerMovement : MonoBehaviour
     /// input; this only owns the CharacterController, the same split PlayerMovement already
     /// keeps with everything else that throws the player around.
     /// </summary>
+    /// <summary>
+    /// Retuned 2026-08-22 from a MoveTowards chase to an actual force, per direct request for
+    /// something more physics-based - harder to control, more rewarding to use well. The old
+    /// version smoothly steered the whole velocity vector, y-component included, straight at the
+    /// anchor every frame - which meant gravity was never actually fighting it and your own
+    /// momentum going in never mattered, since it just got overwritten toward the "correct"
+    /// direction regardless of where you already were. It was reliable because there was nothing
+    /// to actually manage.
+    ///
+    /// Gravity now stays on, and the pull is added to whatever velocity you already had rather
+    /// than replacing it - so a grapple fired while already moving fast in some other direction
+    /// curves rather than snapping straight to the anchor line, and pulling toward something
+    /// above you costs real work against your own weight instead of being free. The speed cap
+    /// still holds, so it can't run away, but reaching it now depends on how well the throw lines
+    /// up with where you were already headed rather than being guaranteed every time.
+    /// </summary>
     public void Grapple(Vector3 anchor, float accel, float maxSpeed, float dt)
     {
         Vector3 toAnchor = anchor - transform.position;
         Vector3 dir = toAnchor.sqrMagnitude > 0.01f ? toAnchor.normalized : transform.forward;
 
-        velocity = Vector3.MoveTowards(velocity, dir * maxSpeed, accel * dt);
+        velocity.y -= gravity * dt;
+        velocity += dir * accel * dt;
+
+        if (velocity.magnitude > maxSpeed)
+            velocity = velocity.normalized * maxSpeed;
+
         grounded = false;
 
         controller.Move(velocity * dt);

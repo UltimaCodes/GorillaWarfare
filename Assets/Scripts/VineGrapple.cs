@@ -78,9 +78,15 @@ public class VineGrapple : MonoBehaviour
     PhotonView PV;
     LineRenderer line;
 
+    [Tooltip("Minimum seconds between grapple attempts. Added 2026-08-22 so the key can't be "
+             + "spammed - without it there was nothing stopping a press every frame, each one "
+             + "cancelling the last whiff sound before it finished and firing a fresh cast.")]
+    [SerializeField] float attemptCooldown = 0.5f;
+
     int anchorViewID = -1;
     Vector3 anchorWorldPoint;
     float attachedAt;
+    float lastAttemptAt = -99f;
     bool hitLandedThisAttach;
 
     /// Whether this copy - owner or remote - is currently shown attached. Read by
@@ -116,8 +122,12 @@ public class VineGrapple : MonoBehaviour
 
         if (!Attached)
         {
-            if (!listening && KeyBinds.Pressed(KeyBinds.Action.Grapple))
+            if (!listening && KeyBinds.Pressed(KeyBinds.Action.Grapple)
+                && Time.time - lastAttemptAt >= attemptCooldown)
+            {
+                lastAttemptAt = Time.time;
                 TryAttach();
+            }
 
             return;
         }
@@ -277,6 +287,46 @@ public class VineGrapple : MonoBehaviour
 
         if (PV.IsMine)
             Juice.Hit(0.3f);
+
+        // A latch is a moment, not just a state change - reported back as wanting to actually
+        // feel it connect, on top of the thwip and the freeze the throw itself already has. A
+        // small spark burst right where it caught, the same Particles/Boom sprites and pattern
+        // the bullet impact puff and the grenade's own explosion both already use, just smaller
+        // than either - this is a rope catching, not a detonation.
+        Puff(worldPoint);
+    }
+
+    static Sprite[] boomShapes;
+
+    static void Puff(Vector3 at)
+    {
+        if (boomShapes == null || boomShapes.Length == 0)
+            boomShapes = Resources.LoadAll<Sprite>("Particles/Boom");
+
+        if (boomShapes.Length == 0)
+            return;
+
+        Sprite spark = null;
+        Sprite core = null;
+
+        foreach (Sprite s in boomShapes)
+        {
+            if (spark == null && s.name.StartsWith("spark", System.StringComparison.OrdinalIgnoreCase))
+                spark = s;
+            if (core == null && s.name.StartsWith("circle", System.StringComparison.OrdinalIgnoreCase))
+                core = s;
+        }
+
+        Color tint = new Color(0.55f, 0.85f, 0.35f, 1f);
+
+        FlashSprite.Spawn(core ?? boomShapes[0], at, 0.12f, 0.26f, 0.09f, tint);
+
+        for (int i = 0; i < 5; i++)
+        {
+            Vector3 away = Random.onUnitSphere;
+            FlashSprite.Spawn(spark ?? boomShapes[0], at + away * 0.06f, 0.05f, 0.01f,
+                              Random.Range(0.14f, 0.22f), tint);
+        }
     }
 
     [PunRPC]
@@ -288,6 +338,12 @@ public class VineGrapple : MonoBehaviour
         PlayerMovement movement = GetComponent<PlayerMovement>();
         if (movement != null)
             movement.Grappling = false;
+
+        // Letting go needed a sound of its own - reported back after the attach and the whiff
+        // both already had one. Same bank and clip as the whiff, but at a distinct pitch and
+        // volume from both it and the attach thwip (full pitch) - lower than either, so it reads
+        // as a release rather than another catch or another miss.
+        GameAudio.PlayPitched(GameAudio.Vine, "swish-13", 0.45f, 0.6f);
     }
 
     /// <summary>

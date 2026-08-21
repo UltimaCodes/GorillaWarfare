@@ -58,8 +58,52 @@ public class Projectile : MonoBehaviour
         shell.arming = from.armingDistance;
 
         shell.BuildVisual();
+        shell.BuildTrail();
 
         return shell;
+    }
+
+    static Material trailMaterial;
+
+    /// <summary>
+    /// A thrown fruit reads as a fast-moving blob without something marking the path it just
+    /// took - added per direct request, the same "comet" look as a fast-thrown ball leaving
+    /// streaked lines behind it. TrailRenderer rather than more FlashSprite billboards: it's
+    /// built for exactly this (a ribbon following recent positions, fading over its own length)
+    /// and doesn't need spawning or cleaning up frame by frame the way a stream of sprites would.
+    /// </summary>
+    void BuildTrail()
+    {
+        TrailRenderer trail = gameObject.AddComponent<TrailRenderer>();
+
+        trail.time = 0.22f;
+        trail.startWidth = Radius * 2.2f;
+        trail.endWidth = 0f;
+        trail.minVertexDistance = 0.05f;
+        trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        trail.receiveShadows = false;
+        trail.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+
+        if (trailMaterial == null)
+        {
+            Shader shader = Shader.Find("Particles/Additive")
+                            ?? Shader.Find("Legacy Shaders/Particles/Additive")
+                            ?? Shader.Find("Sprites/Default");
+            trailMaterial = new Material(shader) { name = "~trail", enableInstancing = true };
+        }
+
+        trail.sharedMaterial = trailMaterial;
+
+        // The weapon's own ripe colour rather than an invented one, so the trail reads as part
+        // of the same banana rather than a generic effect borrowed from somewhere else.
+        Color bright = info != null ? info.ripe : new Color(1f, 0.85f, 0.3f, 1f);
+        bright.a = 1f;
+
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new[] { new GradientColorKey(bright, 0f), new GradientColorKey(bright, 1f) },
+            new[] { new GradientAlphaKey(0.7f, 0f), new GradientAlphaKey(0f, 1f) });
+        trail.colorGradient = gradient;
     }
 
     /// The pineapple itself, borrowed from the same model the weapon uses.
