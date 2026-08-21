@@ -841,13 +841,24 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // something - without it a gun that fires ten times a second is a static banana with a
     // noise attached, and the whole thing reads as a screenshot that occasionally beeps.
     Vector3 viewKick;
-    const float kickBack = 0.055f;
-    const float kickRise = 0.018f;
-    const float kickRecovery = 14f;
+    Vector3 rotationKick;
+
+    // kickBack and kickRise raised, and kickRecovery slowed, on 2026-08-22 - reported that the
+    // weapon "doesn't do that much" when it fires. The position kick alone was barely a
+    // centimetre, and rotation never kicked at all: itemHolder.localRotation only ever chased
+    // weaponViewRotation directly, with nothing added to it the way viewKick gets added to
+    // position. rotationKick below is the fix - the same kick-and-recover shape, applied to
+    // angle instead of offset. Recovery slowed too, since a kick that snaps back before it's
+    // been seen doesn't read as "punishing" no matter how big it is.
+    const float kickBack = 0.09f;
+    const float kickRise = 0.03f;
+    const float kickPitch = 9f;
+    const float kickRecovery = 9f;
 
     public void AddRecoil(Vector2 kick, float recovery, float speed)
     {
         viewKick += new Vector3(0f, kickRise, -kickBack);
+        rotationKick += new Vector3(-kickPitch, 0f, 0f);
 
         recoilTarget += kick;
         recoilRecovery = recovery;
@@ -933,11 +944,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         // Kick decays toward nothing wherever the weapon is being held.
         viewKick = Vector3.Lerp(viewKick, Vector3.zero, 1f - Mathf.Exp(-kickRecovery * Time.deltaTime));
+        rotationKick = Vector3.Lerp(rotationKick, Vector3.zero, 1f - Mathf.Exp(-kickRecovery * Time.deltaTime));
 
         // Back where it belongs, since aiming no longer moves it.
         itemHolder.localPosition = Vector3.Lerp(itemHolder.localPosition, weaponViewOffset + viewKick, t);
         itemHolder.localRotation = Quaternion.Slerp(itemHolder.localRotation,
-                                                    Quaternion.Euler(weaponViewRotation), t);
+                                                    Quaternion.Euler(weaponViewRotation + rotationKick), t);
 
         if (sway != null)
             sway.SetRest(itemHolder.localPosition, itemHolder.localRotation, wants);
