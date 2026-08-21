@@ -47,16 +47,36 @@ a sound with a tail.
 That projectile system is the single highest-value thing on this whole document, because it
 unlocks everything in this section.
 
-### The Vine — grapple
+### The Vine — grapple, now specced closer to ODM gear
 
-Fires a vine. Sticks to world geometry, pulls you toward the anchor, cuts if you're shot or if
-you let go. Not a weapon at all — it takes a weapon slot and does no damage.
+Fires a vine. The original version of this entry only anchored to world geometry and did no
+damage; the 2026-08-21 ask is more specific and closer to Attack on Titan's omnidirectional
+mobility gear, so this replaces that version rather than sitting next to it.
 
-Pairs with the Pineapple the way a rocket launcher pairs with a grappling hook in every game
-that has both: the launcher gets you height, the vine gets you distance, and putting them
-together is a skill you can spend a year getting good at.
+Latches onto either a vantage point (world geometry) or an enemy player, and pulls you toward the
+anchor fast — momentum builds quicker than any other movement tech in the game while attached. Tap
+the button again to cut early; hold it and you stay attached until you reach the anchor or it
+breaks on its own. Your gun is unusable for as long as you're attached — this isn't a weapon-slot
+cost any more, it's an active tradeoff between shooting and moving.
 
-Also fixes something the game currently lacks: a reason to look up.
+**While attached, you can damage a player by reaching them** — using the same speed-scaled formula
+as Momentum melee below, rather than a damage number of its own. That's the right call twice over:
+one formula to tune instead of two, and it means the vine and the peel are the same underlying
+idea in two different shells — go fast, hit something, the speed is the damage. Worth building
+Momentum melee first for its own sake, but it also means the vine inherits an already-tuned,
+already-playtested damage curve for free instead of needing its own pass.
+
+Still pairs with the Pineapple the way a rocket launcher pairs with a grappling hook in every game
+that has both — the launcher gets you height, the vine gets you distance — and still fixes the
+thing the game currently lacks: a reason to look up.
+
+**What it breaks, worth knowing before it's built:** anchoring to a *player* is a moving target in
+a networked game in a way a wall never is. World geometry doesn't die, doesn't respawn, doesn't
+disconnect, and isn't smoothed by interpolation the way a remote copy's position is — an enemy
+anchor can do all four while you're attached to it. Needs an answer for what happens to the rope on
+a kill, a disconnect, and a respawn (almost certainly: detach immediately, don't try to follow them
+to their new spawn point), and needs to feel right while being pulled toward a target whose
+position you're only ever seeing slightly in the past.
 
 ### The Blender — vortex
 
