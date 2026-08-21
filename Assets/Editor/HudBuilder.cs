@@ -507,9 +507,9 @@ public static class HudBuilder
 
             if (sibling != null && sibling.transform.parent != null)
             {
-                TMP_Text made = Text(sibling.transform.parent, "SlideCombo", sibling.font, 54f,
+                TMP_Text made = Text(sibling.transform.parent, "SlideCombo", sibling.font, 80f,
                                      TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                     new Vector2(-70f, 120f), new Vector2(620f, 80f));
+                                     new Vector2(-70f, 120f), new Vector2(680f, 100f));
                 made.text = "SLIDE";
                 made.gameObject.SetActive(false);
 
@@ -526,6 +526,14 @@ public static class HudBuilder
         added += Retune(so, "centreTitle", 130f, new Vector2(0f, 230f), new Vector2(1600f, 150f));
         added += Retune(so, "centreSubtitle", 42f, new Vector2(0f, 148f), new Vector2(1600f, 56f));
         added += Retune(so, "comboText", 76f, new Vector2(0f, -170f), new Vector2(400f, 96f));
+
+        // Reported too small on 2026-08-17 and again on 2026-08-21. 80 matches and slightly
+        // beats the kill-streak combo text (76, above) - the two are the same idea, a hot streak
+        // told to you as text - and the wider box is so BANANAS!!! at the new size doesn't wrap.
+        // Alignment passed explicitly: Retune defaults to Center, and this one was built Right
+        // to hug the edge of its group rather than sit centred in its box like the other three.
+        added += Retune(so, "slideCombo", 80f, new Vector2(-70f, 120f), new Vector2(680f, 100f),
+                        TextAlignmentOptions.Right);
 
         if (added == 0)
         {
@@ -549,7 +557,8 @@ public static class HudBuilder
     /// Returns whether anything changed, so a repair run that finds everything correct can say
     /// so rather than reporting work it didn't do.
     /// </summary>
-    static int Retune(SerializedObject so, string field, float size, Vector2 position, Vector2 dimensions)
+    static int Retune(SerializedObject so, string field, float size, Vector2 position,
+                      Vector2 dimensions, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
     {
         SerializedProperty slot = so.FindProperty(field);
         TMP_Text text = slot != null ? slot.objectReferenceValue as TMP_Text : null;
@@ -561,11 +570,12 @@ public static class HudBuilder
 
         if (Mathf.Approximately(text.fontSize, size)
             && rect.anchoredPosition == position
-            && rect.sizeDelta == dimensions)
+            && rect.sizeDelta == dimensions
+            && text.alignment == alignment)
             return 0;
 
         text.fontSize = size;
-        text.alignment = TextAlignmentOptions.Center;
+        text.alignment = alignment;
         rect.anchoredPosition = position;
         rect.sizeDelta = dimensions;
 

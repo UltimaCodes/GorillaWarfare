@@ -17,8 +17,11 @@ using UnityEngine;
 public class SpeedRush : MonoBehaviour
 {
     [Tooltip("Below this you are running, and nothing happens. Ground speed is 8.13, so this "
-             + "sits above anything you can reach on foot.")]
-    [SerializeField] float threshold = 15f;
+             + "sits above anything you can reach on foot. Lowered from 15 on 2026-08-21: a "
+             + "slide peaked around 9.6 before that day's retune, which never crossed even the "
+             + "old threshold, so the effect could not fire off a slide at all. 11 still clears "
+             + "running comfortably while sitting inside what a real slide or chain now reaches.")]
+    [SerializeField] float threshold = 11f;
 
     [Tooltip("Speed at which the effect is at full strength.")]
     [SerializeField] float full = 32f;
@@ -252,8 +255,19 @@ public class SpeedRush : MonoBehaviour
         float speed = flat.magnitude;
         float wanted = sliding ? GameAudio.SlideVolume * Mathf.Clamp01(speed / 11f) : 0f;
 
+        // Attack and release are deliberately different speeds, retuned 2026-08-21. The old
+        // single rate (6/s) hit the fade-in almost instantly - nearer a click than a scrape -
+        // which is what made the sound lead the camera's own, slower drop into a slide. The
+        // attack reuses slideEase rather than inventing a second number for the same idea, so
+        // the two are locked together instead of two constants somebody has to remember to
+        // retune in step. Release is slower still, so the scrape has an audible tail instead of
+        // cutting the instant `sliding` goes false - some of what read as "ends too early" was
+        // really the slide itself ending early from the drag problem fixed the same day, but the
+        // hard cutoff on top of that was a real, separate rough edge worth smoothing regardless.
+        float rate = wanted > scrape.volume ? slideEase : 3f;
+
         scrape.volume = Mathf.MoveTowards(scrape.volume, wanted * GameSettings.SfxVolume,
-                                          Time.deltaTime * 6f);
+                                          Time.deltaTime * rate);
 
         // Slowing down drops the pitch, which is most of what makes a scrape read as friction
         // rather than as a texture being played at you.

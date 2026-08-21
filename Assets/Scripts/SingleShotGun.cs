@@ -12,6 +12,7 @@ public class SingleShotGun : Gun
     [SerializeField] Camera cam;
 
     PlayerController owner;
+    PlayerMovement ownerMovement;
     MuzzleFlash muzzle;
     Renderer[] visualRenderers;
     MaterialPropertyBlock block;
@@ -55,6 +56,11 @@ public class SingleShotGun : Gun
     private void Awake()
     {
         owner = GetComponentInParent<PlayerController>();
+
+        // Only ever populated for the swinger, since PlayerMovement only exists on the owner's
+        // own copy - a remote copy of somebody else's peel has no CharacterController to read a
+        // speed off, and does not need one, because it never computes a hit either.
+        ownerMovement = owner != null ? owner.GetComponent<PlayerMovement>() : null;
 
         if (owned && cam == null && owner != null)
             cam = owner.GetComponentInChildren<Camera>();
@@ -464,6 +470,13 @@ public class SingleShotGun : Gun
         endNormal = hit.normal;
 
         float damage = Info.DamageAtRange(hit.distance);
+
+        // Momentum melee. Planned in weapon-ideas.md, built 2026-08-21: the peel does more the
+        // faster you were travelling when it landed, so the last gun game rung is something to
+        // build speed toward rather than the weapon you dread getting stuck with. Range falloff
+        // above already handles distance; this is the same idea for speed instead.
+        if (Info.melee && ownerMovement != null)
+            damage = PlayerMovement.MomentumDamage(damage, ownerMovement.HorizontalSpeed);
 
         Hitbox box = hit.collider.GetComponent<Hitbox>();
         if (box != null)

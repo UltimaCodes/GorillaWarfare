@@ -49,6 +49,10 @@ unlocks everything in this section.
 
 ### The Vine — grapple, now specced closer to ODM gear
 
+**Built 2026-08-21**, same day as the spec below — `Assets/Scripts/VineGrapple.cs`, bound to G.
+Left the design writeup in place rather than trimming it down after the fact, since it's still
+the accurate account of what the feature is and why.
+
 Fires a vine. The original version of this entry only anchored to world geometry and did no
 damage; the 2026-08-21 ask is more specific and closer to Attack on Titan's omnidirectional
 mobility gear, so this replaces that version rather than sitting next to it.
@@ -130,7 +134,8 @@ the counter-play - the person who can stop is the person who can shoot.
 
 **Momentum melee.** The peel does more damage the faster you are travelling when it lands. Turns
 a slide into an attack and gives the last gun game rung something to build toward, instead of
-being the weapon you dread getting.
+being the weapon you dread getting. **Built 2026-08-21** as `PlayerMovement.MomentumDamage` — a
+shared formula rather than a peel-only one, since the vine above reuses the exact same curve.
 
 None of these need a system. They are all conditions checked against the velocity the mover
 already has, which is what makes them cheap to add and cheap to remove if one turns out to be

@@ -205,6 +205,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     int announcedRung;
 
     PlayerMovement movement;
+    VineGrapple vine;
 
     /// <summary>
     /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
@@ -240,6 +241,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // Added here rather than on the prefab so there's nothing to wire up. Runs on remote
         // players too, since their transforms are replicated - so you hear their steps.
         gameObject.AddComponent<FootstepPlayer>();
+
+        // Unlike PlayerMovement and SpeedRush below, this belongs on every copy rather than only
+        // the owner's - the rope has to be visible to everyone watching, even though only the
+        // owner ever fires one or gets pulled by one. It gates its own input internally the same
+        // way FootstepPlayer and MonkeyRig already do.
+        vine = gameObject.AddComponent<VineGrapple>();
 
         // Hidden from its owner - you shouldn't see your own body from inside its head - but it
         // still casts a shadow.
@@ -435,18 +442,23 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         Item held = items[Mathf.Clamp(itemIndex, 0, items.Length - 1)];
 
-        if (KeyBinds.Pressed(KeyBinds.Action.Fire))
+        // Your gun is unusable for as long as the vine has you - an active tradeoff between
+        // shooting and moving, not a slot cost, so it blocks the trigger directly rather than
+        // living anywhere in the loadout.
+        bool grappling = vine != null && vine.Attached;
+
+        if (!grappling && KeyBinds.Pressed(KeyBinds.Action.Fire))
         {
             DropProtection();
             held.Use();
         }
-        else if (KeyBinds.Held(KeyBinds.Action.Fire) && held is SingleShotGun heldGun)
+        else if (!grappling && KeyBinds.Held(KeyBinds.Action.Fire) && held is SingleShotGun heldGun)
         {
             DropProtection();
             heldGun.UseHeld();
         }
 
-        if (KeyBinds.Pressed(KeyBinds.Action.Reload) && held is SingleShotGun reloadGun)
+        if (!grappling && KeyBinds.Pressed(KeyBinds.Action.Reload) && held is SingleShotGun reloadGun)
             reloadGun.Reload();
 
         FallOutOfTheWorldCheck();
@@ -626,6 +638,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// gets replicated when you switch.
     public static string[] LoadoutFor(Player player)
     {
+        // Fixed 2026-08-21. The sandbox's own rules already checked Sandbox.Active first
+        // (MatchState.WeaponsFor) - but this method never called that, it went straight to the
+        // replicated property below, which is exactly the thing PUN does not clear between
+        // rooms. A deathmatch's LoadoutKey ("one random weapon") was still sitting on
+        // PhotonNetwork.LocalPlayer when the sandbox's offline room was created on top of it, so
+        // every sandbox spawn read a stale deathmatch loadout instead of asking whether it was
+        // even in a match. Only a domain reload clears that cache, which is exactly why it took
+        // a restart to go away and nothing less did.
+        if (Sandbox.Active)
+            return WeaponLoadout.Everything;
+
         if (player != null
             && player.CustomProperties.TryGetValue(LoadoutKey, out object value)
             && value is string names

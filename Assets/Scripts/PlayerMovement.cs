@@ -150,21 +150,81 @@ public class PlayerMovement : MonoBehaviour
     public bool Grounded => grounded;
     public float HorizontalSpeed => new Vector3(velocity.x, 0f, velocity.z).magnitude;
 
+    [Tooltip("Hard ceiling on horizontal speed, in metres per second. New 2026-08-21: nothing "
+             + "previously capped total velocity, only how often a slide chain or an air-strafed "
+             + "bhop could add more to it - wishSpeed and airSpeedCap only ever bounded the "
+             + "*target* Accelerate() chases, never the momentum already carried. Set well above "
+             + "anything a legitimate rocket jump should reach (Pineapple fireKnockback is 26, "
+             + "selfKnockback 14, and adrenaline adds another 28% near death) so it is a safety "
+             + "ceiling on runaway stacking, not a nerf on the intended tech.")]
+    [SerializeField] float maxHorizontalSpeed = 45f;
+
+    /// <summary>
+    /// Speed-scaled damage, shared by the peel's momentum melee and the vine's contact hit.
+    ///
+    /// One formula rather than two so there is only one curve to tune, and so the vine and the
+    /// peel read as the same underlying idea - go fast, hit something, the speed is the damage -
+    /// in two different shells. Below runSpeed the multiplier bottoms out at 0.6 rather than 0,
+    /// so a melee swing standing still is weak, not useless; above chainSpeed (roughly a
+    /// well-chained slide) it tops out at 2.0, which puts a full-speed hit within reach of a
+    /// one-hit kill against a full health bar without making every graze at running pace lethal.
+    /// </summary>
+    public static float MomentumDamage(float baseDamage, float speed)
+    {
+        const float lowSpeed = 4f;
+        const float highSpeed = 24f;
+        const float lowMultiplier = 0.6f;
+        const float highMultiplier = 2.0f;
+
+        float t = Mathf.InverseLerp(lowSpeed, highSpeed, speed);
+        return baseDamage * Mathf.Lerp(lowMultiplier, highMultiplier, t);
+    }
+
+    /// <summary>
+    /// Set by VineGrapple while attached. Movement hands control over entirely rather than
+    /// blending with it, the same way a launch overrides ground friction - a pull that still had
+    /// to fight WASD and slide/crouch state would never read as being reeled in.
+    /// </summary>
+    public bool Grappling { get; set; }
+
+    /// <summary>
+    /// Pulls the player toward an anchor. Called by VineGrapple, which owns the target and the
+    /// input; this only owns the CharacterController, the same split PlayerMovement already
+    /// keeps with everything else that throws the player around.
+    /// </summary>
+    public void Grapple(Vector3 anchor, float accel, float maxSpeed, float dt)
+    {
+        Vector3 toAnchor = anchor - transform.position;
+        Vector3 dir = toAnchor.sqrMagnitude > 0.01f ? toAnchor.normalized : transform.forward;
+
+        velocity = Vector3.MoveTowards(velocity, dir * maxSpeed, accel * dt);
+        grounded = false;
+
+        controller.Move(velocity * dt);
+    }
+
     [Header("Slide and crouch")]
     [Tooltip("Speed you must already be carrying for the slide key to slide rather than crouch. "
              + "Below it you simply go down.")]
     [SerializeField] float slideEntrySpeed = 6.5f;
 
-    [Tooltip("Multiplier applied to your speed the moment a slide starts. Slightly over one, so "
-             + "sliding into a fight is a commitment that pays rather than a way to stop.")]
-    [SerializeField] float slideKick = 1.18f;
+    [Tooltip("Multiplier applied to your speed the moment a slide starts. Retuned 2026-08-21: "
+             + "1.18 was so small that slideDrag ate it within a second and a slide covered less "
+             + "ground than just running the same stretch - see docs/open-issues.md for the "
+             + "worked numbers. At 1.5, entering from max run (8.13) kicks to ~12.2.")]
+    [SerializeField] float slideKick = 1.5f;
 
     [Tooltip("How fast a slide bleeds off, in metres per second per second. Lower slides "
-             + "further.")]
-    [SerializeField] float slideDrag = 7f;
+             + "further. Paired with slideKick and slideExitSpeed so the average speed across a "
+             + "slide's whole duration comes out above maxGroundSpeed - a slide that averages "
+             + "below running speed is a worse way to cross the same ground, which is what the "
+             + "old 7/3.5 pairing did.")]
+    [SerializeField] float slideDrag = 5.5f;
 
-    [Tooltip("Below this a slide has run out and becomes a crouch.")]
-    [SerializeField] float slideExitSpeed = 3.5f;
+    [Tooltip("Below this a slide has run out and becomes a crouch. Raised from 3.5 alongside the "
+             + "kick and drag retune - a slide now ends at a solid jog rather than a crawl, which "
+             + "is also what keeps the average speed across the slide above running pace.")]
+    [SerializeField] float slideExitSpeed = 5.5f;
 
     [Tooltip("How tall you are crouched, as a fraction of standing.")]
     [Range(0.35f, 0.9f)] [SerializeField] float crouchHeight = 0.55f;
@@ -200,8 +260,11 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Seconds you have after leaving a slide to start the next one and keep the chain.")]
     [SerializeField] float chainWindow = 0.9f;
 
-    [Tooltip("Speed you get when you jump straight out of a slide, on top of what you had.")]
-    [SerializeField] float slideJumpBoost = 1.6f;
+    [Tooltip("Speed you get when you jump straight out of a slide, on top of what you had. Raised "
+             + "from 1.6 alongside the slide retune - the entry kick got bigger in absolute terms "
+             + "too (about +4.1 at max run now, against +1.46 before), and the jump boost was "
+             + "getting lost against that and against slideDrag's per-second loss.")]
+    [SerializeField] float slideJumpBoost = 2.4f;
 
     [Tooltip("Seconds you cannot slide for after topping out the chain.")]
     [SerializeField] float exhaustion = 10f;
@@ -269,6 +332,13 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
+        // VineGrapple owns velocity and the CharacterController for as long as this is true - it
+        // calls Grapple() itself, on its own Update, rather than this one computing anything for
+        // it. Everything below this line (slide, crouch, jump buffering, ground/air move) is
+        // exactly the WASD-and-gravity game, and none of it should run while being reeled in.
+        if (Grappling)
+            return;
+
         // The settings screen is up, so the keyboard belongs to it. Without this you walk off
         // the map while rebinding your movement keys - every key you press to test a binding is
         // also still driving the player - and the same WASD that scrolls a list moves you.
@@ -305,6 +375,17 @@ public class PlayerMovement : MonoBehaviour
             GroundMove(wishDir, wishSpeed, wantsJump, dt);
         else
             AirMove(wishDir, wishSpeed, dt);
+
+        // The one place total speed is actually bounded, rather than just how often something is
+        // allowed to add more of it. Vertical is untouched - this is about bhop and slide chains
+        // running away horizontally, not about falling.
+        Vector3 flatVelocity = new Vector3(velocity.x, 0f, velocity.z);
+        if (flatVelocity.sqrMagnitude > maxHorizontalSpeed * maxHorizontalSpeed)
+        {
+            flatVelocity = flatVelocity.normalized * maxHorizontalSpeed;
+            velocity.x = flatVelocity.x;
+            velocity.z = flatVelocity.z;
+        }
 
         controller.Move(velocity * dt);
     }
