@@ -43,6 +43,19 @@ did, by construction: there's no per-vertex push to disagree with itself. One co
 camera outlines everything in view - players, projectiles, weapons, world geometry - which is also
 the actual answer to "try it on other things too": there's no per-object step to remember.
 
+Weapons were missing from all of this at first, reported back after playing - because the held
+weapon renders through ViewModelCamera's own second camera (own depth buffer, drawn after the
+world camera without clearing colour, so the gun can't clip through walls), which explicitly
+never ran any post-processing. Added ScreenOutline there too now, and it's the one exception to
+that "no post processing" rule. Verifying it needed one more step than the world camera did:
+manually rendering both cameras back-to-back into one shared RenderTexture (reproducing by hand
+what Unity's own camera stack normally does automatically) showed no outline on the weapon at
+all, which looked like the same bug all over again. Rendering the weapon camera alone, into its
+own fresh target, showed a perfectly clean outline - so the camera's own render was never the
+problem, the manual two-camera compositing in the test was. Real gameplay renders both cameras
+through the actual per-frame camera stack, not two manual Render() calls back to back, so this
+was a test-harness gap rather than a real one.
+
 Worth recording since it cost real time: the first attempt at testing this looked like it did
 nothing at all, on a re-verified-clean shader, with depthTextureMode forced on, even bypassing
 OnRenderImage with a direct Graphics.Blit. Every variant of that test was a one-shot

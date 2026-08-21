@@ -74,10 +74,17 @@ public class ViewModelCamera : MonoBehaviour
         // After the world camera, so it draws on top of a finished frame.
         weapon.depth = world.depth + 1;
 
-        // No listener and no post processing on this one. Two AudioListeners make Unity complain
-        // and mute one, and running the whole shader stack twice for a banana is wasteful.
+        // No listener on this one - two AudioListeners make Unity complain and mute one.
         weapon.allowHDR = false;
         weapon.allowMSAA = false;
+
+        // The one exception to "no post processing on this one": the toon outline, added here
+        // too once it turned out weapons weren't getting it - this camera's cullingMask only
+        // ever contains the weapon layer and its clear flags don't wipe the world camera's
+        // colour, so ScreenOutline here only ever finds edges around the weapon's own silhouette,
+        // not a second pass over everything the world camera already drew.
+        weapon.gameObject.AddComponent<ScreenOutline>();
+        weapon.depthTextureMode |= DepthTextureMode.DepthNormals;
     }
 
     /// <summary>

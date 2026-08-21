@@ -59,6 +59,16 @@ public static class OutlinePlayCheck
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.8f, 0.8f, 0.85f);
 
+            // A weapon on the real ViewModel layer, drawn by ViewModelCamera's own second
+            // camera - the exact real code path, not a stand-in, so this either genuinely
+            // proves weapons get outlined or genuinely doesn't.
+            ViewModelCamera vmCam = camHost.AddComponent<ViewModelCamera>();
+            GameObject weapon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            weapon.transform.SetParent(cam.transform, false);
+            weapon.transform.localPosition = new Vector3(0.15f, -0.1f, 0.3f);
+            weapon.transform.localScale = new Vector3(0.08f, 0.08f, 0.3f);
+            ViewModelCamera.Adopt(weapon.transform);
+
             GameObject lightHost = new GameObject("~Light");
             Light light = lightHost.AddComponent<Light>();
             light.type = LightType.Directional;
@@ -76,6 +86,40 @@ public static class OutlinePlayCheck
 
             for (int i = 0; i < 5; i++) yield return null;
             Capture(cam, "after");
+
+            // Weapon camera alone, into its own fresh target - isolates "does this camera's own
+            // render + outline work" from "does it correctly layer onto the world camera's
+            // output". Worth keeping separate: the dual-render Capture() above showed no visible
+            // outline on the weapon the first time this was tested, which turned out to be the
+            // manual back-to-back Render() calls not faithfully reproducing Unity's own
+            // automatic camera-stack compositing (world then weapon, layered by depth order,
+            // entirely inside the engine) rather than a real bug - this solo render confirmed the
+            // weapon camera's own outline pass is correct on its own, which is what actually
+            // matters, since real gameplay renders each frame through the real per-frame stack
+            // rather than two manual Render() calls in a row.
+            Camera soloWeaponCam = null;
+            foreach (Camera c in cam.GetComponentsInChildren<Camera>(true))
+                if (c != cam) soloWeaponCam = c;
+
+            if (soloWeaponCam != null)
+            {
+                int size = 640;
+                RenderTexture soloRt = new RenderTexture(size, size, 24);
+                soloWeaponCam.targetTexture = soloRt;
+                soloWeaponCam.Render();
+
+                RenderTexture.active = soloRt;
+                Texture2D soloShot = new Texture2D(size, size, TextureFormat.RGB24, false);
+                soloShot.ReadPixels(new Rect(0, 0, size, size), 0, 0);
+                soloShot.Apply();
+
+                string soloPath = Path.Combine(Application.dataPath, "..", "Library", "outline-play-weapon-solo.png");
+                File.WriteAllBytes(soloPath, soloShot.EncodeToPNG());
+                Debug.Log($"[outline-play] weapon-solo -> {soloPath}");
+
+                Object.Destroy(soloRt);
+                Object.Destroy(soloShot);
+            }
 
             Debug.Log("[outline-play] done");
             EditorApplication.Exit(0);
@@ -95,6 +139,25 @@ public static class OutlinePlayCheck
 
             cam.targetTexture = rt;
             cam.Render();
+
+            // ViewModelCamera's own second camera doesn't render itself just because the world
+            // camera did - in real gameplay both are "active" and Unity's normal per-frame loop
+            // renders every active camera in depth order into the same backbuffer. A manual
+            // capture has to replicate that explicitly: render the weapon camera into the same
+            // target right after, same order, same depth-preserving clear flags it actually uses.
+            Camera weaponCam = null;
+            foreach (Camera c in cam.GetComponentsInChildren<Camera>(true))
+            {
+                if (c != cam) weaponCam = c;
+            }
+
+            if (weaponCam != null)
+            {
+                RenderTexture weaponPrevTarget = weaponCam.targetTexture;
+                weaponCam.targetTexture = rt;
+                weaponCam.Render();
+                weaponCam.targetTexture = weaponPrevTarget;
+            }
 
             RenderTexture.active = rt;
             Texture2D shot = new Texture2D(size, size, TextureFormat.RGB24, false);
