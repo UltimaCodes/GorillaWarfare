@@ -112,6 +112,8 @@ public class SingleShotGun : Gun
                 r.sharedMaterial = mat;
         }
 
+        // No per-object outline here - ScreenOutline on the local camera already outlines the
+        // held weapon along with everything else in view.
         visualRoot = visual.transform;
 
         // Melee is carried point-down from the moment it is drawn, not only while swinging.

@@ -297,6 +297,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 if (LocalCamera.GetComponent<ViewModelCamera>() == null)
                     LocalCamera.gameObject.AddComponent<ViewModelCamera>();
 
+                // One toon outline for the whole view - players, projectiles, weapons, world
+                // geometry - rather than a per-object shader wired into each of their build
+                // paths. See ScreenOutline.cs for why: the per-object version (Custom/ToonOutline,
+                // still in the project but no longer applied anywhere) reads clean on a simple
+                // convex prop like the pineapple and tears on the gorilla's own complex,
+                // overlapping low-poly geometry, because it depends on per-vertex mesh topology.
+                // This reads the camera's own depth and normal buffers instead, so it can't tear
+                // the same way - verified against the gorilla specifically with
+                // Tools/Gorilla Warfare/Photograph the screen outline (play mode).
+                if (LocalCamera.GetComponent<ScreenOutline>() == null)
+                    LocalCamera.gameObject.AddComponent<ScreenOutline>();
+
                 // The camera is built fresh on every respawn and arrives holding whatever the
                 // prefab was authored with, so the saved field of view has to be reapplied
                 // rather than read once at startup.
