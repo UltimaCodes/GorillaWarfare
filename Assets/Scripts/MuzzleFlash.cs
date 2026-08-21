@@ -22,9 +22,12 @@ public class MuzzleFlash : MonoBehaviour
     [SerializeField] float decay = 30f;
 
     [Tooltip("Metres across. Scaled up by longer weapons, which have bigger muzzles.")]
-    [SerializeField] float flashSize = 0.42f;
+    // Raised from 0.42 alongside the switch to the star/circle sprites below - those are a
+    // tighter, more contained shape than the old soft photographic blob, and read as small next
+    // to the tracers (0.07m wide now, up from 0.035m the same day) at the old size.
+    [SerializeField] float flashSize = 0.55f;
 
-    [SerializeField] float flashSeconds = 0.045f;
+    [SerializeField] float flashSeconds = 0.06f;
 
     static Sprite[] shapes;
 
@@ -76,20 +79,39 @@ public class MuzzleFlash : MonoBehaviour
     }
 
     /// <summary>
-    /// The muzzle sprites, loaded once.
+    /// The muzzle sprites.
     ///
-    /// From Resources so there is nothing to wire onto a weapon that is built at runtime. Four
-    /// of them because one is a repeating animation and four is a gun going off.
+    /// Was its own set in Resources/Particles/Muzzle - soft, photographic gunpowder-flash
+    /// textures, picked before this game had settled on a visual language. Reported as looking
+    /// "ugly and out of place" once the toon outline shipped, and looking at the actual sprite
+    /// confirms why: it's a soft realistic falloff sitting right next to a bold graphic black
+    /// line, while everything else that flashes - the bullet impact puff, the vine's latch spark,
+    /// the grenade's own explosion - already draws from Particles/Boom's star and circle shapes,
+    /// which read as flat and graphic rather than photographic. Switched to the same bank rather
+    /// than sourcing a new one, so every spark in the game is now visually one family instead of
+    /// the muzzle being the one exception.
     /// </summary>
     static Sprite[] Shapes()
     {
         if (shapes != null && shapes.Length > 0)
             return shapes;
 
-        shapes = Resources.LoadAll<Sprite>("Particles/Muzzle");
+        Sprite[] all = Resources.LoadAll<Sprite>("Particles/Boom");
+        System.Collections.Generic.List<Sprite> picked = new System.Collections.Generic.List<Sprite>();
+
+        foreach (Sprite s in all)
+        {
+            if (s.name.StartsWith("star", System.StringComparison.OrdinalIgnoreCase)
+                || s.name.StartsWith("circle", System.StringComparison.OrdinalIgnoreCase))
+            {
+                picked.Add(s);
+            }
+        }
+
+        shapes = picked.Count > 0 ? picked.ToArray() : all;
 
         if (shapes.Length == 0)
-            Debug.LogWarning("[muzzle] no sprites in Resources/Particles/Muzzle - falling back to the light alone");
+            Debug.LogWarning("[muzzle] no sprites in Resources/Particles/Boom - falling back to the light alone");
 
         return shapes;
     }
