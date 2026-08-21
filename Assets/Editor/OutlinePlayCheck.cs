@@ -46,6 +46,29 @@ public static class OutlinePlayCheck
             GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.transform.position = new Vector3(-1.2f, 0.5f, 3f);
 
+            // A wide wall behind everything, with a bullet decal on its front face - the exact
+            // real BulletDecal.Spawn path, testing whether ScreenOutline makes it invisible the
+            // way it was reported to.
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.transform.position = new Vector3(0f, 1f, 5f);
+            wall.transform.localScale = new Vector3(4f, 3f, 0.2f);
+
+            int worldMask = ~0;
+
+            // A freshly created collider isn't reliably raycastable in the same script tick it
+            // was created in - PhysX needs at least one physics step to register it. Not a real
+            // bug, just a test-timing gap the same way the earlier ones were.
+            yield return new WaitForFixedUpdate();
+            yield return null;
+
+            bool sanityHit = Physics.Raycast(new Vector3(0f, 1f, 4.55f), Vector3.forward,
+                                             out RaycastHit sanity, 0.7f, worldMask, QueryTriggerInteraction.Ignore);
+            Debug.Log($"[outline-play] sanity raycast hit={sanityHit} "
+                      + (sanityHit ? $"point={sanity.point} collider={sanity.collider.name}" : ""));
+
+            BulletDecal decal = BulletDecal.Spawn(new Vector3(0f, 1f, 4.9f), Vector3.back, worldMask);
+            Debug.Log($"[outline-play] decal spawned={decal != null}");
+
             MonkeyRig rig = new GameObject("~Gorilla").AddComponent<MonkeyRig>();
             bool rigBuilt = rig.Build(false);
             rig.transform.position = new Vector3(1.2f, 0f, 3f);
@@ -68,6 +91,26 @@ public static class OutlinePlayCheck
             weapon.transform.localPosition = new Vector3(0.15f, -0.1f, 0.3f);
             weapon.transform.localScale = new Vector3(0.08f, 0.08f, 0.3f);
             ViewModelCamera.Adopt(weapon.transform);
+
+            // A line renderer using the exact material VineGrapple builds, to check it actually
+            // shows up in the outline now instead of assuming the shader swap was enough.
+            GameObject lineHost = new GameObject("~Line");
+            LineRenderer testLine = lineHost.AddComponent<LineRenderer>();
+            testLine.useWorldSpace = true;
+            testLine.positionCount = 2;
+            testLine.startWidth = 0.08f;
+            testLine.endWidth = 0.08f;
+            testLine.SetPosition(0, new Vector3(-1f, 1.6f, 2f));
+            testLine.SetPosition(1, new Vector3(1.5f, 0.3f, 2.5f));
+            Shader lineShader = Shader.Find("Custom/UnlitVertexColor");
+            Material lineMat = new Material(lineShader);
+            Texture2D dot = new Texture2D(1, 1);
+            dot.SetPixel(0, 0, Color.white);
+            dot.Apply();
+            lineMat.mainTexture = dot;
+            testLine.sharedMaterial = lineMat;
+            testLine.startColor = new Color(0.30f, 0.46f, 0.16f);
+            testLine.endColor = new Color(0.30f, 0.46f, 0.16f);
 
             GameObject lightHost = new GameObject("~Light");
             Light light = lightHost.AddComponent<Light>();

@@ -14,7 +14,10 @@ Shader "Skybox/JungleSky"
     {
         [Header(Bands)]
         _GroundColor ("Ground (below horizon)", Color) = (0.05, 0.16, 0.07, 1)
-        _HorizonColor ("Horizon haze", Color) = (0.85, 0.80, 0.32, 1)
+        // Pulled down from (0.85, 0.80, 0.32) - reported as too strong a yellow. Both dimmer and
+        // less saturated (raised the blue channel), so it reads as a warm haze rather than a
+        // block of vivid yellow paint across the middle of the sky.
+        _HorizonColor ("Horizon haze", Color) = (0.70, 0.66, 0.40, 1)
         _ZenithColor ("Zenith", Color) = (0.09, 0.34, 0.24, 1)
 
         [Header(Shape)]
@@ -43,8 +46,12 @@ Shader "Skybox/JungleSky"
         // together at different frequencies so the streaks land irregular rather than a perfect
         // pinwheel, which is what would give away that it's a formula.
         _RayColor ("Ray colour", Color) = (1.0, 0.88, 0.55, 1)
-        _RayIntensity ("Ray strength", Range(0, 1)) = 0.55
-        _RayFalloff ("Ray falloff from sun", Range(1, 12)) = 3.5
+        // Lowered from 0.55, and falloff raised from 3.5, on the same day - reported back as
+        // "too much in your face" and not reading as jungle atmosphere. Both numbers push the
+        // same direction: weaker rays, and confined much closer to the sun itself instead of
+        // fanning out across most of the sky.
+        _RayIntensity ("Ray strength", Range(0, 1)) = 0.28
+        _RayFalloff ("Ray falloff from sun", Range(1, 12)) = 6.5
     }
 
     SubShader
