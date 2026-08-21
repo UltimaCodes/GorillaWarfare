@@ -44,8 +44,13 @@ public class VineGrapple : MonoBehaviour
     [Header("Pull")]
     [Tooltip("Metres per second squared toward the anchor. Higher than any ground or air "
              + "acceleration in the game on purpose - this is meant to read as the fastest way "
-             + "to gain speed, the way the brief asked for.")]
-    [SerializeField] float pullAccel = 60f;
+             + "to gain speed, the way the brief asked for. Raised from 60 on 2026-08-22 - the "
+             + "most loved feature so far, reported back that the pull itself felt slow to "
+             + "actually take hold even after maxPullSpeed came down to something reasonable. At "
+             + "110, reaching that 24 m/s ceiling from a standing start takes about 0.22s against "
+             + "the old 0.4s - the top speed itself hasn't changed, only how fast the vine gets "
+             + "you there.")]
+    [SerializeField] float pullAccel = 110f;
 
     [Tooltip("Speed the pull chases, in metres per second. Retuned down from 40 on 2026-08-22 - "
              + "reported as way too fast, and the numbers back that up: a full slide chain tops "

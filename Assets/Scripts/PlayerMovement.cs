@@ -47,8 +47,18 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float walkSpeed = 3.4f;
 
     [Header("Air")]
-    [SerializeField] float airAccel = 100f;
-    [SerializeField] float airSpeedCap = 0.762f;
+    [SerializeField] float airAccel = 130f;
+
+    [Tooltip("Raised from the authentic CS:S value (0.762) on 2026-08-22. That number is tiny by "
+             + "design - it's what makes real air-strafe technique (turning the mouse while "
+             + "holding a strafe key) the only way to gain speed in the air, which is deep but "
+             + "has a real learning curve. Reported back as 'too hard to change direction' "
+             + "specifically about slide-hop chains, where the point is chaining hops together "
+             + "rather than mastering strafe-jumping on its own. Raised enough that ordinary "
+             + "directional input now visibly redirects a hop's trajectory - still well under "
+             + "ground speed, so it curves a hop rather than cancels its momentum, and a player "
+             + "who does strafe properly still gains more than one who doesn't.")]
+    [SerializeField] float airSpeedCap = 2.5f;
 
     [Header("Jump")]
     [SerializeField] float jumpSpeed = 6.86f;
@@ -257,17 +267,24 @@ public class PlayerMovement : MonoBehaviour
              + "you break it, so the technique has a ceiling rather than being infinite speed.")]
     [SerializeField] int maxChain = 4;
 
-    [Tooltip("Extra kick per link in the chain, on top of the base slide boost.")]
-    [SerializeField] float chainBonus = 0.09f;
+    [Tooltip("Extra kick per link in the chain, on top of the base slide boost. Lowered from 0.09 "
+             + "on 2026-08-22 - a full 4-chain compounds this multiplicatively on top of "
+             + "slideJumpBoost's flat add between every link, and a clean chain was reported "
+             + "back as 'too fast if you get it right', annoying to play against. Chain 4's kick "
+             + "is now 1.68 against the old 1.77 - still the highest link, just not by as much.")]
+    [SerializeField] float chainBonus = 0.06f;
 
     [Tooltip("Seconds you have after leaving a slide to start the next one and keep the chain.")]
     [SerializeField] float chainWindow = 0.9f;
 
     [Tooltip("Speed you get when you jump straight out of a slide, on top of what you had. Raised "
-             + "from 1.6 alongside the slide retune - the entry kick got bigger in absolute terms "
-             + "too (about +4.1 at max run now, against +1.46 before), and the jump boost was "
-             + "getting lost against that and against slideDrag's per-second loss.")]
-    [SerializeField] float slideJumpBoost = 2.4f;
+             + "from 1.6 to 2.4 on 2026-08-21 because the boost wasn't paying off against the "
+             + "slide retune's bigger numbers - overshot it. Reported 2026-08-22 as part of why a "
+             + "full chain gets 'too fast if you get it right', since this adds flat on every one "
+             + "of up to three jump-outs in a chain, on top of chainBonus's own compounding. "
+             + "Split the difference at 1.9 rather than reverting outright - still more than the "
+             + "original 1.6, just not stacking as hard three times in a row.")]
+    [SerializeField] float slideJumpBoost = 1.9f;
 
     [Tooltip("Seconds you cannot slide for after topping out the chain.")]
     [SerializeField] float exhaustion = 10f;
