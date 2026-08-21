@@ -421,7 +421,12 @@ public class VineGrapple : MonoBehaviour
         if (sharedMaterial != null)
             return sharedMaterial;
 
-        Shader shader = Shader.Find("Sprites/Default")
+        // Custom/UnlitVertexColor rather than Sprites/Default - same flat unlit colour, but
+        // tagged as opaque geometry so it actually writes into the depth+normals buffer
+        // ScreenOutline reads. Sprites/Default is a transparent render type, which Unity's
+        // depth prepass skips, so the vine never showed up in the toon outline at all.
+        Shader shader = Shader.Find("Custom/UnlitVertexColor")
+                        ?? Shader.Find("Sprites/Default")
                         ?? Shader.Find("Legacy Shaders/Diffuse")
                         ?? Shader.Find("Standard");
 
