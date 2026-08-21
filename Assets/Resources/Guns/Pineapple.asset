@@ -33,7 +33,7 @@ MonoBehaviour:
   armingDistance: 1.2
   blastRadius: 7.5
   knockback: 17
-  selfKnockback: 14
+  selfKnockback: 12
   selfDamageScale: 0
   magazineSize: 4
   spareMagazines: 4

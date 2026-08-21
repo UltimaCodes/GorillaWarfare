@@ -15,9 +15,13 @@ using UnityEngine;
 /// </summary>
 public class BulletTracer : MonoBehaviour
 {
-    const float LifeSeconds = 0.055f;
-    const float StartWidth = 0.035f;
-    const float EndWidth = 0.008f;
+    // Retuned 2026-08-22 - reported as not reading clearly as a bullet. 0.055s and a 0.035m start
+    // width were tuned to be a quick flicker rather than a real streak; a rifle at ten rounds a
+    // second firing tracers that linger too long would look like a wall of light, but the old
+    // numbers undershot the other direction for every gun, not just the fast ones.
+    const float LifeSeconds = 0.11f;
+    const float StartWidth = 0.07f;
+    const float EndWidth = 0.02f;
 
     static Material shared;
 

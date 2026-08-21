@@ -59,8 +59,29 @@ public class Projectile : MonoBehaviour
 
         shell.BuildVisual();
         shell.BuildTrail();
+        shell.BuildGlow();
 
         return shell;
+    }
+
+    /// <summary>
+    /// A real light on the shell itself, not just a bright material - so a pineapple arcing
+    /// through a dim room actually throws light on the walls it passes, which is what "glow"
+    /// means for something that moves rather than something that sits still. One light per live
+    /// shell is cheap enough; this game has never had more than a couple of these in flight at
+    /// once, since they detonate on arrival rather than accumulating.
+    /// </summary>
+    void BuildGlow()
+    {
+        GameObject host = new GameObject("~glow");
+        host.transform.SetParent(transform, false);
+
+        Light light = host.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = info != null ? info.ripe : new Color(1f, 0.85f, 0.3f);
+        light.intensity = 2.2f;
+        light.range = 4f;
+        light.shadows = LightShadows.None;
     }
 
     static Material trailMaterial;
