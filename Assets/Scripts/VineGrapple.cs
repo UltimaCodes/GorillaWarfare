@@ -131,6 +131,13 @@ public class VineGrapple : MonoBehaviour
             if (targetPlayer != null && !hitLandedThisAttach)
                 LandHit(targetPlayer);
 
+            // Small on purpose, same as the throw - this is a landing, not a kill, even on the
+            // attach where it happens to also be one. The kill's own weight already comes from
+            // TakeDamage's normal feedback (the hit sound in LandHit, the death pipeline); this
+            // is only ever the "you arrived" beat, and only ever reachable while still holding
+            // the button, since letting go detaches through the branch above this one instead.
+            Juice.Hit(0.4f);
+
             Detach();
             return;
         }
@@ -209,7 +216,12 @@ public class VineGrapple : MonoBehaviour
         attachedAt = Time.time;
         hitLandedThisAttach = false;
 
-        GameAudio.PlayAt(GameAudio.Slide, transform.position, GameAudio.SlideVolume * 0.8f, 0.15f);
+        // Runs on every client, same as the RPC itself, so the thwip is positional and everyone
+        // nearby hears it - only the person who actually fired it also gets stopped for it.
+        GameAudio.PlayAt(GameAudio.Vine, transform.position, 0.85f, 0.06f);
+
+        if (PV.IsMine)
+            Juice.Hit(0.3f);
     }
 
     [PunRPC]
@@ -282,13 +294,22 @@ public class VineGrapple : MonoBehaviour
 
         target.TakeDamage(damage, "Vine", false);
 
+        // The same confirmation every other weapon gives - was missing here despite the comment
+        // above claiming to mirror SingleShotGun's hit path. RegisterHit's rising pitch too, so
+        // a vine kill on a run of good hits sounds like part of the same streak a gun would.
+        int hits = player.RegisterHit();
+        GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
+                              1f + Mathf.Min(hits - 1, 9) * 0.055f);
+
         if (player.Hud != null)
         {
             player.Hud.ShowHit(false);
             player.Hud.ShowDamage(target.transform.position + Vector3.up, damage, false);
         }
 
-        Juice.Hit(0.5f);
+        // No Juice.Hit here - the arrival freeze in UpdateOwner already covers this moment, and
+        // a kill doesn't need a second, larger one stacked on top for a "small" effect to stay
+        // small.
     }
 
     // ---------------------------------------------------------------- visual
