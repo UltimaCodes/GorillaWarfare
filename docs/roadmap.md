@@ -22,7 +22,7 @@ something to check work against rather than a vibe:
 
 ## Checking it still works
 
-Six suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
+Seven suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
 open the project.
 
 ```
@@ -36,6 +36,7 @@ open the project.
 | `RemoteCopyCheck` | the copy of you other people see, and the invariants tying it to yours |
 | `SceneCheck` | opens both shipping scenes, looks for missing scripts and magenta materials |
 | `MatchCheck` | the match rules, including a whole gun game played out |
+| `AudioCheck` | every bank has clips, named clips exist, nothing silent or clipping, shape checks (the slide scrape, the shield break, the vine thwip, the wind bed) |
 | `PlayModeProbe` | **runs the actual game** in Photon offline mode |
 
 `PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
@@ -267,13 +268,15 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 
 ## M6 — Maps
 
-- [ ] **Osama bin Laden's compound** as the first real map. Walled compound, inner courtyard,
-      multi-storey building — that layout is genuinely good deathmatch geometry: clear sightlines
-      across the yard, tight interior fights, roof access.
+Full plan - four map concepts, the compound and the silo picked as the first two to build, and
+the map-voting design - lives in `maps-and-voting.md` rather than duplicated here. Summary:
+
+- [ ] **The Compound** as the first real map. Walled compound, inner courtyard, multi-storey
+      building — clear sightlines across the yard, tight interior fights, roof access.
 - [ ] Replace the seven cubes and four planes
-- [ ] Map selection in the lobby
+- [ ] Map selection in the lobby, backed by map voting
 - [ ] Spawn system that doesn't drop people on each other
-- [ ] Second map
+- [ ] **The Silo** as the second map — small, vertical, maximally different from the compound
 
 ---
 
@@ -306,8 +309,9 @@ Note: a previous settings menu was built and reverted at your call. The code is 
 - [x] **Two handed weapon poses.** Both hands solve to their own target, the left further along
       the weapon than the right. `twoHanded` on the GunInfo decides: the Cavendish and the Slip
       Hazard are one handed and put the off hand on the hip, everything longer braces with both.
-- [ ] **Melee swing.** The Peel is a 2.4m hitscan with no arc and no animation, so it reads as
-      an invisible short gun rather than a swing.
+- [x] **Melee swing.** `SingleShotGun.StabSwing()` - a fast jab forward, a slower settle back,
+      driven by maths off the weapon's own held pose rather than a clip, unscaled time so
+      hitstop doesn't freeze it mid-jab.
 - [x] **Check hitbox alignment against the mesh.** Actually looked at, 2026-08-22, with
       `Tools/Gorilla Warfare/Photograph the hitboxes` - and it was worse than "never checked":
       the auto-fit measured the arm at 0.66m radius, wider than the torso, because this rig's
