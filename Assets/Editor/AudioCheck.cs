@@ -67,6 +67,26 @@ public static class AudioCheck
         }
     }
 
+    /// <summary>
+    /// The vine's thwip has to be a snap rather than a whoosh - the opposite shape from the
+    /// slide's scrape, which is exactly why it isn't the same bank. Length is the checkable
+    /// part, same as the other two shape checks; how sharp the attack is was measured with
+    /// tools/analyze_swishes.py when the clips were picked and is recorded in the bank's own
+    /// README rather than re-derived here every run.
+    /// </summary>
+    static void VineIsAThwip()
+    {
+        AudioClip[] vine = Resources.LoadAll<AudioClip>("Audio/Vine");
+
+        Check(vine.Length > 0, "the vine bank has something in it", $"{vine.Length} clips");
+
+        foreach (AudioClip clip in vine)
+        {
+            Check(clip.length < 0.3f, $"{clip.name} is a snap rather than a whoosh",
+                  $"{clip.length:F2}s");
+        }
+    }
+
     public static void Run()
     {
         failures = 0;
@@ -80,6 +100,7 @@ public static class AudioCheck
         MusicLoopsCleanly();
         ShieldIsTheRightShape();
         SlideIsAScrape();
+        VineIsAThwip();
 
         Debug.Log("[audio] banks\n" + Log);
         Debug.Log(failures == 0 ? "[audio] ===== ALL PASS =====" : $"[audio] {failures} FAILURES");

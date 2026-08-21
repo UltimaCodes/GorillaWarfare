@@ -45,6 +45,16 @@ public static class GameAudio
 
     public const string Shield = "Shield";
 
+    /// <summary>
+    /// The vine firing out and catching. Its own bank rather than borrowing Slide - a thwip and
+    /// a scrape are opposite shapes of sound, a snap against a sustain, and asking one bank to
+    /// be both would have meant tuning it badly for one of the two.
+    ///
+    /// Drop something into Resources/Audio/Vine and it plays. Empty, it falls back to a shot
+    /// pitched up, which is at least short and sharp rather than nothing.
+    /// </summary>
+    public const string Vine = "Vine";
+
     /// A pineapple going off. Its own bank rather than the generic impact, which is the sound a
     /// bullet makes hitting a wall - reusing it would make the loudest thing in the game sound
     /// like the smallest.
@@ -198,6 +208,15 @@ public static class GameAudio
         if (clip == null && bank == Slide)
             clip = Pick(Footstep);
 
+        // Same idea as the Slide fallback above, for the same reason - a bank that hasn't been
+        // filled yet should sound wrong rather than say nothing.
+        bool borrowedShot = false;
+        if (clip == null && bank == Vine)
+        {
+            clip = Pick(Shoot);
+            borrowedShot = true;
+        }
+
         if (clip == null)
             return;
 
@@ -207,7 +226,7 @@ public static class GameAudio
         src.minDistance = 2f;
         src.maxDistance = 55f;
         src.volume = volume * GameSettings.SfxVolume;
-        src.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
+        src.pitch = (borrowedShot ? 1.6f : 1f) + Random.Range(-pitchJitter, pitchJitter);
         src.PlayOneShot(clip);
     }
 

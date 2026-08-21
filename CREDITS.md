@@ -29,6 +29,13 @@ independently and fails on more than one, which is what finally settled it.
 **Reload** - "Gun reload sounds" by SpringySpringo, [OpenGameArt](https://opengameart.org/content/gun-reload-sounds),
 **CC0**.
 
+**Vine grapple (thwip)** - "Swishes Sound Pack" by artisticdude,
+[OpenGameArt](https://opengameart.org/content/swishes-sound-pack), **CC0**. Two of the thirteen,
+picked by measurement (`tools/analyze_swishes.py`): highest crest factor and earliest peak in the
+pack for `swish-10`, shortest overall for `swish-13` - a thwip wants a sharp, early crack rather
+than a swell, which is a different shape from Slide's sustained scrape and why this didn't just
+reuse that bank.
+
 **Hits, headshots, kill, death, melee swing, menu taps** - "Punches, hits, swords and squishes"
 by Philippe Groarke (Socapex), [OpenGameArt](https://opengameart.org/content/punches-hits-swords-and-squishes),
 **CC BY-SA 3.0**, itself compiled from Freesound samples under CC-BY 3.0 and CC0. Attribution is a
