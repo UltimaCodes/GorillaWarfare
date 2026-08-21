@@ -90,8 +90,49 @@ public class SpeedRush : MonoBehaviour
         ApplyFov();
         ApplySlideLean();
         UpdateScrape();
+        UpdateWind();
         SpawnLines();
     }
+
+    /// <summary>
+    /// Wind under going fast, whatever's causing it - unlike the scrape, not gated on sliding.
+    /// A rocket jump or a bhop chain is exactly as fast as a slide and should sound like it.
+    ///
+    /// Same shape as UpdateScrape: one persistent looping source rather than retriggering,
+    /// volume tracking rush directly since rush is already the eased, clamped 0-1 this effect
+    /// wants and there's no separate speed threshold to recompute.
+    /// </summary>
+    void UpdateWind()
+    {
+        if (wind == null)
+        {
+            AudioClip[] clips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Wind);
+
+            if (clips.Length == 0)
+                return;
+
+            wind = gameObject.AddComponent<AudioSource>();
+            wind.clip = clips[Random.Range(0, clips.Length)];
+            wind.loop = true;
+            wind.playOnAwake = false;
+            wind.spatialBlend = 0f;
+            wind.volume = 0f;
+        }
+
+        wind.volume = Mathf.MoveTowards(wind.volume, rush * windVolume * GameSettings.SfxVolume,
+                                        Time.deltaTime * ease);
+
+        if (wind.volume > 0.001f && !wind.isPlaying)
+            wind.Play();
+        else if (wind.volume <= 0.001f && wind.isPlaying)
+            wind.Stop();
+    }
+
+    [Tooltip("Loudest the wind gets, at full rush. Under the scrape and the guns - this is "
+             + "meant to sit behind everything else, not compete with it.")]
+    [SerializeField] float windVolume = 0.4f;
+
+    AudioSource wind;
 
     void ApplyFov()
     {
@@ -255,16 +296,19 @@ public class SpeedRush : MonoBehaviour
         float speed = flat.magnitude;
         float wanted = sliding ? GameAudio.SlideVolume * Mathf.Clamp01(speed / 11f) : 0f;
 
-        // Attack and release are deliberately different speeds, retuned 2026-08-21. The old
-        // single rate (6/s) hit the fade-in almost instantly - nearer a click than a scrape -
-        // which is what made the sound lead the camera's own, slower drop into a slide. The
-        // attack reuses slideEase rather than inventing a second number for the same idea, so
-        // the two are locked together instead of two constants somebody has to remember to
-        // retune in step. Release is slower still, so the scrape has an audible tail instead of
-        // cutting the instant `sliding` goes false - some of what read as "ends too early" was
-        // really the slide itself ending early from the drag problem fixed the same day, but the
-        // hard cutoff on top of that was a real, separate rough edge worth smoothing regardless.
-        float rate = wanted > scrape.volume ? slideEase : 3f;
+        // Attack and release are deliberately different speeds. The old single rate (6/s) hit
+        // the fade-in almost instantly - nearer a click than a scrape - which is what made the
+        // sound lead the camera's own, slower drop into a slide. The attack reuses slideEase
+        // rather than inventing a second number for the same idea, so the two are locked
+        // together instead of two constants somebody has to remember to retune in step.
+        //
+        // Release was slowed on 2026-08-21 to give it an audible tail, and that turned out to be
+        // the wrong call - reported back the next day as the scrape still playing after jumping
+        // out of a slide, which a fast release fixes and a slow one is exactly what caused.
+        // Footsteps don't linger after you stop moving either; this should be no different. Fast
+        // rather than an instant snap to zero, so it's still a release rather than a click, but
+        // at this rate the whole tail is under 25ms - not something a person can hear as a tail.
+        float rate = wanted > scrape.volume ? slideEase : 24f;
 
         scrape.volume = Mathf.MoveTowards(scrape.volume, wanted * GameSettings.SfxVolume,
                                           Time.deltaTime * rate);

@@ -268,8 +268,9 @@ Closed since, and worth recording why:
   at full shield. `WeaponCheck` plays the roster through the rule rather than dividing.
 - **No `Music/over` track** was never a bug. `MusicPlayer` picks `over ?? lobby ?? menu`, and the
   lobby track is a holding pen, which is exactly what a results screen is.
-- **`AppVersion` empty** is fixed — it's `0.5` now, so mismatched builds can't see each other's
-  rooms. Bump it whenever the RPC list or a replicated property changes.
+- **`AppVersion` empty** is fixed — it's `0.6` now (bumped from `0.5` on 2026-08-22, when the
+  vine's `RPC_Attach`/`RPC_Detach` got added to `RpcList`), so mismatched builds can't see each
+  other's rooms. Bump it whenever the RPC list or a replicated property changes.
 - **"Third-person banana sits at hip height"** was never true, or stopped being true when the
   two-handed poses landed. It measures at 73–77% of body height, which is chest level. Worth
   knowing how that was nearly "fixed": the first measurement used the stand-in's transform as

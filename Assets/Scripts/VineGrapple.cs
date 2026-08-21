@@ -28,6 +28,12 @@ public class VineGrapple : MonoBehaviour
     [Tooltip("How far a vine can latch onto something, in metres.")]
     [SerializeField] float maxRange = 40f;
 
+    [Tooltip("Radius of the cast used to find something to latch onto, in metres. A bare raycast "
+             + "made this feel unreliable - a small anchor point at range is a tiny target for a "
+             + "single ray, and a miss looked identical to the key not registering at all. A "
+             + "sphere cast is far more forgiving without changing what it can actually reach.")]
+    [SerializeField] float castRadius = 0.6f;
+
     [Tooltip("How close counts as arrived - ends the pull on a vantage point, or lands the hit "
              + "on an enemy.")]
     [SerializeField] float arriveDistance = 1.6f;
@@ -38,10 +44,12 @@ public class VineGrapple : MonoBehaviour
              + "to gain speed, the way the brief asked for.")]
     [SerializeField] float pullAccel = 60f;
 
-    [Tooltip("Speed the pull chases, in metres per second. Kept under PlayerMovement's own "
-             + "maxHorizontalSpeed (45) so a grapple approaches the global ceiling rather than "
-             + "needing an exemption from it.")]
-    [SerializeField] float maxPullSpeed = 40f;
+    [Tooltip("Speed the pull chases, in metres per second. Retuned down from 40 on 2026-08-22 - "
+             + "reported as way too fast, and the numbers back that up: a full slide chain tops "
+             + "out around 14, so 40 was close to five times running speed rather than a clear "
+             + "step above the game's other movement tech. 24 sits above a good slide chain "
+             + "without dwarfing everything else the way the old number did.")]
+    [SerializeField] float maxPullSpeed = 24f;
 
     [Tooltip("Safety cutoff, in seconds. Covers an anchor that's technically still reachable but "
              + "never actually gets any closer - circling around geometry, for instance.")]
@@ -171,8 +179,12 @@ public class VineGrapple : MonoBehaviour
         int mask = TargetMask();
         Ray ray = new Ray(camera.transform.position, camera.transform.forward);
 
-        if (!Physics.Raycast(ray, out RaycastHit hit, maxRange, mask, QueryTriggerInteraction.Ignore))
+        if (!Physics.SphereCast(ray, castRadius, out RaycastHit hit, maxRange, mask,
+                                QueryTriggerInteraction.Ignore))
+        {
+            Whiff();
             return;
+        }
 
         PlayerController target = hit.collider.GetComponentInParent<PlayerController>();
 
@@ -184,6 +196,20 @@ public class VineGrapple : MonoBehaviour
         int targetViewID = target != null && target.View != null ? target.View.ViewID : -1;
 
         Begin(targetViewID, hit.point);
+    }
+
+    /// <summary>
+    /// Nothing was in range. Local only, and deliberately not run through an RPC - a miss isn't
+    /// a networked event, it's you finding out your own aim didn't land on anything.
+    ///
+    /// Existed as a silent no-op originally, which is most of what made the whole mechanic read
+    /// as unreliable: pressing G and getting nothing back is indistinguishable from the key not
+    /// registering at all. This turns a miss into an audible, different-sounding outcome instead
+    /// of the absence of one.
+    /// </summary>
+    void Whiff()
+    {
+        GameAudio.PlayPitched(GameAudio.Vine, "swish-13", 0.35f, 0.7f);
     }
 
     static int TargetMask()

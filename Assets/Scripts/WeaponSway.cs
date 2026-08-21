@@ -21,6 +21,13 @@ public class WeaponSway : MonoBehaviour
     [SerializeField] float bobDistance = 0.018f;
     [SerializeField] float bobRate = 9f;
 
+    [Header("Speed")]
+    [Tooltip("How far the weapon drifts down and back at full SpeedRush intensity, in local "
+             + "metres. Small on purpose - this reads as wind pressure on your arms while going "
+             + "fast, not as the gun being thrown off screen. Same idea as the FOV kick and wind "
+             + "lines, applied to the one thing on screen those two don't touch.")]
+    [SerializeField] Vector3 speedPush = new Vector3(0.012f, -0.03f, 0.05f);
+
     // Speed at which bob reaches full strength. Matches the movement's reference speed so a
     // sprint bobs fully and a walk only partly.
     [SerializeField] float referenceSpeed = 8f;
@@ -99,8 +106,14 @@ public class WeaponSway : MonoBehaviour
             -Mathf.Abs(Mathf.Sin(bobPhase)) * bobDistance * strength,
             0f) * damping;
 
+        // --- push from going fast
+        // Reads SpeedRush's own public intensity rather than computing speed a second time -
+        // one source of "how fast does this feel" for the FOV kick, the wind lines and this to
+        // all agree on, rather than three slightly different ideas of the same number.
+        Vector3 push = speedPush * SpeedRush.Intensity;
+
         float t = 1f - Mathf.Exp(-swaySmooth * dt);
-        transform.localPosition = Vector3.Lerp(transform.localPosition, restPosition + swayOffset + bob, t);
+        transform.localPosition = Vector3.Lerp(transform.localPosition, restPosition + swayOffset + bob + push, t);
         transform.localRotation = Quaternion.Slerp(transform.localRotation, restRotation * swayTilt, t);
     }
 }
