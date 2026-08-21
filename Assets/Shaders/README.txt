@@ -19,6 +19,15 @@ same result. The lesson that mattered: read the pixels before trusting the scree
 
 The material lives at Assets/Resources/Sky/JungleSky.mat, assigned as the scene's skybox.
 
+Retuned 2026-08-22 against a reference grid of dense fantasy-jungle art - canopy green pushed
+much further up the dome (green is most of the sky now, open colour is what's left at the very
+top rather than the other way round) and procedural god rays added around the sun direction:
+several sine waves of the angle around the sun axis, added at different frequencies so the
+streaks land irregular rather than a visible pinwheel, masked by both distance from the sun and
+height (they fade approaching the horizon haze, reading as the canopy blocking them lower down).
+Nothing photographic added - still a shader, no textures - the reference was for colour and mood,
+not for a cubemap to trace over.
+
 ToonOutline.shader / ScreenOutline.shader - two different toon outlines, only one of which is
 actually wired into the game. Built the same day, in that order, because the first one turned out
 not to be good enough on the gorilla specifically.
