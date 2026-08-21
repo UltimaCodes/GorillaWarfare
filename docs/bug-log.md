@@ -37,8 +37,9 @@ killer took the victim's death down with it.
 **Vertical aim was never sent.** `Look()` puts yaw on the root, which `PhotonTransformView`
 replicates, but pitch goes on `cameraHolder` — which had no components on it at all. Nobody ever saw
 anyone look up or down. `PlayerController` now implements `IPunObservable` and sends pitch as one
-float on the root view. Reasoning for not just slapping a `PhotonView` on `cameraHolder` is in
-[player-fixes.md](player-fixes.md).
+float on the root view — considered a `PhotonView` + `PhotonTransformView` directly on
+`cameraHolder` instead and rejected it: that's a fourth `PhotonView` per player burning a view ID
+on every respawn, sending a full position and rotation just to carry one number.
 
 **You could shoot yourself.** Everything is on layer 0 and the ray starts at the camera, which sits
 inside your own capsule collider. Now checks the hit's `PhotonView.Owner` against the shooter.
@@ -118,7 +119,7 @@ property doesn't exist until the first kill or death. Defaults to `0`.
   Bumped to 20.
 - Region was hard-pinned to `uae`, forcing everyone onto that cluster no matter where they are.
   Unpinned. (If we end up geographically split, one explicit shared region beats auto — see
-  [player-fixes.md](player-fixes.md).)
+  `roadmap.md`'s "Known limitations".)
 - Point light on the player model, imported from the `.3DS`, intensity 271 and range 0. Lit nothing,
   still got processed on every player. Disabled. (Root `MeshFilter`/`MeshRenderer` are already
   disabled, left them.)
@@ -135,7 +136,9 @@ and a layer mask, not ownership checks. That means editing `TagManager.asset` an
 across prefabs and scenes, which is a bigger change than it sounds and belongs with the collider
 rework. Worked around for now, `TODO` left in `SingleShotGun`.
 
-**The late-join visibility bug** — still open, see [player-fixes.md](player-fixes.md).
+**The late-join visibility bug** — was open as of this pass. Fixed since, by rewriting the spawn
+path to Photon's own pattern and deleting `PlayerManager` entirely — see `roadmap.md`'s "Recently
+closed".
 
 ---
 
