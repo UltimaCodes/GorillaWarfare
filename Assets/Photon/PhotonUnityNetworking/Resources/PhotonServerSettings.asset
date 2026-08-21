@@ -17,7 +17,7 @@ MonoBehaviour:
     AppIdFusion: 
     AppIdChat: 
     AppIdVoice: 
-    AppVersion: 0.5
+    AppVersion: 0.6
     UseNameServer: 1
     FixedRegion: uae
     Server: 
@@ -40,6 +40,8 @@ MonoBehaviour:
   - ClickRpc
   - DestroyRpc
   - RPC_ProjectileFired
+  - RPC_Attach
+  - RPC_Detach
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

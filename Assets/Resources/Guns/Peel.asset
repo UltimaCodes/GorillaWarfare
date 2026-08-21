@@ -23,7 +23,7 @@ MonoBehaviour:
   pelletsPerShot: 1
   melee: 1
   fireKnockback: 0
-  meleeHold: {x: 72, y: 0, z: 18}
+  meleeHold: {x: -15, y: 0, z: 180}
   meleeSwing: 65
   twoHanded: 0
   magazineSize: 0

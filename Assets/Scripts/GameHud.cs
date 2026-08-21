@@ -69,6 +69,14 @@ public class GameHud : MonoBehaviour
     int lastSlideRank;
     float slidePunchUntil = -99f;
 
+    // The health and ammo groups drift outward at speed. Resolved from healthNumber/ammoNumber's
+    // own parent rather than adding two more fields to wire up in the scene - HudBuilder already
+    // parents each under its own panel, so the panel is sitting right there to be found.
+    RectTransform healthGroup;
+    RectTransform ammoGroup;
+    Vector2 healthBasePos;
+    Vector2 ammoBasePos;
+
     /// Drawn behind the winner's name when the round is over. Without it the result was a line
     /// of text floating over a firefight that had visibly stopped mattering, which is not what
     /// winning should look like.
@@ -187,6 +195,20 @@ public class GameHud : MonoBehaviour
 
         if (arrowTemplate != null)
             arrowTemplate.gameObject.SetActive(false);
+
+        if (healthNumber != null)
+        {
+            healthGroup = healthNumber.rectTransform.parent as RectTransform;
+            if (healthGroup != null)
+                healthBasePos = healthGroup.anchoredPosition;
+        }
+
+        if (ammoNumber != null)
+        {
+            ammoGroup = ammoNumber.rectTransform.parent as RectTransform;
+            if (ammoGroup != null)
+                ammoBasePos = ammoGroup.anchoredPosition;
+        }
 
         // Made here if the scene has not got one, same as the crosshair dot. A full screen
         // radial sprite, tinted red and pulsed - it darkens the edges and leaves the middle
@@ -465,6 +487,29 @@ public class GameHud : MonoBehaviour
         UpdateDamageArrows();
         UpdateAdrenaline();
         UpdateSlideCombo();
+        UpdateSpeedPush();
+    }
+
+    /// <summary>
+    /// Health and ammo drift a little further into their own corners at speed - the same idea as
+    /// the weapon's own push in WeaponSway, so the effect isn't only something that happens to
+    /// the gun. Both read SpeedRush.Intensity directly rather than the HUD tracking its own
+    /// notion of "going fast", so all three effects agree on the same number.
+    ///
+    /// Deliberately not applied to the crosshair, the hitmarker or the damage numbers - anything
+    /// that has to stay exactly where the gameplay says it is stays put. This is only the chrome.
+    /// </summary>
+    const float speedPushPixels = 22f;
+
+    void UpdateSpeedPush()
+    {
+        float rush = SpeedRush.Intensity;
+
+        if (healthGroup != null)
+            healthGroup.anchoredPosition = healthBasePos + new Vector2(-1f, -1f) * speedPushPixels * rush;
+
+        if (ammoGroup != null)
+            ammoGroup.anchoredPosition = ammoBasePos + new Vector2(1f, -1f) * speedPushPixels * rush;
     }
 
     void UpdateHealth()

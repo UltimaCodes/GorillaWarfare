@@ -74,6 +74,29 @@ public static class AudioCheck
     /// tools/analyze_swishes.py when the clips were picked and is recorded in the bank's own
     /// README rather than re-derived here every run.
     /// </summary>
+    /// <summary>
+    /// The wind bed has to be a bed - the same requirement the jungle ambience failed and got
+    /// cut for. That track buried wind chimes in it and measured 0.49 distinct events a second;
+    /// a cricket-wall alternative that measured at 0.09 was the one praised as actually smooth.
+    /// Reusing CountOnsets rather than judging by description a second time, since "described as
+    /// a whoosh" was exactly as true of the track that got cut.
+    /// </summary>
+    static void WindIsSmooth()
+    {
+        AudioClip[] wind = Resources.LoadAll<AudioClip>("Audio/Wind");
+
+        Check(wind.Length > 0, "the wind bank has something in it", $"{wind.Length} clips");
+
+        foreach (AudioClip clip in wind)
+        {
+            int onsets = CountOnsets(clip, out _);
+            float perSecond = onsets / Mathf.Max(0.01f, clip.length);
+
+            Check(perSecond < 0.3f, $"{clip.name} is a bed, not a string of events",
+                  $"{perSecond:F2}/s over {clip.length:F1}s");
+        }
+    }
+
     static void VineIsAThwip()
     {
         AudioClip[] vine = Resources.LoadAll<AudioClip>("Audio/Vine");
@@ -101,6 +124,7 @@ public static class AudioCheck
         ShieldIsTheRightShape();
         SlideIsAScrape();
         VineIsAThwip();
+        WindIsSmooth();
 
         Debug.Log("[audio] banks\n" + Log);
         Debug.Log(failures == 0 ? "[audio] ===== ALL PASS =====" : $"[audio] {failures} FAILURES");

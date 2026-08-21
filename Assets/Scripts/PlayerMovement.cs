@@ -59,8 +59,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] bool autoBhop = false;
 
     // Keeps a jump you pressed slightly too early, so landing and immediately jumping again
-    // is forgiving instead of frame-perfect.
-    [SerializeField] float jumpBufferTime = 0.1f;
+    // is forgiving instead of frame-perfect. Matched to slideBuffer's window rather than tuned
+    // separately - queuing a jump for landing and queuing a slide for landing are the same idea
+    // played on two different keys, and a jump that was stingier about it than a slide made the
+    // pair feel like two different systems instead of one.
+    [SerializeField] float jumpBufferTime = 0.22f;
 
     public Vector3 Velocity => velocity;
 
@@ -412,7 +415,12 @@ public class PlayerMovement : MonoBehaviour
         // you land. Without this, chaining was impossible by design: you have to press it while
         // airborne to catch the landing, and the check only ever looked at whether you were
         // holding it on a frame where you happened to already be on the floor.
-        if (!listening && KeyBinds.Pressed(KeyBinds.Action.Walk))
+        //
+        // Only re-armed while not already sliding. A press that lands while sliding is already
+        // is not a queue for anything - you're already in the state it would ask for - and
+        // arming it anyway meant a slide that ended from a natural speed drop while the key was
+        // still held (or freshly re-tapped) could look like a landing queue and refire itself.
+        if (!listening && !sliding && KeyBinds.Pressed(KeyBinds.Action.Walk))
             slidePressedAt = Time.time;
 
         bool buffered = Time.time - slidePressedAt <= slideBuffer;
@@ -430,11 +438,20 @@ public class PlayerMovement : MonoBehaviour
                 crouching = false;
             }
         }
-        else if (!sliding && !crouching)
+        else if (!sliding && !crouching && grounded)
         {
-            // Which one you get is decided once, on the press, by how fast you were already
-            // going. Deciding it every frame would flicker between the two at the boundary.
-            if (grounded && speed >= slideEntrySpeed && !Exhausted)
+            // Grounded is now part of the gate itself, not just the branch inside it. Queuing a
+            // slide by pressing the key while still airborne used to fall straight into the
+            // "else" below and crouch immediately, mid-air, before landing had even happened -
+            // so by the time you actually touched down you were already crouched rather than
+            // still waiting to decide, and the slide-entry check here never got a chance to run
+            // on the landing frame at all. That was the whole jump-into-slide jank: queuing a
+            // slide silently turned into queuing a crouch instead.
+            //
+            // Which one you get is decided once, now that we know you're on the ground, by how
+            // fast you were already going. Deciding it every frame would flicker between the two
+            // at the boundary.
+            if (speed >= slideEntrySpeed && !Exhausted)
             {
                 sliding = true;
                 slidePressedAt = -99f;

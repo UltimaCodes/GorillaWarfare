@@ -263,3 +263,49 @@ Fixed by giving `LoadoutFor` the same `Sandbox.Active` guard `WeaponsFor` alread
 first, before the property is ever read - rather than relying on the property being cleared at
 the right moment, which is precisely the kind of timing PUN has already been shown not to
 guarantee.
+
+## Jumping into a slide queued a crouch instead, silently
+
+Reported 2026-08-22 as "jump into slide is still janky" - jumping out of a slide already worked,
+but pressing slide while still airborne, intending to land into one, mostly didn't. Root cause in
+`UpdateStance`: the branch that decides slide-vs-crouch ran the moment the key was pressed or
+buffered, with no check for whether the player was actually on the ground yet. Pressed while
+airborne, `grounded && speed >= slideEntrySpeed` failed (grounded was false), so it fell into the
+`else` and set `crouching = true` - mid-air, before landing had even happened. By the time the
+player actually touched down, `crouching` was already true, which blocked the slide-entry check
+from ever running on the landing frame at all - `!sliding && !crouching` was false before the one
+frame that mattered arrived. Queuing a slide silently turned into queuing a crouch.
+
+Fixed by moving `grounded` into the outer gate rather than only the inner one, so nothing about
+stance is decided at all until the player is actually on the ground. The buffer timestamp still
+does its job of remembering the press; it just isn't allowed to act on it early. Also stopped
+re-arming the buffer on a press that lands while already sliding - a press mid-slide was never a
+queue for anything, and letting it arm the timestamp anyway meant a slide ending from a natural
+speed drop while the key was still held could look identical to a landing queue and refire.
+
+## The slide scrape's release tail, retuned 2026-08-21, was the wrong fix
+
+Reported back 2026-08-22 as the scrape still playing after jumping out of a slide. The previous
+day's fix slowed the release rate deliberately, to give the sound a tail instead of a hard cutoff
+- reported at the time as fixing "ends too early". That reasoning didn't survive a jump-cancel: a
+jump doesn't reduce horizontal speed, so `wanted` drops to zero correctly the instant `sliding`
+goes false, but the slow release rate took audibly long to actually reach it, which is exactly
+what "still playing after jumping out" describes. Reverted the release rate back to fast (24/s,
+under 25ms for the whole tail) while keeping the attack-side fix from the same day, which wasn't
+in question. Footsteps don't linger after you stop moving; this shouldn't either.
+
+## The peel's melee hold, wrong a third time until it was actually rendered
+
+Guessed wrong twice before this project's own admission (`GunInfo.meleeHold`'s tooltip says so).
+Guessed the numbers a third time on 2026-08-22 too, both times from reasoning about the rotation
+rather than seeing it - the exact mistake the tooltip already warned about. Built
+`Tools/Gorilla Warfare/Photograph the peel` instead: renders the peel with `SingleShotGun`'s exact
+pose maths (identity, then `meleeHold`), from a camera positioned like the one built for
+`PlayModeProbe`'s player-model shot, with coloured axis rods so the render can be read in
+absolute terms instead of guessed from silhouette. First attempt rendered a flat grey frame -
+`-nographics` provides no real graphics device for `Camera.Render()` to write into, which
+`PlayModeProbe` never hits because it renders across real frames in an actual play session rather
+than a single cold `-executeMethod` call. Dropping `-nographics` for this one tool fixed it.
+Iterated by eye from there: old value `(72, 0, 18)` held the peel hanging down, blunt tip low,
+which matched the screenshot exactly. New value `(-15, 0, 180)` holds it curving up and forward
+instead - verified by rendering it, not by reasoning about it a fourth time.

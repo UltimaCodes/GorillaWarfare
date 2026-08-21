@@ -36,6 +36,11 @@ pack for `swish-10`, shortest overall for `swish-13` - a thwip wants a sharp, ea
 than a swell, which is a different shape from Slide's sustained scrape and why this didn't just
 reuse that bank.
 
+**Wind, under going fast** - "Wind Whoosh Loop" by SketchMan3,
+[OpenGameArt](https://opengameart.org/content/wind-whoosh-loop), **CC0**. Measured with
+`AudioCheck.WindIsSmooth` (0.00 events/second) before trusting it - the same check that would
+have caught the wind chimes buried in the ambient jungle track cut earlier in the project.
+
 **Hits, headshots, kill, death, melee swing, menu taps** - "Punches, hits, swords and squishes"
 by Philippe Groarke (Socapex), [OpenGameArt](https://opengameart.org/content/punches-hits-swords-and-squishes),
 **CC BY-SA 3.0**, itself compiled from Freesound samples under CC-BY 3.0 and CC0. Attribution is a

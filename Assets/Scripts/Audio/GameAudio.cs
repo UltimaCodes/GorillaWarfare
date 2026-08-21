@@ -55,6 +55,16 @@ public static class GameAudio
     /// </summary>
     public const string Vine = "Vine";
 
+    /// <summary>
+    /// Wind under everything else while going fast - the sound half of the FOV kick and the
+    /// wind lines, so speed reads as speed even with the sound off... except it isn't, that's
+    /// the point. Wants to be a smooth bed with as few distinct events in it as possible - the
+    /// ambient jungle track that got cut had wind chimes buried in it and measured at 0.49
+    /// events a second, which is exactly the shape this must not be. AudioCheck's WindIsSmooth
+    /// holds that down the same way it held the jungle bed to account, before it got cut.
+    /// </summary>
+    public const string Wind = "Wind";
+
     /// A pineapple going off. Its own bank rather than the generic impact, which is the sound a
     /// bullet makes hitting a wall - reusing it would make the loudest thing in the game sound
     /// like the smallest.
