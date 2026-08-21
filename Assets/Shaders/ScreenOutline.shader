@@ -13,7 +13,14 @@ Shader "Custom/ScreenOutline"
         _MainTex ("Source", 2D) = "white" {}
         _OutlineColor ("Outline colour", Color) = (0.04, 0.04, 0.04, 1)
         _DepthSensitivity ("Depth sensitivity", Range(0.1, 10)) = 2.5
-        _NormalSensitivity ("Normal sensitivity", Range(0.1, 10)) = 3.0
+        // Low by default (retuned 2026-08-22, was 3.0) - a low-poly, hard-faceted character
+        // like the gorilla has small normal jumps at essentially every triangle boundary across
+        // its whole curved body, not just at real creases, so anything high enough to read as a
+        // deliberate line on a cube's actual corner also lit up every facet on a body - reported
+        // back as "every crevice and line", not a clean border. Depth edges alone already draw
+        // the actual silhouette; this only needs to be sensitive enough to catch a genuinely
+        // sharp fold, not general surface curvature.
+        _NormalSensitivity ("Normal sensitivity", Range(0.0, 10)) = 0.35
         _Thickness ("Thickness (pixels)", Range(0.5, 4)) = 1.5
     }
 
