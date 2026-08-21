@@ -17,7 +17,7 @@ MonoBehaviour:
   maxRange: 200
   falloffStart: 30
   falloffFloor: 0.65
-  fireRate: 10
+  fireRate: 8.5
   automatic: 1
   spread: 0.5
   pelletsPerShot: 1

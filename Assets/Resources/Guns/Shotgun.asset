@@ -19,7 +19,7 @@ MonoBehaviour:
   falloffFloor: 0.2
   fireRate: 1.4
   automatic: 0
-  spread: 4.5
+  spread: 7
   pelletsPerShot: 9
   melee: 0
   fireKnockback: 0

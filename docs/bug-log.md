@@ -309,3 +309,34 @@ than a single cold `-executeMethod` call. Dropping `-nographics` for this one to
 Iterated by eye from there: old value `(72, 0, 18)` held the peel hanging down, blunt tip low,
 which matched the screenshot exactly. New value `(-15, 0, 180)` holds it curving up and forward
 instead - verified by rendering it, not by reasoning about it a fourth time.
+
+## The fitted hitboxes were worse than the spheres they replaced
+
+Reported 2026-08-22 as "you can't headshot or anything, they're not really accurate." Built
+`Tools/Gorilla Warfare/Photograph the hitboxes` the same way the peel got photographed, to
+overlay the actual colliders on the actual mesh instead of reading numbers and guessing - and the
+overlay showed the arm hitboxes as two purple blobs bigger than the entire torso.
+
+Measured why: the fitting algorithm assigned every sampled vertex to whichever of the thirteen
+bone segments it sat geometrically nearest to, and a shoulder joint sits *inside* the body, not
+on its surface - so a joint can genuinely be the closest point in space to a swath of chest and
+back skin that has nothing to do with the arm. First fix tried was smarter: use the mesh's own
+skin weights to decide which limb a vertex belongs to, since that's what it actually moves with,
+rather than raw distance. Vertex counts shifted for the torso parts and the arm didn't move -
+`p50=0.570` for the arm's own weight-correct vertices, meaning half the skin genuinely dominant-
+weighted to the shoulder bone sits over half a metre from it. That's not a fitting bug, it's this
+rig's weight painting: broad around the shoulder and hip joints, almost certainly from whatever
+auto-weighting produced a free CC0 model, and no formula run against it was ever going to land
+somewhere sane.
+
+Replaced fitting entirely with `HitboxProfile.asset` - one hand-set radius per part, per Ryaan's
+own call once the cause was clear: stop trying to derive correct numbers from data that measured
+as untrustworthy, and let a person who can see the result set them instead. Seeded with a rough
+anatomical taper (torso biggest, tapering to the extremities) and checked against
+`PlayModeProbe`'s existing coverage floor - the same one written when this problem was 20%
+coverage the first time, still 66% - which the auto-fit's replacement now clears at 70%. Final
+tuning is intentionally not done here.
+
+Coverage log also names where the remaining gaps are nearest to, which is worth reading before
+the next tuning pass: chest and leg carry the most of what's left uncovered at these starting
+numbers.

@@ -276,10 +276,32 @@ public class PlayerMovement : MonoBehaviour
              + "chaining possible - you press it in the air and it fires on touchdown.")]
     [SerializeField] float slideBuffer = 0.22f;
 
+    [Header("Fatigue")]
+    [Tooltip("Added on every slide entry, whether or not it's part of a chain. Separate from the "
+             + "chain counter, which resets after chainWindow - this doesn't, at least not "
+             + "quickly, which is the whole point of it.")]
+    [SerializeField] float fatiguePerSlide = 1f;
+
+    [Tooltip("Fatigue that triggers exhaustion, the same lockout topping out the chain gives. "
+             + "Set just above maxChain so one clean 4-chain still exhausts through the chain "
+             + "path first, and this one only fires for the pattern that path can't see.")]
+    [SerializeField] float fatigueLimit = 5f;
+
+    [Tooltip("Fatigue lost per second, all the time, not only while grounded. Slow on purpose: "
+             + "recovering from a full 3-slide burst (fatigue 3) takes about 15 seconds at this "
+             + "rate, so waiting out chainWindow's 0.9s between bursts barely dents it. Reported "
+             + "2026-08-22: slide three times, wait a few seconds, slide three times, repeat, "
+             + "and the chain-only exhaustion check never fires because it never actually hits "
+             + "the chain ceiling - each burst starts a fresh chain from 1. That's what this "
+             + "field exists to close: fatigue accumulates across bursts even when the chain "
+             + "itself keeps resetting, so a few seconds of waiting stops being enough.")]
+    [SerializeField] float fatigueDecay = 0.2f;
+
     int chain;
     float chainExpires = -99f;
     float exhaustedUntil = -99f;
     float slidePressedAt = -99f;
+    float fatigue;
 
     /// Whether sliding is currently locked out, and for how much longer. Both public because the
     /// HUD has to be able to say so - being unable to slide with no explanation is the worst
@@ -293,6 +315,7 @@ public class PlayerMovement : MonoBehaviour
         exhaustedUntil = -99f;
         chain = 0;
         chainExpires = -99f;
+        fatigue = 0f;
     }
 
     /// How many slides deep the current chain is, for the camera and the effects. Zero when
@@ -409,6 +432,12 @@ public class PlayerMovement : MonoBehaviour
     /// </summary>
     void UpdateStance(bool listening, float dt)
     {
+        // Decays every frame regardless of what else is happening, which is what makes it a
+        // fatigue meter rather than a second chain counter - it doesn't care whether you're
+        // mid-slide, standing still, or in the air, only how long it's been since you last added
+        // to it.
+        fatigue = Mathf.Max(0f, fatigue - fatigueDecay * dt);
+
         bool held = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
 
         // Remembered on the press, so hitting slide just before you touch down still slides when
@@ -470,6 +499,19 @@ public class PlayerMovement : MonoBehaviour
                 {
                     exhaustedUntil = Time.time + exhaustion;
                     chain = maxChain;
+                }
+
+                // The slower-decaying half of the same idea, for the pattern the chain ceiling
+                // can't see: several short bursts, each one broken deliberately before it ever
+                // reaches maxChain, with just enough of a gap between them for the chain to
+                // reset but not enough for fatigue to meaningfully recover. Same lockout, same
+                // cost, triggered by total recent sliding rather than by one unbroken run of it.
+                fatigue += fatiguePerSlide;
+
+                if (fatigue >= fatigueLimit)
+                {
+                    exhaustedUntil = Time.time + exhaustion;
+                    fatigue = 0f;
                 }
 
                 float kick = slideKick + chainBonus * (chain - 1);

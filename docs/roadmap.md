@@ -308,8 +308,13 @@ Note: a previous settings menu was built and reverted at your call. The code is 
       Hazard are one handed and put the off hand on the hip, everything longer braces with both.
 - [ ] **Melee swing.** The Peel is a 2.4m hitscan with no arc and no animation, so it reads as
       an invisible short gun rather than a swing.
-- [ ] **Check hitbox alignment against the mesh.** They're spheres at bone origins and have
-      never been looked at next to the actual gorilla, so they may not match its shape.
+- [x] **Check hitbox alignment against the mesh.** Actually looked at, 2026-08-22, with
+      `Tools/Gorilla Warfare/Photograph the hitboxes` - and it was worse than "never checked":
+      the auto-fit measured the arm at 0.66m radius, wider than the torso, because this rig's
+      skin weights are painted broadly around the shoulder and hip joints and the fitter trusted
+      them. Replaced with `HitboxProfile.asset`, a hand-set radius per part - see bug-log.md.
+      Seeded and roughly tuned (`PlayModeProbe`'s coverage check passes at 70%, floor is 66%);
+      final pass is Ryaan's, by design.
 
 ---
 
@@ -332,7 +337,6 @@ Separate from M0 because it needs a person playing it, not a fix.
 Things the checks can't reach, so they need a person:
 
 - whether the recoil, gait and weapon framing feel right
-- whether the hitboxes line up with the gorilla visually
 - whether the bananas read as their weapons at a glance
 - **all of M4.** Every sound is verified to exist, to be one shot, and not to clip. Whether any
   of it sounds *good* is not something a check can answer, and the synthesised ones especially

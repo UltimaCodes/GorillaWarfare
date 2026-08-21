@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11201cc5a81bd334c9d8f9db40c19abe, type: 3}
+  m_Name: HitboxProfile
+  m_EditorClassIdentifier: Assembly-CSharp::HitboxProfile
+  entries:
+  - bone: Head
+    label: head
+    radius: 0.24
+  - bone: NECK
+    label: neck
+    radius: 0.2
+  - bone: SPINE3
+    label: chest
+    radius: 0.32
+  - bone: SPINE1
+    label: stomach
+    radius: 0.3
+  - bone: HIPS
+    label: hips
+    radius: 0.28
+  - bone: LEFTHIP
+    label: leg
+    radius: 0.19
+  - bone: RIGHTHIP
+    label: leg
+    radius: 0.19
+  - bone: LEFTKNEE
+    label: leg
+    radius: 0.17
+  - bone: RIGHTKNEE
+    label: leg
+    radius: 0.17
+  - bone: LEFTSHOULDER
+    label: arm
+    radius: 0.18
+  - bone: RIGHTSHOULDER
+    label: arm
+    radius: 0.18
+  - bone: LEFTELBOW
+    label: arm
+    radius: 0.16
+  - bone: RIGHTELBOW
+    label: arm
+    radius: 0.16

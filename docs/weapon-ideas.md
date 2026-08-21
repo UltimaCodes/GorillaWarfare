@@ -82,21 +82,67 @@ a kill, a disconnect, and a respawn (almost certainly: detach immediately, don't
 to their new spawn point), and needs to feel right while being pulled toward a target whose
 position you're only ever seeing slightly in the past.
 
-### The Blender — vortex
+### Replaced 2026-08-22
 
-Short-range cone that **pulls enemies toward you** rather than pushing them. Almost no damage.
+The Blender and the old Coconut Mortar are gone — told directly they weren't landing, not just
+quietly cut. Three ideas below instead of a one-for-one swap, since "I don't like these" is a
+better reason to offer a real choice than to guess which single replacement is right.
 
-It's an anti-camping tool and a setup tool: yank someone off a ledge, pull them out of cover into
-your friend's line, drag someone into the pineapple you just fired. In a five-player game the
-funniest weapon is the one that makes somebody else's shot land.
+### The Durian — sticky mortar
 
-### Coconut Mortar
+Same high arc as the old Coconut Mortar — it physically cannot be fired at someone you can see —
+but it doesn't detonate on contact. It **sticks**: to a wall, a floor, or a player, however it
+first touches something, then goes off on a short fuse.
 
-High arc, no direct fire — it physically cannot shoot at someone you can see. Sticks where it
-lands and detonates after a beat.
+Stuck to geometry, it's the old idea done slightly better — you get to choose where the "don't
+go there" zone actually is rather than wherever the arc happened to land, since it's now visible
+and ticking rather than an invisible landing site.
 
-The point is that it makes **rooms** dangerous rather than **people** dangerous. Nothing in the
-game currently lets you say "you can't go through there for the next three seconds".
+Stuck to a **player**, it's a different thing entirely: a mark. Everyone can see it, including
+whoever's carrying it, and it demands they do something about it in the next couple of seconds —
+run somewhere it won't hurt anyone else, or run at their friends and hope the blast catches
+someone too. That's the pitch the old version didn't have: a moment of urgency aimed at a
+specific person, not a patch of denied floor.
+
+**What it needs:** the same projectile system every arced weapon here already shares, plus a
+stick-on-contact state (surface normal for geometry, parent-to-hitbox for a player) and a fuse
+timer with a readable tell — a beep, a flashing skin — so getting marked is legible instantly
+rather than found out from the explosion.
+
+### The Zest — citrus blind
+
+Short-range spray, almost no damage, more juice can than gun. Catches you in it and the screen
+stings — a bright, brief citrus-in-the-eyes flash and a few seconds of blurred vision, not a
+one-shot advantage but enough of an opening for whoever threw it to close distance or get out.
+
+The pitch is disable instead of damage, which nothing else on this list does. The Pineapple
+changes where you can be; the vine changes how fast you get there; the Zest changes whether you
+can *see* for the next couple of seconds, which reads completely differently on both ends of
+it — genuinely funny to throw, genuinely infuriating to eat, and that gap is the point.
+
+**What it needs:** a cone check rather than a projectile (no travel time — this is a spray, not a
+shell), a screen-space post-process for the sting itself (bloom past white, a blur ramp in and a
+slower ramp out), and a duration/intensity pair that's worth tuning by playing — too short and
+it's not worth the ammo, too long and it's a Zest fight nobody enjoys losing.
+
+### The Coconut — rolling mine
+
+Kept the name, dropped the mortar. Thrown rather than lobbed on an arc, it hits the ground and
+**rolls**, following the terrain — down a slope, off a ledge, however momentum and gravity take
+it — until it hits a wall or a player, at which point it sticks and goes off the same way the
+Durian does.
+
+The reason to build a second sticky-detonator rather than reuse the Durian outright is the
+trajectory: an arc is aimed once and then it's just physics, but a rolling mine keeps moving
+after it lands, which makes it read and feel completely differently even sharing the same
+detonation logic — it can chase someone down a corridor, get stuck against a doorframe, or
+surprise someone by rolling round a corner they thought was safe. Purely physical, no logic of
+its own beyond "roll until you hit something", which is what makes it worth having next to the
+Durian rather than being the same weapon twice.
+
+**What it needs:** a rigidbody rather than the kinematic travel every other projectile here uses
+(this is the one thing on the list that actually needs to roll believably), and the same
+stick-and-fuse detonation the Durian already has, reused rather than rebuilt.
 
 ---
 
@@ -194,5 +240,10 @@ But they're filler, and they shouldn't come before any of the above.
 
 ## 5. Naming
 
-Fruit where it's a fruit, and not otherwise. "The Blender" and "Knuckle Run" aren't fruit and are
-better for it. Half the joke is a gorilla holding something that clearly isn't a banana.
+Fruit where it's a fruit, and not otherwise — the Durian, the Zest, the Coconut. Killstreaks and
+movement tech don't need to keep the bit going the same way weapons do: "Go Ape" isn't fruit and
+is better for it. Half the joke is a gorilla holding something that clearly isn't a banana; the
+other half doesn't need forcing onto things that were never bananas to begin with.
+
+(Retired 2026-08-22: this used to cite "The Blender" as the non-fruit example. It's gone now, see
+above, so this points at something still in the document instead.)

@@ -225,11 +225,41 @@ public class SingleShotGun : Gun
     void Update()
     {
         TickReload();
+        UpdateReloadFlip();
 
         // The spray resets once you've been off the trigger long enough, which is what lets you
         // tap-fire accurately instead of inheriting the last burst's climb.
         if (Time.time - lastShotTime > 0.35f)
             shotsInBurst = 0;
+    }
+
+    /// <summary>
+    /// A full end-over-end tumble for the duration of the reload, so the weapon visibly does
+    /// something instead of just sitting there for reloadTime seconds while ammo silently
+    /// refills. Timed to land exactly on a full 360 by the moment TickReload actually swaps the
+    /// magazine, so the flip and the sound finish together rather than the model snapping back
+    /// mid-spin.
+    ///
+    /// Skipped for melee - Reload() already refuses to start one (no ammo means Ammo is always
+    /// at least magazineSize, the guard that turns Reload() into a no-op), but this still has to
+    /// know not to touch visualRoot for melee even so, or it would fight meleeHeld every frame
+    /// it isn't reloading rather than only the frames it is.
+    /// </summary>
+    void UpdateReloadFlip()
+    {
+        if (Info == null || Info.melee || visualRoot == null)
+            return;
+
+        if (!reloading)
+        {
+            visualRoot.localRotation = Quaternion.identity;
+            return;
+        }
+
+        float elapsed = Info.reloadTime - (reloadDoneAt - Time.time);
+        float t = Info.reloadTime > 0.01f ? Mathf.Clamp01(elapsed / Info.reloadTime) : 1f;
+
+        visualRoot.localRotation = Quaternion.Euler(t * 360f, 0f, 0f);
     }
 
     /// Reload keeps running while stowed, so switching away and back doesn't restart it. The

@@ -30,9 +30,12 @@ public class VineGrapple : MonoBehaviour
 
     [Tooltip("Radius of the cast used to find something to latch onto, in metres. A bare raycast "
              + "made this feel unreliable - a small anchor point at range is a tiny target for a "
-             + "single ray, and a miss looked identical to the key not registering at all. A "
-             + "sphere cast is far more forgiving without changing what it can actually reach.")]
-    [SerializeField] float castRadius = 0.6f;
+             + "single ray, and a miss looked identical to the key not registering at all. "
+             + "Raised from 0.6 on 2026-08-22, still reported as unreliable at that size - "
+             + "SphereCastAll now also picks whichever candidate is nearest the crosshair rather "
+             + "than whatever the first single cast happened to hit, which matters more as this "
+             + "grows and starts sweeping past more than one thing.")]
+    [SerializeField] float castRadius = 1.1f;
 
     [Tooltip("How close counts as arrived - ends the pull on a vantage point, or lands the hit "
              + "on an enemy.")]
@@ -168,6 +171,11 @@ public class VineGrapple : MonoBehaviour
     /// Uses the same mask shape SingleShotGun's own trace uses - everything except the movement
     /// capsule layer, so the ray lands on a hitbox or on the world, never on the collider the
     /// shooter is standing inside.
+    ///
+    /// SphereCastAll rather than a single SphereCast, and the winner is whichever candidate the
+    /// ray passes nearest to rather than whichever the physics engine happens to report first -
+    /// "the nearest thing on your crosshair" means angularly nearest to where you're actually
+    /// looking, not just the first thing a fat ray glanced.
     /// </summary>
     void TryAttach()
     {
@@ -179,20 +187,36 @@ public class VineGrapple : MonoBehaviour
         int mask = TargetMask();
         Ray ray = new Ray(camera.transform.position, camera.transform.forward);
 
-        if (!Physics.SphereCast(ray, castRadius, out RaycastHit hit, maxRange, mask,
-                                QueryTriggerInteraction.Ignore))
+        RaycastHit[] hits = Physics.SphereCastAll(ray, castRadius, maxRange, mask,
+                                                  QueryTriggerInteraction.Ignore);
+
+        int bestIndex = -1;
+        float bestAngle = float.MaxValue;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            // Can't latch onto your own hitbox - the camera sits inside them, so a wide enough
+            // cast always finds one.
+            if (hits[i].collider.GetComponentInParent<PlayerController>() == player)
+                continue;
+
+            float angle = Vector3.Angle(ray.direction, hits[i].point - ray.origin);
+
+            if (angle >= bestAngle)
+                continue;
+
+            bestAngle = angle;
+            bestIndex = i;
+        }
+
+        if (bestIndex < 0)
         {
             Whiff();
             return;
         }
 
+        RaycastHit hit = hits[bestIndex];
         PlayerController target = hit.collider.GetComponentInParent<PlayerController>();
-
-        // Can't latch onto your own hitbox - the camera sits inside them, but a stray ray that
-        // somehow still found one would otherwise attach to yourself at distance zero.
-        if (target == player)
-            target = null;
-
         int targetViewID = target != null && target.View != null ? target.View.ViewID : -1;
 
         Begin(targetViewID, hit.point);
