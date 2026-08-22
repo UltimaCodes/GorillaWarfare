@@ -498,3 +498,55 @@ a white flash across a gorilla's body on taking a hit (broadcast to everyone wat
 the victim - see the note in `BulletDecal.cs`), an audio heartbeat under the existing critical-
 health screen edge (which was visual-only until now), and the slide combo's punch-on-change
 treatment extended to the health number, ammo count and kill feed lines.
+
+# Sixth pass — particles done properly, and the movement tech, 2026-08-22
+
+## The reload spin was "unbearably slow"
+
+One full 360 stretched across the whole `reloadTime`, so a longer reload just meant a slower
+single spin instead of more of them. Fixed the *rate* (900°/s) rather than the rotation count -
+`laps = round(reloadTime * rate / 360)`, always at least one, always landing exactly on a whole
+lap by the moment the magazine actually swaps, same guarantee the original had.
+
+## Bhop was gaining speed way too fast
+
+See `roadmap.md`'s movement tuning section - a direct side effect of the same-day `airSpeedCap`
+raise (0.762 to 2.5) for the slide-hop redirect complaint. `bhopKeep` down from 1 to 0.92.
+
+## The pineapple's glow didn't look like a glow
+
+A point light next to an object lights the room, not the object itself - `Projectile.BuildGlow()`
+only ever had the light. Added a soft additive billboard riding alongside it, camera-faced every
+frame independently of the shell's own tumble, the same trick every other flash in this game
+already uses to look like the thing making the light rather than a thing sitting near one.
+
+## Muzzle flash and bullet impact, rebuilt on real ParticleSystems
+
+Reported as looking bad and specifically as not using Unity's particle system properly - both
+fair. `MuzzleFlash` was a single `FlashSprite` billboard per shot; bullet impact's "debris" was a
+loop of `FlashSprite`s that faded in place at a fixed offset with no velocity at all, which is
+likely the real reason impacts kept reading as not appearing regardless of what collider they
+landed on - nothing in the effect ever actually moved. Looked at how impact VFX is actually built
+elsewhere (start speed 2-5 m/s, a Cone shape, lifetime 0.1-0.25s is the standard shape) rather than
+patch the old approach a third time. Both are real `ParticleSystem` bursts now, with actual
+outward velocity and gravity. Caught by `PlayModeProbe` immediately after: the muzzle flash's new
+particle system is a *persistent* renderer (unlike the old one-shot `FlashSprite`s), and nothing
+had ever hidden it while aiming - added `MuzzleFlash.SetVisible`, called from
+`SingleShotGun.SetVisible` alongside the weapon model's own renderers.
+
+## Critical health pulse, too intense
+
+Peak alpha 0.72 on a 0.45-wide beat swing meant the worst moments were most of the screen edge
+solid red. Down to 0.42 peak, 0.32 swing.
+
+## Wall run, vault, ground slam, air brake - built
+
+See `ideas.md`'s movement tech section for the design (written down the same day, before these
+were built, so it doubles as the account of what these actually do) and `roadmap.md`'s Unverified
+section for what still needs a person playing it. Worth naming here what each one's balance
+argument actually is, since "make sure it's balanced" was the direct ask: none of the four add
+net horizontal speed on their own. Vault and the ground slam trade height for control, not for
+more speed. The air brake only ever removes speed. Wall run preserves whatever horizontal speed
+was already there rather than adding to it - no `Accelerate()` call runs during one. The existing
+`maxHorizontalSpeed` safety ceiling still applies underneath all four regardless, the same as it
+already did for slide chains and bhop.
