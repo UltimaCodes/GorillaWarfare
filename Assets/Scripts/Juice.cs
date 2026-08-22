@@ -25,8 +25,16 @@ public class Juice : MonoBehaviour
     const float stopScale = 0.06f;
 
     const float maxStopSeconds = 0.11f;
-    const float maxShake = 0.085f;
-    const float shakeFalloff = 7.5f;
+
+    // Retuned 2026-08-22 - reported as not noticeable at all. 0.085m of pure camera *position*
+    // was the whole effect, and a few centimetres of lateral drift barely reads on screen at a
+    // normal FOV - there's nothing nearby for the eye to measure it against. Roughly doubled the
+    // position and added a rotational component, which is doing most of the new work: a couple
+    // of degrees of roll and pitch reads as the camera being knocked, where the same magnitude
+    // in position alone reads as nothing.
+    const float maxShake = 0.16f;
+    const float maxShakeDegrees = 3.5f;
+    const float shakeFalloff = 6.5f;
     const float shakeSpeed = 42f;
 
     static Juice instance;
@@ -37,6 +45,7 @@ public class Juice : MonoBehaviour
 
     Camera held;
     Vector3 restPosition;
+    Quaternion restRotation;
 
     static Juice Instance
     {
@@ -102,10 +111,14 @@ public class Juice : MonoBehaviour
         if (camera != held)
         {
             if (held != null)
+            {
                 held.transform.localPosition = restPosition;
+                held.transform.localRotation = restRotation;
+            }
 
             held = camera;
             restPosition = camera != null ? camera.transform.localPosition : Vector3.zero;
+            restRotation = camera != null ? camera.transform.localRotation : Quaternion.identity;
         }
 
         if (camera == null)
@@ -114,6 +127,7 @@ public class Juice : MonoBehaviour
         if (shake <= 0.0001f)
         {
             camera.transform.localPosition = restPosition;
+            camera.transform.localRotation = restRotation;
             return;
         }
 
@@ -127,6 +141,16 @@ public class Juice : MonoBehaviour
             0f) * shake;
 
         camera.transform.localPosition = restPosition + offset;
+
+        // A separate pair of noise channels so the roll and pitch don't move in lockstep with
+        // the position and end up reading as one wobble instead of a knock. Normalised against
+        // maxShake first since `shake` is carried in the position's units (metres), not degrees.
+        float normalised = shake / maxShake;
+
+        float roll = (Mathf.PerlinNoise(seed + 23f, time) - 0.5f) * 2f * normalised * maxShakeDegrees;
+        float pitch = (Mathf.PerlinNoise(seed + 37f, time) - 0.5f) * 2f * normalised * maxShakeDegrees * 0.6f;
+
+        camera.transform.localRotation = restRotation * Quaternion.Euler(pitch, 0f, roll);
 
         // Unscaled again: during hitstop, scaled time is barely advancing, and a shake that
         // decays on scaled time would hang there for the whole freeze.
