@@ -310,10 +310,6 @@ public class PlayerMovement : MonoBehaviour
     bool vaultUsedThisAirtime;
 
     [Header("Wall run")]
-    [Tooltip("Minimum horizontal speed to latch onto a wall. Below this it reads as leaning on a "
-             + "wall, not running along it.")]
-    [SerializeField] float wallRunMinSpeed = 5f;
-
     [Tooltip("Fraction of normal gravity while wall running. Not zero - full weightlessness reads "
              + "as flying, not running; a small pull down is what keeps it feeling like a wall "
              + "under your feet rather than a stopped clock.")]
