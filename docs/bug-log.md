@@ -611,3 +611,30 @@ Removed outright rather than kept as reference. Confirmed unused first - no `Add
 or `ToonOutline.ApplyTo` call anywhere in the project - not just "looked unused." See
 `Assets/Shaders/README.txt` for the full account of why it was built and replaced; the technique
 itself is standard enough to rebuild from scratch if a future simple-convex-prop case wants it.
+
+## Dead code, second pass: `MenuCleanup.cs`, `ModelProbe.cs`, an orphaned field
+
+Audited every script in `Assets/Scripts` (54, all confirmed live - this project's heavy use of
+runtime `AddComponent` makes a naive scene/prefab-only reference scan produce false positives, so
+each one was checked against actual code call sites too) and `Assets/Editor` (35 - 26 carry
+`[MenuItem]` and are deliberately-kept manual tools, 7 more are the documented check suite plus
+`AssetFixups`, both cross-referenced in `roadmap.md`/`working-notes.md`).
+
+Two editor tools had no caller, no `[MenuItem]`, and no doc mention anywhere:
+
+- **`MenuCleanup.cs`** — its entire job was removing a stray looping `AudioSource` from
+  `Menu.unity`. That scene has zero `AudioSource` components on it now - the job it existed to do
+  is already done.
+- **`ModelProbe.cs`** — a batch-mode probe for the gorilla FBX import, from before `MonkeyRig`
+  existed. Confirmed stale rather than just unreferenced: it checks for bone names like
+  `b_Spine02` and `b_Head` (Mixamo-style naming), but the rig actually shipped uses `RIGHTSHOULDER`,
+  `LEFTELBOW` and so on - a different scheme entirely, so even run today it would report every
+  bone missing. It also carries a `TryHumanoid()` method that mutates the model's import settings
+  to test Mixamo retargeting, an approach `working-notes.md`'s "Decided, don't relitigate" section
+  already records as rejected in favour of driving the bones directly.
+
+Also found by hand while re-reading the movement tech's own code, not by the audit: a
+`wallRunMinSpeed` field left declared and tooltipped but never read anywhere, from the wall-run
+rewrite two passes up - the speed gate it used to enforce was dropped on purpose (direct request:
+proximity plus holding the key, no speed requirement) but the now-dead field describing it never
+got removed alongside the logic. Removed.
