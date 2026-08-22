@@ -28,22 +28,19 @@ height (they fade approaching the horizon haze, reading as the canopy blocking t
 Nothing photographic added - still a shader, no textures - the reference was for colour and mood,
 not for a cubemap to trace over.
 
-ToonOutline.shader / ScreenOutline.shader - two different toon outlines, only one of which is
-actually wired into the game. Built the same day, in that order, because the first one turned out
-not to be good enough on the gorilla specifically.
-
-ToonOutline is the classic inverted-hull trick: render a mesh's back faces pushed out along their
-own normals, in a flat colour, with the real mesh drawn on top. Applied as an extra material slot
-on a renderer rather than a shader swap, so it never touches the object's own material - see
-ToonOutline.cs. Looked clean on the pineapple (a simple convex shape) and gappy on the gorilla, and
-the instinct to just widen it made that worse, not better. Isolating the outline pass alone (hiding
-the real mesh) showed why: the shell isn't one continuous surface on this model, it's a lot of
-separately-pushed triangles that overlap and fight each other at nearly equal depth wherever the
-character's own geometry overlaps itself - the arm crossing the torso, fingers, joints. That's a
-property of this specific low-poly, self-overlapping mesh, not a bug in the shader; a simpler
-convex prop doesn't have it, which is exactly why the pineapple looked fine. Not deleted - still a
-real, working technique for a simple prop that doesn't need a full-screen pass for one object - but
-nothing in the game applies it any more.
+ScreenOutline.shader is the toon outline actually wired into the game. It replaced an earlier
+attempt, ToonOutline.shader - the classic inverted-hull trick: render a mesh's back faces pushed
+out along their own normals, in a flat colour, with the real mesh drawn on top. Looked clean on
+the pineapple (a simple convex shape) and gappy on the gorilla - isolating the outline pass alone
+(hiding the real mesh) showed why: the shell isn't one continuous surface on this model, it's a
+lot of separately-pushed triangles that overlap and fight each other at nearly equal depth
+wherever the character's own geometry overlaps itself - the arm crossing the torso, fingers,
+joints. That's a property of this specific low-poly, self-overlapping mesh, not a bug in the
+shader; a simpler convex prop doesn't have it, which is exactly why the pineapple looked fine.
+Kept around unused for a while as a reference for a simple-convex-prop case that doesn't need a
+full-screen pass; removed outright 2026-08-22 in a dead-code pass once it was clear nothing in
+the project was ever going to call it again - the technique is standard enough to rebuild from
+scratch if a future prop-only case actually wants it.
 
 ScreenOutline is what's actually running, on the local camera (see PlayerController.cs). Reads the
 camera's own depth+normals buffer instead of mesh geometry - draws a line wherever depth or surface

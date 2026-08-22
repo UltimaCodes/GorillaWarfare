@@ -290,21 +290,24 @@ public class PlayerMovement : MonoBehaviour
     [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 0.92f;
 
     [Header("Vault")]
-    [Tooltip("Minimum forward speed to trigger an auto-vault. Below this you just walk into it - "
-             + "vaulting a ledge you're barely moving toward would look like levitating.")]
-    [SerializeField] float vaultMinSpeed = 3.2f;
-
-    [Tooltip("Ledge height range that counts as vaultable, in metres. Below the low end it's not "
-             + "worth a vault - just walk over it. Above the high end it's a wall, not a ledge, "
-             + "and belongs to wall run instead.")]
-    [SerializeField] float vaultMinHeight = 0.35f;
-    [SerializeField] float vaultMaxHeight = 1.3f;
-
+    [Tooltip("How far forward the ledge check reaches. Triggered by a second jump press while "
+             + "airborne, not by speed alone - see TryVault().")]
     [SerializeField] float vaultCheckDistance = 0.7f;
+
+    [Tooltip("Ledge height range relative to where the second jump was pressed, in metres. Below "
+             + "the low end you're falling onto it, not vaulting; above the high end it's out of "
+             + "a lunge's reach.")]
+    [SerializeField] float vaultMinHeight = -1.5f;
+    [SerializeField] float vaultMaxHeight = 2.2f;
+
     [SerializeField] float vaultImpulse = 4.6f;
     [SerializeField] float vaultCooldown = 0.5f;
 
     float vaultCooldownUntil = -99f;
+
+    /// One vault attempt per airtime - reset the moment you land, set the moment you use your
+    /// second jump press to try one, whether or not it actually found a ledge.
+    bool vaultUsedThisAirtime;
 
     [Header("Wall run")]
     [Tooltip("Minimum horizontal speed to latch onto a wall. Below this it reads as leaning on a "
@@ -506,6 +509,7 @@ public class PlayerMovement : MonoBehaviour
         if (grounded && wasAirborne)
         {
             landedAt = Time.time;
+            vaultUsedThisAirtime = false;
 
             if (slamming)
             {
@@ -517,6 +521,14 @@ public class PlayerMovement : MonoBehaviour
                 EndWallRun(false);
         }
 
+        // Vault: a second jump press while already airborne, checked against a ledge ahead.
+        // Capped at one attempt per airtime so holding jump can't spam raycasts every frame.
+        if (!grounded && !vaultUsedThisAirtime && !listening && KeyBinds.Pressed(KeyBinds.Action.Jump))
+        {
+            vaultUsedThisAirtime = true;
+            TryVault();
+        }
+
         UpdateStance(listening, dt);
         UpdateAirAction(listening);
 
@@ -524,15 +536,11 @@ public class PlayerMovement : MonoBehaviour
 
         float wishSpeed = (crouching ? crouchSpeed : maxGroundSpeed) * AdrenalineSpeed;
 
-        // Vault and wall run each get first refusal on their own half of the world (ground and
-        // air respectively) before falling back to the ordinary move - see ideas.md's "ready to
-        // build" plan, written the day before these landed, for why each is shaped the way it is.
         if (grounded)
         {
-            if (!TryVault(wishDir))
-                GroundMove(wishDir, wishSpeed, wantsJump, dt);
+            GroundMove(wishDir, wishSpeed, wantsJump, dt);
         }
-        else if (!UpdateWallRun(wantsJump, dt))
+        else if (!UpdateWallRun(listening, wantsJump, dt))
         {
             AirMove(wishDir, wishSpeed, dt);
         }
@@ -825,77 +833,86 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// Run at a ledge below chest height and go over it without stopping.
+    /// A second jump press while already airborne, near a ledge, carries you over it.
     ///
-    /// A clearance check, then one upward impulse - not a scripted position tween. Three
-    /// raycasts, all along the direction actually being travelled rather than wherever the
-    /// camera happens to be aimed: one at knee height to find a ledge, one at chest height that
-    /// has to find *nothing* (a wall too tall to vault blocks it there), and one straight down
-    /// from just above the ledge to see where it actually lands and how tall it really is. Physics
-    /// carries the rest, same as a jump - this only supplies the one number a jump doesn't have.
+    /// Retuned 2026-08-22 from an automatic grounded-and-fast trigger, reported as simply not
+    /// working - which tracks, because the old version only ever checked while `grounded`, and
+    /// the one thing an actual player does at a ledge worth vaulting is jump at it. The moment
+    /// they did, `grounded` went false and the check never ran again for that approach. Making
+    /// the second jump itself the trigger means it fires exactly when a player would naturally
+    /// reach for it, and it costs nothing if there's nothing to vault - press it in open air and
+    /// nothing happens, no free double jump granted.
+    ///
+    /// One raycast forward for a surface to climb, one down from just past it to find where it
+    /// actually is - generous on both, since the player is already mid-air with real velocity of
+    /// their own rather than standing still at a known height the way the grounded version could
+    /// assume.
     /// </summary>
-    bool TryVault(Vector3 wishDir)
+    bool TryVault()
     {
         if (Time.time < vaultCooldownUntil)
             return false;
 
         Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
-        float speed = flat.magnitude;
+        Vector3 dir = flat.sqrMagnitude > 0.01f ? flat.normalized : transform.forward;
 
-        if (speed < vaultMinSpeed)
-            return false;
-
-        Vector3 dir = flat.normalized;
-        Vector3 kneeOrigin = transform.position + Vector3.up * vaultMinHeight;
-
-        if (!Physics.Raycast(kneeOrigin, dir, out RaycastHit low, vaultCheckDistance,
+        if (!Physics.Raycast(transform.position, dir, out RaycastHit wall, vaultCheckDistance,
                              Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
         {
             return false;
         }
 
-        // Too tall to vault if something also blocks the chest - that's a wall, not a ledge.
-        Vector3 chestOrigin = transform.position + Vector3.up * vaultMaxHeight;
-        if (Physics.Raycast(chestOrigin, dir, vaultCheckDistance + 0.25f,
-                            Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-        {
-            return false;
-        }
-
-        Vector3 above = low.point + dir * 0.35f + Vector3.up * (vaultMaxHeight + 0.4f);
-        if (!Physics.Raycast(above, Vector3.down, out RaycastHit landing, vaultMaxHeight + 0.8f,
+        Vector3 above = wall.point + dir * 0.4f + Vector3.up * 1.6f;
+        if (!Physics.Raycast(above, Vector3.down, out RaycastHit landing, 3.2f,
                              Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
         {
             return false;
         }
 
         float ledgeHeight = landing.point.y - transform.position.y;
+
+        // A genuine ledge within reach of a lunge - not so far below it is just falling onto
+        // something, not so far above a second jump could plausibly still reach it.
         if (ledgeHeight < vaultMinHeight || ledgeHeight > vaultMaxHeight)
             return false;
 
-        velocity.y = Mathf.Max(velocity.y, vaultImpulse);
-        grounded = false;
+        velocity += dir * (vaultImpulse * 0.7f) + Vector3.up * vaultImpulse;
         vaultCooldownUntil = Time.time + vaultCooldown;
 
-        VaultEffects(low.point);
+        VaultEffects(landing.point);
         return true;
     }
 
     /// <summary>
-    /// Hold toward a wall while airborne and above a speed threshold, and stick to it.
+    /// Hold the slide/crouch key near a wall while airborne, and stick to it for as long as it's
+    /// held.
     ///
-    /// Returns whether it owned this frame's velocity, so Update() knows whether to fall back to
-    /// AirMove. While active, gravity is scaled down rather than removed - full weightlessness
-    /// reads as flying, and the wall stops being a wall - and velocity is clipped to the wall's
-    /// own tangent plane the same way a wall collision already is elsewhere, just every frame
-    /// instead of only on contact, so steering along it doesn't slowly drift back into the wall
-    /// or away from it. Ends on a timer, dropping below speed, losing the wall, or jumping - the
-    /// jump is the payoff and pushes away from the wall as well as up.
+    /// Redesigned 2026-08-22, reported as "really weird" - the original auto-latched onto any
+    /// wall you were moving toward fast enough, with no button, which made it unpredictable to
+    /// start and impossible to end on purpose. Direct request was explicit: press the key near a
+    /// wall to start, hold it to stay on, let go and you fall immediately. That's what this is -
+    /// no speed threshold, no "moving toward it" check, just proximity plus the key. Returns
+    /// whether it owned this frame's velocity, so Update() knows whether to fall back to AirMove.
+    ///
+    /// While active, gravity is scaled down rather than removed - full weightlessness reads as
+    /// flying, and the wall stops being a wall - and velocity is clipped to the wall's own
+    /// tangent plane the same way a wall collision already is elsewhere, just every frame instead
+    /// of only on contact, so steering along it doesn't slowly drift back into the wall or away
+    /// from it. A jump is the one other way out, and the only one with a payoff - it pushes away
+    /// from the wall as well as up, rather than just dropping you.
     /// </summary>
-    bool UpdateWallRun(bool wantsJump, float dt)
+    bool UpdateWallRun(bool listening, bool wantsJump, float dt)
     {
+        bool holding = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
+
         if (wallRunning)
         {
+            if (!holding)
+            {
+                EndWallRun(false);
+                return false;
+            }
+
             if (wantsJump)
             {
                 EndWallRun(true);
@@ -906,7 +923,7 @@ public class PlayerMovement : MonoBehaviour
                                              wallRunCheckDistance + 0.15f, Hitbox.WorldMask,
                                              QueryTriggerInteraction.Ignore);
 
-            if (!stillWall || HorizontalSpeed < wallRunMinSpeed * 0.7f || Time.time >= wallRunEndsAt)
+            if (!stillWall || Time.time >= wallRunEndsAt)
             {
                 EndWallRun(false);
                 return false;
@@ -920,23 +937,19 @@ public class PlayerMovement : MonoBehaviour
             return true;
         }
 
-        if (Time.time < wallRunBlockedUntil || HorizontalSpeed < wallRunMinSpeed)
+        if (!holding || Time.time < wallRunBlockedUntil)
             return false;
 
         Vector3 right = transform.right;
         RaycastHit hit;
 
-        bool hitRight = Physics.Raycast(transform.position, right, out RaycastHit rHit,
-                                        wallRunCheckDistance, Hitbox.WorldMask,
-                                        QueryTriggerInteraction.Ignore);
-
-        if (hitRight && Vector3.Dot(velocity, right) > 0.3f)
+        if (Physics.Raycast(transform.position, right, out RaycastHit rHit,
+                            wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
         {
             hit = rHit;
         }
         else if (Physics.Raycast(transform.position, -right, out RaycastHit lHit,
-                                 wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
-                && Vector3.Dot(velocity, -right) > 0.3f)
+                                 wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
         {
             hit = lHit;
         }
@@ -954,7 +967,6 @@ public class PlayerMovement : MonoBehaviour
         wallNormal = hit.normal;
         wallRunEndsAt = Time.time + wallRunMaxSeconds;
         wallRunDustTimer = 0f;
-        grounded = false;
 
         WallRunStartEffects();
         return true;
@@ -976,22 +988,25 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// One key, two moves - told apart by which way the player is already going rather than by
-    /// timing a tap against a hold. Pressing it while rising or at the apex (`velocity.y >= 0`)
-    /// brakes; pressing it while already falling slams. Either way is instant: waiting to see
-    /// whether a press turns into a hold would have cost the faster of the two its whole point.
+    /// Air brake and ground slam, on separate keys as of 2026-08-22.
+    ///
+    /// They used to share Walk, told apart by vertical velocity - falling meant slam, rising
+    /// meant brake - which broke the moment it met the slide buffer, which *also* reads Walk
+    /// while airborne to remember a slide for landing. Landing is always falling, so trying to
+    /// buffer a slide kept firing a slam instead, every time. Ground pound now has its own key
+    /// (`KeyBinds.Action.GroundPound`) and doesn't touch Walk at all. The air brake stays on Walk
+    /// but keeps its rising-only condition - it never conflicted with the slide buffer in the
+    /// first place, since you can't be about to land while still going up.
     /// </summary>
     void UpdateAirAction(bool listening)
     {
         if (listening || grounded || wallRunning || Grappling)
             return;
 
-        if (!KeyBinds.Pressed(KeyBinds.Action.Walk))
-            return;
-
-        if (velocity.y < -0.5f)
+        if (KeyBinds.Pressed(KeyBinds.Action.GroundPound))
             GroundSlam();
-        else
+
+        if (KeyBinds.Pressed(KeyBinds.Action.Walk) && velocity.y >= 0f)
             AirBrake();
     }
 
@@ -1133,7 +1148,12 @@ public class PlayerMovement : MonoBehaviour
         Juice.Shake(0.3f);
         MovementBurst(transform.position, -backward, Color.white, "star", 6, 40f, 1.5f, 3f,
                      0.03f, 0.06f, 0.16f, 0.3f);
-        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 1.3f, GameAudio.Slide, 1.6f);
+
+        // Footstep, not Slide - reported as sounding the same as an actual slide, which this
+        // shouldn't, being the opposite of one (a hard stop rather than a sustained scrape).
+        // Pitched sharply up and treated as a single hit rather than the looping scrape SpeedRush
+        // owns, so it reads as a skid rather than a slide.
+        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 1.6f, GameAudio.Footstep, 1.8f);
     }
 
     void GroundSlamStartEffects()
@@ -1144,7 +1164,15 @@ public class PlayerMovement : MonoBehaviour
     void SlamLandingEffects()
     {
         Juice.Hit(0.55f);
-        MovementBurst(transform.position, Vector3.up, DustTint, "circle", 10, 60f, 2f, 5f,
+
+        // Feet, not the capsule's own pivot - CharacterController.bounds already accounts for
+        // center/height correctly, which transform.position alone does not. A burst at the
+        // capsule's centre lands roughly at chest height instead of on the ground, which is
+        // likely why this was reported as having no particle effect at all - it was there, just
+        // floating at head height instead of reading as a landing impact.
+        Vector3 feet = new Vector3(transform.position.x, controller.bounds.min.y, transform.position.z);
+
+        MovementBurst(feet, Vector3.up, DustTint, "circle", 10, 60f, 2f, 5f,
                      0.05f, 0.12f, 0.25f, 0.8f);
         GameAudio.PlayShaped(GameAudio.Slam, 0.7f, 0.8f, GameAudio.Explosion, 0.55f);
     }

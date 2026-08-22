@@ -318,8 +318,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 // One toon outline for the whole view - players, projectiles, weapons, world
                 // geometry - rather than a per-object shader wired into each of their build
                 // paths. See ScreenOutline.cs for why: the per-object version (Custom/ToonOutline,
-                // still in the project but no longer applied anywhere) reads clean on a simple
-                // convex prop like the pineapple and tears on the gorilla's own complex,
+                // removed from the project 2026-08-22 in a dead-code pass - never applied
+                // anywhere by the time it went) read clean on a simple convex prop like the
+                // pineapple and tore on the gorilla's own complex,
                 // overlapping low-poly geometry, because it depends on per-vertex mesh topology.
                 // This reads the camera's own depth and normal buffers instead, so it can't tear
                 // the same way - verified against the gorilla specifically with

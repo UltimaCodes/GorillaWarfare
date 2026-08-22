@@ -550,3 +550,64 @@ more speed. The air brake only ever removes speed. Wall run preserves whatever h
 was already there rather than adding to it - no `Accelerate()` call runs during one. The existing
 `maxHorizontalSpeed` safety ceiling still applies underneath all four regardless, the same as it
 already did for slide chains and bhop.
+
+# Seventh pass — the movement tech's first playtest, 2026-08-22
+
+Everything below was reported after actually trying the four mechanics from the sixth pass -
+they compiled clean and passed every automated check, but a person pressing the keys found real
+problems none of that could see, which is exactly the gap `roadmap.md`'s Unverified section
+already existed to flag.
+
+## Ground pound was firing every time a slide was buffered
+
+Reported as "sliding is kinda hard to do when landing because it just ground pounds you." Root
+cause: ground pound and the slide buffer both read `KeyBinds.Action.Walk`, and ground pound's own
+trigger condition was "falling" - which is also true of every single landing, buffered slide or
+not. Pressing Walk in the air to queue a slide for touchdown satisfied the slam's condition just
+as well, and fired it instead, every time. Gave ground pound its own binding
+(`KeyBinds.Action.GroundPound`, `LeftControl` by default) rather than retuning the shared-key
+logic further - the air brake's half of that same design (rising velocity triggers it) never had
+this problem, since you can't be about to land while still going up, so it stayed on Walk.
+
+## No particle effect on ground pound
+
+Reported separately, same session. `SlamLandingEffects()` spawned its burst at `transform.position`,
+which is the `CharacterController`'s own pivot - roughly chest height, not the ground. The effect
+was firing; it was floating at head height instead of reading as a landing impact. Now built from
+`controller.bounds.min.y`, which accounts for the capsule's actual center/height rather than
+assuming the transform's origin sits at the feet.
+
+## Wall running was "really weird"
+
+The original latched on automatically - airborne, fast enough, moving toward a wall - with no
+button, which made it unpredictable to start on purpose and impossible to end on purpose short of
+losing the wall or timing out. Direct request was explicit: hold Walk near a wall to stick to it,
+let go and you fall immediately. Rebuilt as exactly that - proximity plus holding the key, no
+speed threshold, no "moving toward it" requirement. Release is now the primary way out; a jump is
+still the secondary one, and the only one with a push behind it.
+
+## Vaulting "doesn't work right now"
+
+The original only checked while `grounded`, at speed, with nothing pressed - but the one thing an
+actual player does at a ledge worth vaulting is jump at it, and the moment they did, `grounded`
+went false and the check never ran again for that approach. It wasn't unreliable, it was checking
+a condition a real attempt at using it would never be in. Retriggered on a second jump press while
+already airborne instead - direct request ("make vaulting possible by doubling jumping") - which
+also means it costs nothing when there's no ledge: press it in open air and nothing happens,
+no free extra jump granted.
+
+## The air brake's fallback sound was reported as identical to sliding's
+
+Both used to reach for the same `Slide` bank - an actual slide reads it directly
+through `SpeedRush`'s scrape loop, and the air brake's fallback pitched the same bank up as a
+one-shot. Close enough in practice that the report was "the sound effect for sliding shouldn't be
+the same as [the air brake's]." Air brake's fallback now pitches `Footstep` instead - a shape nothing
+else in the game already draws its own sound from - sharply up and short, closer to a skid than a
+slide.
+
+## Dead code: `ToonOutline.cs` / `ToonOutline.shader`
+
+Removed outright rather than kept as reference. Confirmed unused first - no `AddComponent<ToonOutline>`
+or `ToonOutline.ApplyTo` call anywhere in the project - not just "looked unused." See
+`Assets/Shaders/README.txt` for the full account of why it was built and replaced; the technique
+itself is standard enough to rebuild from scratch if a future simple-convex-prop case wants it.
