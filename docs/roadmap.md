@@ -309,6 +309,16 @@ Summary:
 - [ ] Spawn system that doesn't drop people on each other
 - [ ] **The Silo** as the second map — small, vertical, maximally different from the compound
 
+**The current jungle map got a density and verticality pass 2026-08-22** - not a replacement for
+the above, which is still the real plan. `Tools/Gorilla Warfare/Expand the jungle map`
+(`Assets/Editor/MapExpansion.cs`) adds climbable cliff clusters (staggered cliff_block_rock
+tiers, real height now checked in the scene file after a bug where every tier landed at ground
+level instead of stacking) built to reward the new movement tech, plus a denser scatter of the
+existing prop kit across the open ground. Re-runnable and idempotent, same convention as
+`MapDressing`: everything it places lives under one `~MapExpansion` group, replaced whole on
+every run rather than accumulating. Explicitly a first pass on the numbers (tier count, scale,
+how many clusters) - not played yet, see Unverified.
+
 ---
 
 ## Tried and dropped
@@ -416,6 +426,10 @@ Things the checks can't reach, so they need a person:
 - **team deathmatch specifically.** Landed after the 3-4 client playtest on 2026-08-16 covered
   the rest of M3, so it's shared the same client-authoritative, unreviewed-by-a-server plumbing
   as everything else but hasn't had its own dedicated session.
+- **the cliff clusters added to the jungle map.** Numerically confirmed to stack at the right
+  heights (checked directly in the scene file after a real bug in that same math), but the
+  numbers themselves - tier count, scale, how tall a formation ends up, how far apart they sit -
+  are a first pass same as everything else on this list.
 - **wall run, vault, ground slam and air brake, entirely.** Built and verified not to throw, but
   every number in them (speed thresholds, ledge heights, the wall-run timer, the impulses) is a
   first guess reasoned from the existing constants, the same way every other feel number in this
