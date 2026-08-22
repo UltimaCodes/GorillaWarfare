@@ -69,6 +69,26 @@ public class GameHud : MonoBehaviour
     int lastSlideRank;
     float slidePunchUntil = -99f;
 
+    // Same trick, two more places. UpdateSlideCombo was the only thing on the HUD that punched
+    // on a change instead of just snapping to a new value - added 2026-08-22 to the two other
+    // numbers that change constantly enough to want it: health dropping and ammo counting down.
+    int lastHealthPoints = -1;
+    float healthPunchUntil = -99f;
+    int lastAmmoCount = -1;
+    float ammoPunchUntil = -99f;
+
+    /// <summary>
+    /// The shared shape behind every punch on this HUD: fast in, decaying out, on top of a base
+    /// scale of 1 - a snap rather than a fade, per this HUD's own "no fades" rule. One curve
+    /// rather than three copies of the same maths, so retuning how a punch feels means changing
+    /// it in one place.
+    /// </summary>
+    static float PunchScale(float punchUntil, float duration = 0.22f)
+    {
+        float t = Mathf.Clamp01((punchUntil - Time.unscaledTime) / duration);
+        return 1f + t * t * 0.5f;
+    }
+
     // The health and ammo groups drift outward at speed. Resolved from healthNumber/ammoNumber's
     // own parent rather than adding two more fields to wire up in the scene - HudBuilder already
     // parents each under its own panel, so the panel is sitting right there to be found.
@@ -534,11 +554,21 @@ public class GameHud : MonoBehaviour
         if (healFlash > 0f)
             colour = Color.Lerp(colour, healed, healFlash);
 
+        // Punches on any change, not only a drop - healing back up is worth a beat too, and
+        // healFlash already owns the colour side of that so this only ever adds the motion.
+        if (lastHealthPoints >= 0 && points != lastHealthPoints)
+            healthPunchUntil = Time.unscaledTime + 0.22f;
+
+        lastHealthPoints = points;
+
         if (healthNumber != null)
         {
             healthNumber.text = points.ToString();
             healthNumber.color = colour;
         }
+
+        if (healthGroup != null)
+            healthGroup.localScale = Vector3.one * PunchScale(healthPunchUntil);
 
         // The track is a hundred and forty, full stop.
         //
@@ -602,6 +632,20 @@ public class GameHud : MonoBehaviour
         // there's nothing else it could be counting.
         spareNumber.text = gun.SpareMagazines.ToString();
         spareNumber.color = gun.SpareMagazines > 0 ? dim : critical;
+
+        // Punches on every round fired and on the magazine coming back full after a reload -
+        // not while "--" is showing mid-reload, which isn't a number changing so much as it is
+        // one being hidden.
+        if (!gun.Reloading)
+        {
+            if (lastAmmoCount >= 0 && gun.Ammo != lastAmmoCount)
+                ammoPunchUntil = Time.unscaledTime + 0.22f;
+
+            lastAmmoCount = gun.Ammo;
+        }
+
+        if (ammoGroup != null)
+            ammoGroup.localScale = Vector3.one * PunchScale(ammoPunchUntil);
     }
 
     void UpdateCrosshair()
@@ -1057,6 +1101,14 @@ public class GameHud : MonoBehaviour
 
             float fade = Mathf.Clamp01((feedSeconds - age) / 1.5f);
 
+            // Punches in on arrival rather than just appearing. Driven off the entry's own age
+            // rather than separate per-row state, since age already measures exactly the thing a
+            // punch needs to know - how long ago this specific line showed up - and every row
+            // gets reused from the same pool as older entries scroll off, so an index-keyed punch
+            // timer would have to be re-armed by hand every time a row changed which entry it was
+            // showing anyway.
+            row.rectTransform.localScale = Vector3.one * PunchScale(entry.at + 0.22f);
+
             switch (entry.kind)
             {
                 case MatchState.FeedKind.Join:
@@ -1096,6 +1148,11 @@ public class GameHud : MonoBehaviour
     /// Unscaled, so it keeps beating through a kill's hitstop - a heartbeat that stops when the
     /// world does is a strange thing to watch.
     /// </summary>
+    // Which half-beat the heartbeat sound last fired on. Not reset when adrenaline drops out -
+    // Time.unscaledTime keeps climbing regardless, so the next time it's needed the index has
+    // simply moved on and the comparison below still fires cleanly on the next boundary.
+    int lastHeartbeatIndex = -1;
+
     void UpdateAdrenaline()
     {
         if (adrenalineEdge == null)
@@ -1110,13 +1167,27 @@ public class GameHud : MonoBehaviour
 
         // Faster the closer to death, from about one beat a second to nearly three.
         float rate = 3f + amount * 5f;
-        float beat = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * rate));
+        float phase = Time.unscaledTime * rate;
+        float beat = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(phase));
 
         adrenalineEdge.color = new Color(0.75f, 0.03f, 0.06f, amount * beat * 0.72f);
 
         // Swelling slightly with the beat, so the edge breathes inward rather than only
         // brightening. Subtle, because a pumping screen is nauseating at any real size.
         adrenalineEdge.rectTransform.localScale = Vector3.one * (1f + (1f - beat) * 0.04f);
+
+        // The audio half, added 2026-08-22 - the edge was already beating, nothing was making a
+        // sound on the beat. abs(sin) completes a half-cycle (one visual pulse) every pi/rate
+        // seconds, so floor(phase / pi) is a clean integer that ticks over exactly once per pulse
+        // regardless of frame rate, rather than re-deriving "was that a peak" from noisy per-frame
+        // comparisons.
+        int beatIndex = Mathf.FloorToInt(phase / Mathf.PI);
+
+        if (beatIndex != lastHeartbeatIndex)
+        {
+            lastHeartbeatIndex = beatIndex;
+            GameAudio.PlayHeartbeat(amount);
+        }
     }
 
     /// <summary>

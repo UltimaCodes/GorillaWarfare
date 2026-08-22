@@ -412,3 +412,89 @@ this pass found it hits too. The rest of the probe's checks (the numeric ones) d
 Deliberately not re-guessed a third time from reasoning about the rig alone - this is the same
 system the peel's melee hold was wrong about twice doing exactly that, see the pass above. Needs
 either a better camera angle or a person watching it in real play.
+
+# Fifth pass — the freeze frame, a real momentum bug, and the slide chain, 2026-08-22
+
+## The freeze frame "doesn't work"
+
+Reported outright as broken, not just weak. Checked for a competing writer first rather than
+assume it was a numbers problem again - grepped every script for `Time.timeScale` and `Juice` is
+the only thing that ever touches it, so nothing was fighting it. The actual number: 110ms at 6%
+speed on a kill, which is under a tenth of a second of real time - closer to a flicker than
+anything ULTRAKILL's own doc comment in this file already promises. Raised the hold to 260ms and
+the stop itself slightly harder (6% to 4.5%). Body shots and headshots scale off the same
+`strength` as before, so a stray pellet still barely stutters - only the top end changed.
+
+## Camera didn't drop into a slide
+
+Reported as a regression - "used to happen, doesn't now." Searched every script for anything that
+ever wrote to `cameraHolder`'s local *position* (not rotation) and found nothing at all - the
+capsule genuinely shrinks in `PlayerMovement.UpdateStance`, but nothing was reading that and
+moving the eye down with it. Whatever produced the old behaviour is gone without a trace now, not
+worth chasing further back than confirming it doesn't exist today. Added `PlayerMovement.
+StanceFraction` (the capsule's own eased height ratio, so the camera can't drift out of sync with
+the collider it's supposed to track) and a `crouchCameraDrop` field in `PlayerController.Look()`
+that reads it.
+
+## Wall collisions never cost any speed
+
+Reported as: hit a wall at speed, and as long as forward is still held, turning slightly left or
+right keeps all of it - "momentum doesn't immediately die out." Root cause: nothing in
+`PlayerMovement` ever clipped `velocity` against a collision at all. `controller.Move()` stops
+your *position* at a wall, but the `velocity` field driving it next frame was never told - so it
+kept its full pre-collision magnitude forever, and the CharacterController's own wall-sliding
+made it *look* like physics was handling it when nothing was correcting the number underneath.
+Added `OnControllerColliderHit`, doing the classic Quake `ClipVelocity`: remove the component of
+velocity pointing into whatever was hit, but only for near-vertical surfaces (a wall, not a floor
+or ceiling - the floor's own handling in `GroundMove` already owns vertical speed and clipping it
+here too would fight that). A graze along a wall keeps its tangential speed, which is correct
+wall-sliding; a square hit has almost all its velocity pointing into the normal and comes out
+near zero, which is the actual fix.
+
+## The slide chain compounded into "quickly, way too much speed"
+
+Reported as capable of reaching absurd speed fast, "not ideal." The chain's own safety ceiling
+(`maxHorizontalSpeed`, 45 m/s) already existed and was doing its job - the actual problem was how
+fast a chain reached it. The slide kick (`flat *= kick`) multiplied whatever velocity a player
+already had, not a stable baseline - so chain 2's kick landed on chain 1's *already-boosted*
+result, chain 3's landed on that, and three or four chained slide-hops reached the ceiling within
+a couple of seconds. Changed the kick to multiply `maxGroundSpeed` (a fixed reference) and add
+that as a flat bonus on top of current speed instead of re-multiplying it - reproduces the exact
+same chain-1 number (current speed happens to equal the baseline there, entering from a normal
+run), while every extra link now adds a bounded amount instead of compounding on a stack.
+
+## The bullet-impact mesh-collider report, investigated and not confirmed
+
+Reported as: impacts show up on box colliders but not mesh colliders (the palm trees, rocks and
+logs `MapDressing` places). Built a throwaway diagnostic (`Tools > Gorilla Warfare`, removed once
+done) that opened the real `Game.unity`, entered play mode, and ran `BulletDecal.Spawn`'s exact
+re-raycast against every mesh and box collider actually in the scene - all 67 mesh colliders and
+all 120 box colliders re-raycast clean, and a decal spawned on a scaled, rotated tree came out an
+undistorted, correctly sized quad (its `lossyScale` was uniform despite the tree's own 6×8×6
+non-uniform scale, which rules out a shear from `SetParent(..., true)`). A real screenshot of both
+cases showed the same faint-but-present mark on both - the decal has always been a subtle multiply
+blend by design (see `BulletDecal`'s own class doc), on both surfaces equally.
+
+No differential bug was ever found between the two collider types. Raised `BulletDecal`'s
+`LiftOff` and the impact puff's own offsets as a hedge against the one plausible mechanism that
+couldn't be ruled out either way - a coarse, low-poly mesh's per-triangle normal has more room to
+be a few degrees off the true local surface than a flat wall's, which at the old tiny offset could
+occasionally place an effect just inside the mesh instead of just outside it. If impacts on mesh
+props still read as missing after this, it needs a person shooting one and saying so - this was
+checked as hard as it can be checked without that.
+
+## `SpeedRush` threw on every single spawn
+
+Found while verifying the above, unrelated to any of it. `readonly float wobbleSeed =
+Random.Range(0f, 100f);` is a field initializer, and Unity doesn't allow `Random.Range` to be
+called from one - `PlayModeProbe`'s log had it twice, once per player build in that run, silently
+eaten rather than failing anything. Moved into `Awake()`.
+
+## New this pass: hit-flash, a heartbeat, and HUD punches
+
+Not bugs - added while addressing feedback that specifically asked for these, so recorded here
+rather than scattered across commit messages. See `roadmap.md`'s M5/M7 sections for what shipped:
+a white flash across a gorilla's body on taking a hit (broadcast to everyone watching, not just
+the victim - see the note in `BulletDecal.cs`), an audio heartbeat under the existing critical-
+health screen edge (which was visual-only until now), and the slide combo's punch-on-change
+treatment extended to the health number, ammo count and kill feed lines.

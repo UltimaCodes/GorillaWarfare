@@ -27,7 +27,22 @@ public class BulletDecal : MonoBehaviour
     const float SearchDistance = 0.35f;
 
     // Lifted off the surface, or it z-fights with it.
-    const float LiftOff = 0.008f;
+    //
+    // Raised from 0.008 on 2026-08-22, investigated after a report that impacts "don't work" on
+    // mesh colliders specifically. Built a diagnostic (Tools > Gorilla Warfare, since removed)
+    // that re-raycast every mesh and box collider actually in Game.unity the way Spawn() does
+    // below - all 67 mesh colliders and all 120 box colliders re-raycast clean, and a decal spawned
+    // on a scaled, rotated tree came out an undistorted, correctly sized quad, not the sheared or
+    // degenerate shape a non-uniform parent scale would produce. No difference between the two
+    // collider types was ever found. What is true: the decal itself has always been a faint
+    // multiply blend by design (see the class doc above), and a low-poly decoration mesh has much
+    // coarser per-triangle normals than a flat wall - a raycast hitting near a facet seam on a
+    // rock or trunk can report a normal that's a few degrees off the true local surface, which at
+    // this offset was close enough to risk sitting just inside the mesh instead of just outside
+    // it. Raised as a hedge against that specific failure mode rather than left at a value tuned
+    // only ever tested against flat, unscaled geometry - if impacts on mesh props still read as
+    // missing after this, it needs a person shooting one and saying so, not another guess.
+    const float LiftOff = 0.02f;
 
     const float WorldLifetime = 18f;
     const float BloodLifetime = 7f;
@@ -66,6 +81,18 @@ public class BulletDecal : MonoBehaviour
         }
 
         bool bloody = hit.collider.GetComponentInParent<IDamageable>() != null;
+
+        // Added 2026-08-22. Runs here rather than off the damage RPC because that RPC only ever
+        // reaches the victim (see PlayerController.TakeDamage) - this, like the rest of
+        // PlayFireEffects, is broadcast to every client, which is what a shooter's own hit
+        // confirmation actually needs: to be seen by whoever's looking at the target, not just
+        // felt by the target themselves.
+        if (bloody)
+        {
+            MonkeyRig rig = hit.collider.GetComponentInParent<MonkeyRig>();
+            if (rig != null)
+                rig.Flash();
+        }
 
         Puff(hit.point, hit.normal, bloody);
 
@@ -167,7 +194,9 @@ public class BulletDecal : MonoBehaviour
 
         // A quick bright core right at the surface, gone almost instantly - the same "arrives at
         // full size and collapses" trick the explosion's own core uses, just a fraction of it.
-        FlashSprite.Spawn(core, point + normal * 0.02f, 0.10f, 0.22f, 0.07f, tint);
+        // Offset raised alongside BulletDecal's own LiftOff, same reasoning - a coarse mesh's
+        // per-triangle normal has more room to be slightly wrong than a flat wall's.
+        FlashSprite.Spawn(core, point + normal * 0.05f, 0.10f, 0.22f, 0.07f, tint);
 
         // A handful of sparks kicked off the surface, biased along the normal so they read as
         // debris leaving the impact rather than a ring painted on it.
@@ -176,7 +205,7 @@ public class BulletDecal : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             Vector3 away = (normal * 0.6f + Random.insideUnitSphere * 0.5f).normalized;
-            FlashSprite.Spawn(spark, point + away * 0.05f, 0.05f, 0.01f,
+            FlashSprite.Spawn(spark, point + away * 0.08f, 0.05f, 0.01f,
                               Random.Range(0.12f, 0.2f), tint);
         }
     }

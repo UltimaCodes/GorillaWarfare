@@ -267,6 +267,18 @@ The big aesthetic one. See the philosophy section above.
 Kills, joins and leaves share one list rather than having one each. They compete for the same
 few lines of screen and the only thing deciding what you see is what happened most recently;
 two feeds would either overlap or need a third thing to arbitrate.
+- [x] **Hit-flash** — a white flash across a gorilla's body the instant a hit lands, broadcast to
+      whoever's watching rather than only felt by the victim (the damage RPC itself only ever
+      reaches them). Added 2026-08-22, in `MonkeyRig.Flash()`, triggered from `BulletDecal.Spawn`
+      since that already runs on every client and already works out locally whether a body was hit.
+- [x] **A heartbeat** — the critical-health screen edge (`GameHud.UpdateAdrenaline`) was visual
+      only; added the audio half the same day, ticking on the exact beat the edge already pulses on.
+- [x] **HUD punch** — the slide combo's punch-on-change scale (`GameHud.UpdateSlideCombo`) was the
+      only thing on the HUD that reacted to a change instead of snapping to it. Extended to the
+      health number, the ammo count and each kill feed line as it arrives, 2026-08-22.
+- [x] **Directional damage indicator** — already built and wired (`GameHud.ShowDamageFrom`,
+      called from `PlayerController.RPC_TakeDamage`) when this was reviewed 2026-08-22; not new,
+      just confirmed rather than rebuilt from a guess that it was missing.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
@@ -324,7 +336,10 @@ Summary:
 - [ ] Replace the remaining placeholder textures (the menu still uses them)
 - [ ] Environment art matching the philosophy
 - [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
-- [x] Screenshake and hitstop — `Juice`, on the camera, all unscaled time
+- [x] Screenshake and hitstop — `Juice`, on the camera, all unscaled time. Both retuned
+      2026-08-22: shake gained a rotational component (position alone read as nothing), and the
+      freeze itself was reported as "doesn't work" — 110ms at 6% speed on a kill was closer to a
+      flicker than the ULTRAKILL-style stop this was meant to be. Now 260ms at 4.5%.
 - [x] **Two handed weapon poses.** Both hands solve to their own target, the left further along
       the weapon than the right. `twoHanded` on the GunInfo decides: the Cavendish and the Slip
       Hazard are one handed and put the off hand on the hip, everything longer braces with both.
@@ -354,6 +369,17 @@ Separate from M0 because it needs a person playing it, not a fix.
       down. That's inverted from the old build and you haven't tried it yet, so it may just feel
       wrong.
 - [x] Auto-bhop off. Holding space to keep speed for free was most of the skill gone.
+- [x] **Wall collisions now cost speed.** Nothing ever clipped `velocity` against a hit before
+      2026-08-22 - `controller.Move()` stopped your position at a wall but never told the stored
+      velocity, so it kept its full magnitude and a slight turn let you carry on at full speed.
+      `PlayerMovement.OnControllerColliderHit` clips it properly now, wall normals only.
+- [x] **Slide chain no longer compounds.** The kick used to multiply whatever velocity a player
+      already had, so each chained slide-hop compounded on the last one's compounding and reached
+      the safety ceiling within a couple of seconds. Now multiplies a fixed baseline instead, see
+      `bug-log.md`'s fifth pass.
+- [x] **The camera drops into a slide again.** Regression, cause not found further back than
+      confirming nothing currently moves the camera for this - `PlayerMovement.StanceFraction`
+      plus a `crouchCameraDrop` field in `PlayerController.Look()` fixed it going forward.
 
 ## Unverified
 

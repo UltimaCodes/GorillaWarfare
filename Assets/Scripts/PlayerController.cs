@@ -9,6 +9,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 {
     [SerializeField] float mouseSensitivity = 3f;
     [SerializeField] GameObject cameraHolder;
+
+    [Tooltip("Metres the camera drops at full crouch/slide, eased with PlayerMovement's own "
+             + "capsule height. Added 2026-08-22 - reported as a regression ('used to happen'), "
+             + "but nothing anywhere ever actually moved the camera for this: the capsule shrinks "
+             + "in PlayerMovement.UpdateStance, and that was the whole effect. The eye staying "
+             + "level while the hitbox drops under it is exactly what 'the camera doesn't go down "
+             + "while sliding' describes.")]
+    [SerializeField] float crouchCameraDrop = 0.35f;
+    Vector3 cameraHolderBasePos;
     // Populated at runtime by WeaponLoadout. Left serialized so the prefab's old entries are
     // visible, but they're replaced on spawn.
     [SerializeField] Item[] items;
@@ -234,6 +243,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (itemHolder == null)
             Debug.LogError("No ItemHolder on the player - there is nowhere to put a weapon.", this);
+
+        if (cameraHolder != null)
+            cameraHolderBasePos = cameraHolder.transform.localPosition;
     }
 
     void Start()
@@ -889,6 +901,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // recovering doesn't undo where you actually pointed the mouse.
         transform.localEulerAngles = new Vector3(0f, horizontalLookRotation + recoilOffset.y, 0f);
         cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation - recoilOffset.x, 0f, 0f);
+
+        // Drops the eye with the capsule. StanceFraction is already eased in PlayerMovement, so
+        // this just follows it rather than running a second easing curve that could drift out of
+        // sync with the collider it is supposed to be tracking.
+        float stance = movement != null ? movement.StanceFraction : 1f;
+        Vector3 pos = cameraHolderBasePos;
+        pos.y -= (1f - stance) * crouchCameraDrop;
+        cameraHolder.transform.localPosition = pos;
     }
 
     // Aiming down the banana.

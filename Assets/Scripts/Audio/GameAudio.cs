@@ -73,6 +73,21 @@ public static class GameAudio
     /// Eating one banana and pulling out another. Used to borrow a random UI click.
     public const string Reload = "Reload";
 
+    /// <summary>
+    /// Under everything else once you're nearly dead. Added 2026-08-22 alongside the HUD punch
+    /// pass - the edge already went red and beat in time with this in `GameHud.UpdateAdrenaline`,
+    /// but nothing made a sound, so the one moment in the game most shooters reach for audio
+    /// first had none at all.
+    ///
+    /// Its own bank for the same reason Shield and Slide have theirs - a heartbeat is a
+    /// completely different shape of sound to Hurt's cry and deserves a low, physical thump.
+    /// Drop a beat into Resources/Audio/Heartbeat and it plays at the rate the screen edge
+    /// already pulses at. Empty, it falls back to Hurt pitched down almost an octave and a half,
+    /// which reads as a dull thud rather than a cry - closer to the right shape than nothing.
+    /// </summary>
+    public const string Heartbeat = "Heartbeat";
+    public const float HeartbeatVolume = 0.55f;
+
     // One place for how loud everything is, rather than a number at each call site.
     //
     // The ordering is what matters more than the values: hit and kill confirmation sit above
@@ -277,6 +292,27 @@ public static class GameAudio
         // is what a big version of it sounds like, and it costs nothing.
         src.pitch = pitch;
         src.PlayDelayed(delay);
+    }
+
+    public static void PlayHeartbeat(float strength)
+    {
+        AudioClip clip = Pick(Heartbeat);
+        float pitch = 1f;
+
+        if (clip == null)
+        {
+            clip = Pick(Hurt);
+            pitch = 0.55f;
+        }
+
+        if (clip == null)
+            return;
+
+        AudioSource src = NextSource();
+        src.spatialBlend = 0f;
+        src.volume = HeartbeatVolume * Mathf.Clamp01(strength) * GameSettings.SfxVolume;
+        src.pitch = pitch;
+        src.PlayOneShot(clip);
     }
 
     public static void Play2D(string bank, float volume = 1f, float pitchJitter = 0f)

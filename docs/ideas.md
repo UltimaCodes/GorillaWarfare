@@ -202,6 +202,62 @@ a slide into an attack and gives the last gun game rung something to build towar
 being the weapon you dread getting. **Built 2026-08-21** as `PlayerMovement.MomentumDamage` — a
 shared formula rather than a peel-only one, since the vine above reuses the exact same curve.
 
+### Ready to build: wall run, vault, ground slam, air brake
+
+Worked out 2026-08-22 so the next session on this can go straight to code instead of re-deriving
+the mechanics from the one-line descriptions above. Nothing here is built yet — this is the plan,
+not the feature. Every check below is a raycast or spherecast against `Hitbox.WorldMask`, never
+`Collider.bounds` reasoning, per the mesh-collider note earlier in this section.
+
+**Air brake and ground slam share one input, disambiguated by trajectory, not timing.** Both are
+"press the slide/walk key while airborne," and a tap-vs-hold read would add real latency to
+whichever one needs the fast response most. Instead: pressing it while *rising or at the apex*
+(`velocity.y >= 0`) is the air brake — kill horizontal velocity outright. Pressing it while
+*already falling* (`velocity.y < 0`) is the ground slam — force a hard, fast descent instead,
+keeping the horizontal component (only `velocity.y` is touched). No added state, no delay, and it
+matches the intuition of the same button meaning "stop" going up and "slam" coming down.
+
+- Air brake: zero (or nearly zero) `velocity.x`/`velocity.z` on the frame it fires. Wants a burst
+  of particles kicked backward along the pre-brake direction (`FlashSprite`, the existing
+  `Particles/Boom` sprites) and a short, sharp stop sound — reuse `Slide`'s scrape pitched up and
+  shortened rather than sourcing new audio, the same fallback pattern `GameAudio` already uses
+  everywhere else.
+- Ground slam: set `velocity.y` to a strong fixed downward speed the moment it fires. On landing
+  (the existing `grounded && wasAirborne` check in `Update()` already marks this moment), fire a
+  landing impact scaled to how hard the slam was — a `Juice.Hit`-shaped hitstop/shake (smaller
+  than a kill, bigger than a footstep), an expanding ring of impact particles at the feet, and a
+  heavy thud. `GameAudio` doesn't have anything this weighty yet; `Explosion` pitched down is the
+  nearest existing fallback until something purpose-built exists.
+
+**Vault** is a clearance check, then one upward impulse — not a scripted position tween. Three
+raycasts forward from the player, all at the speed/direction they're actually moving (not where
+they're aiming): one at knee height to find a ledge, one at chest height that must find *nothing*
+(too tall to vault if it does), and one straight down from just above the ledge to find where it
+lands and how tall it actually is. Only fires above a minimum forward speed and while grounded, with
+a short cooldown so it can't refire the instant it clears the obstacle. The "effect" here is almost
+entirely felt through motion — a quick upward `velocity.y` impulse, physics carries the rest — plus
+a short effort sound (`Footstep` pitched down and lengthened is the nearest fallback) and a small
+hand-slap dust puff at the ledge point.
+
+**Wall run** is the one genuine state machine of the four. While airborne, above a speed
+threshold, and moving *toward* a wall detected by a sideways raycast (checked both left and
+right, using `transform.right`/`-transform.right`, not the camera): latch on, drop gravity to a
+small fraction of normal rather than to zero, add a small constant upward `velocity.y`, and
+constrain velocity to the wall's tangent plane the same way `OnControllerColliderHit`'s clip
+already knows how to do (project out the wall-normal component). Ends on any of: a timer (~1.2s,
+per the design brief's "a second or so"), dropping below the speed threshold, the raycast losing
+the wall, or a jump — which should be the payoff move, pushing away from the wall *and* up, not
+just a normal jump. Needs a `WallRunning` bool and the current wall normal exposed publicly, the
+same way `Sliding`/`Crouching` already are, so `PlayerController.Look()` can add a camera roll
+toward the wall while it's active — a wall run that doesn't tilt the camera is the one entry on
+this whole list that would look wrong without its visual half. Continuous scrape audio while
+active can reuse the same `AudioSource`-holding pattern `SpeedRush` already uses for the slide
+scrape, rather than inventing a second one.
+
+All four want a cooldown or re-entry guard of some kind (don't re-latch the same wall a frame
+after leaving it, don't allow a second slam before landing the first) — exactly the kind of thing
+that's invisible until it's missing and then reads as a completely different bug.
+
 None of these need a system. They are all conditions checked against the velocity the mover
 already has, which is what makes them cheap to add and cheap to remove if one turns out to be
 horrible.
