@@ -930,6 +930,46 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         Vector3 pos = cameraHolderBasePos;
         pos.y -= (1f - stance) * crouchCameraDrop;
         cameraHolder.transform.localPosition = pos;
+
+        PullCameraOutOfWalls();
+    }
+
+    /// <summary>
+    /// Stops the camera clipping into geometry near the player - reported directly as
+    /// effectively a wallhack, and it was: the camera sits at a fixed local offset forward and up
+    /// from CameraHolder with nothing ever checking whether that point is actually inside a wall,
+    /// so standing close enough to one let the near clip plane poke through it into whatever was
+    /// on the other side.
+    ///
+    /// Pulls `cameraHolder` itself back in world space rather than touching the `Camera` child's
+    /// own local transform - `Juice`'s screenshake owns that transform and caches its rest
+    /// position from the child's *local* offset, so if this adjusted the child directly instead,
+    /// every correction here would get silently overwritten the next time a shake's rest position
+    /// was captured, or would itself corrupt what Juice thinks "rest" is. Moving the parent
+    /// preserves the child's local offset exactly as authored while still shifting where it ends
+    /// up in the world, so the two systems never fight over the same field.
+    /// </summary>
+    void PullCameraOutOfWalls()
+    {
+        if (LocalCamera == null)
+            return;
+
+        Vector3 safeOrigin = cameraHolder.transform.position;
+        Vector3 desired = LocalCamera.transform.position;
+        Vector3 diff = desired - safeOrigin;
+        float distance = diff.magnitude;
+
+        if (distance < 0.01f)
+            return;
+
+        Vector3 dir = diff / distance;
+
+        if (Physics.SphereCast(safeOrigin, 0.12f, dir, out RaycastHit hit, distance,
+                               Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            float safeDistance = Mathf.Max(0f, hit.distance - 0.08f);
+            cameraHolder.transform.position -= dir * (distance - safeDistance);
+        }
     }
 
     // Aiming down the banana.

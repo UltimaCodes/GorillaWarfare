@@ -52,6 +52,16 @@ public class Juice : MonoBehaviour
     float shake;
     float seed;
 
+    /// <summary>
+    /// The current shake, normalised to 0-1. Added 2026-08-22 so the HUD can shake with the
+    /// world instead of sitting dead still while the camera is visibly getting knocked around it -
+    /// a screen-space overlay canvas doesn't move with the camera at all, so without this the UI
+    /// was the one thing on screen a hit never touched. Read-only and normalised rather than
+    /// handing out the raw metre value, so a HUD reading this doesn't need to know or care what
+    /// `maxShake` currently is.
+    /// </summary>
+    public static float Amount => instance != null ? Mathf.Clamp01(instance.shake / maxShake) : 0f;
+
     Camera held;
     Vector3 restPosition;
     Quaternion restRotation;

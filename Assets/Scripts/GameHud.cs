@@ -508,6 +508,48 @@ public class GameHud : MonoBehaviour
         UpdateAdrenaline();
         UpdateSlideCombo();
         UpdateSpeedPush();
+        UpdateHudShake();
+    }
+
+    Vector2 canvasRestPos;
+    float hudShakeSeed = -1f;
+
+    /// <summary>
+    /// Shakes the whole HUD along with the world. Added 2026-08-22, direct request - a screen
+    /// space overlay canvas is exactly that, an overlay, and never moved with the camera at all,
+    /// so the one hit that should least be ignorable (a kill's own screenshake) left the HUD
+    /// dead still while the world visibly got knocked around it. Reads `Juice.Amount`
+    /// (normalised 0-1) rather than the world shake's own pixel/degree values, since the UI
+    /// wants its own, smaller displacement - a health number thrown around as far as the camera
+    /// shakes would be unreadable, not punchy.
+    /// </summary>
+    void UpdateHudShake()
+    {
+        if (canvasRect == null)
+            return;
+
+        if (hudShakeSeed < 0f)
+        {
+            canvasRestPos = canvasRect.anchoredPosition;
+            hudShakeSeed = Random.Range(0f, 100f);
+        }
+
+        float amount = Juice.Amount;
+
+        if (amount <= 0.001f)
+        {
+            canvasRect.anchoredPosition = canvasRestPos;
+            return;
+        }
+
+        float time = Time.unscaledTime * 42f;
+        const float maxPixels = 14f;
+
+        Vector2 offset = new Vector2(
+            (Mathf.PerlinNoise(hudShakeSeed, time) - 0.5f) * 2f,
+            (Mathf.PerlinNoise(hudShakeSeed + 11f, time) - 0.5f) * 2f) * (maxPixels * amount);
+
+        canvasRect.anchoredPosition = canvasRestPos + offset;
     }
 
     /// <summary>

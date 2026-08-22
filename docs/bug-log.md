@@ -638,3 +638,96 @@ Also found by hand while re-reading the movement tech's own code, not by the aud
 rewrite two passes up - the speed gate it used to enforce was dropped on purpose (direct request:
 proximity plus holding the key, no speed requirement) but the now-dead field describing it never
 got removed alongside the logic. Removed.
+
+# Eighth pass — reload, wall-run's own sound, UI shake, and a two-bug sandbox, 2026-08-22
+
+## The reload spin was "wayy too weird"
+
+The previous pass's fix (a single 360° spin, rate fixed so it always lands on a whole lap) was
+still a full spin - reported directly as not matching how reloads actually read elsewhere.
+Searched for Redmatch 2's specific reload animation for reference and found nothing precise (the
+only search results describing its reload were about the mechanic - shooting cancels it - not the
+visual), so rather than guess at a specific reference that couldn't be confirmed, replaced the
+spin with the genre-standard shape instead: a dip down and slight tilt, a hold, a return - no
+rotation-spin at all. `SingleShotGun.UpdateReloadFlip()` eases out into the dip over the first 20%
+of `reloadTime`, holds through the middle 60%, eases back in over the last 20%.
+
+## Wall run's scrape was reported as identical to sliding's
+
+Same root cause as the air brake's fallback sound two passes up, different mechanic: wall run's
+tick effects reached for `GameAudio.Slide` as a fallback pitched up, which is close enough to an
+actual slide to read as literally the same sound. Built wall run its own persistent-`AudioSource`
+scrape, same pattern `SpeedRush` already uses for the slide's own loop (attack/release easing,
+Perlin-wobbled pitch) rather than another one-shot fallback - loads from `Audio/WallRun` if
+populated, falls back to the vine's clip folder otherwise. The old one-shot calls in
+`WallRunStartEffects`/`WallRunTickEffects` are gone; those methods now only handle the dust burst.
+
+## Screenshake didn't touch the UI
+
+Reported directly - a screen-space overlay canvas doesn't move with the camera at all, so a hit
+that visibly knocked the world left the HUD dead still. Added `Juice.Amount`, the current shake
+normalised to 0-1 (read-only, so nothing downstream needs to know the actual `maxShake` constant),
+and `GameHud.UpdateHudShake()`, which offsets the whole canvas `RectTransform` with the same
+Perlin-noise wobble the camera's own shake already uses, scaled to a maximum of 14 pixels.
+
+## Ground slams could be spammed
+
+Reported directly. Nothing gated repeated presses - each slam fires on its own key now (see the
+seventh pass) with no cooldown behind it at all, so mashing the key in the air queued another one
+the instant the last one's `velocity.y` override wore off. Added a 1.4s cooldown that starts from
+the *landing*, not the press - starting it from the press would still allow a slam queued deep
+into the previous one's descent, and landing is the moment that actually ends its effect on the
+player.
+
+## Vault, removed
+
+Retuned once already this same day (grounded-and-fast trigger to a double-jump-press trigger,
+seventh pass), reported as still not working on the very next playtest. Removed outright per
+direct instruction rather than guessed at a third time - see `ideas.md`'s movement tech section
+for the design record and `roadmap.md`'s movement tuning section for the current status. Deleted
+`TryVault()`, `VaultEffects()`, every vault-only field, and the `GameAudio.Vault` bank constant it
+was the only reader of.
+
+## The camera could see through walls
+
+Reported as "basically wallhacks" - standing close to a wall could put the inner `Camera` on the
+far side of it, since nothing had ever kept the camera itself out of solid geometry, only the
+`CharacterController` driving the body. Added `PlayerController.PullCameraOutOfWalls()`, a
+spherecast from `cameraHolder` (the parent) to the camera's actual position each frame; if it would
+clip something, the *holder* is pulled back along that direction in world space by the clipped
+amount. Deliberately not applied to the `Camera` child's own local transform - `Juice.cs` owns and
+caches that child's local rest position/rotation for screenshake, and writing to it here would
+either get silently overwritten by Juice next frame or corrupt what Juice considers "rest."
+
+## The sandbox's training dummies had never worked, and it took two bugs to explain why
+
+Reported directly, in those words. The first bug looked like the whole explanation:
+`RoomManager.PlaceDummies()` ran from `OnJoinedRoom`, which fires the moment the room is created -
+while still standing in the *menu* scene, before `SpawnManager` or the map itself exist - so
+dummies were placed relative to world origin in a scene about to be torn down, and died with it a
+moment later. Moved the call to `OnSceneLoaded`, gated on the game scene the same way `TrySpawn`
+already is.
+
+Built `SandboxDummyCheck.cs` (temporary, removed once this concluded) to confirm it with a real
+run rather than trust the reasoning, since this project's rig has been guessed wrong before. It
+failed - zero dummies, and the active scene's name was still blank long after `PhotonNetwork.
+InRoom` had already gone true. That's not what a race condition between two callbacks looks like;
+that's a scene that never loaded at all.
+
+Traced the actual call chain instead of re-guessing: `SettingsMenu.EnterSandbox()` calls
+`Sandbox.Enter()` and nothing else. `Sandbox.Enter()` disconnects, sets `OfflineMode`, and calls
+`CreateRoom` - and nothing else either. The one place in the whole project that calls
+`PhotonNetwork.LoadLevel` for a fresh room is `Launcher.StartGame()`, a button the *lobby* host
+presses once everyone's ready - and `RoomManager.OnJoinedRoom()`'s own `LoadLevel` call exists only
+for a late joiner arriving at a match already in progress, deliberately gated on `!PhotonNetwork.
+IsMasterClient`. Creating your own room always makes you its master client. So a sandbox room got
+created, and absolutely nothing in the codebase was ever going to load the map to go with it - the
+menu-scene timing bug fixed first was real, but fixing it changed nothing, because the scene load
+it was racing against didn't exist yet either.
+
+Fixed in `Sandbox.cs`'s own `Open()` coroutine: after `CreateRoom`, wait for `PhotonNetwork.
+InRoom`, then call `PhotonNetwork.LoadLevel(RoomManager.gameSceneIndex)` directly - the same
+create-room-then-load pattern `PlayModeProbe` already uses successfully for its own automated
+runs. Re-ran `SandboxDummyCheck` after this second fix: 4 dummies found, each with its 13 hitboxes,
+positioned in the actual loaded `Game` scene. Removed the check afterward, per the usual
+convention for these throwaway diagnostics.
