@@ -369,6 +369,14 @@ Separate from M0 because it needs a person playing it, not a fix.
       down. That's inverted from the old build and you haven't tried it yet, so it may just feel
       wrong.
 - [x] Auto-bhop off. Holding space to keep speed for free was most of the skill gone.
+- [x] **Wall run, vault, ground slam, air brake.** Built 2026-08-22, same day as designed - see
+      `ideas.md`'s movement tech section for the mechanics and `bug-log.md`'s sixth pass for the
+      other fixes that landed alongside them. Not yet played by a person.
+- [x] **Bhop retuned again.** Reported as gaining way too much speed way too fast - a side effect
+      of the same-day airSpeedCap raise for slide-hop redirect making *every* jump gain more from
+      strafing, not just a slide-hop one. `bhopKeep` down from 1 to 0.92 so a perfect landing
+      bleeds a little rather than nothing, capping how fast pure jump-chaining compounds without
+      touching the slide-hop chain (which never went through that code path to begin with).
 - [x] **Wall collisions now cost speed.** Nothing ever clipped `velocity` against a hit before
       2026-08-22 - `controller.Move()` stopped your position at a wall but never told the stored
       velocity, so it kept its full magnitude and a slight turn let you carry on at full speed.
@@ -408,6 +416,12 @@ Things the checks can't reach, so they need a person:
 - **team deathmatch specifically.** Landed after the 3-4 client playtest on 2026-08-16 covered
   the rest of M3, so it's shared the same client-authoritative, unreviewed-by-a-server plumbing
   as everything else but hasn't had its own dedicated session.
+- **wall run, vault, ground slam and air brake, entirely.** Built and verified not to throw, but
+  every number in them (speed thresholds, ledge heights, the wall-run timer, the impulses) is a
+  first guess reasoned from the existing constants, the same way every other feel number in this
+  project has needed a person before it could be trusted. Explicitly asked to be balanced, not
+  overpowered - the reasoning for why they shouldn't compound is written where they're built, but
+  reasoning is not the same claim as having been played.
 
 Previously listed here and corrected 2026-08-22: "anything that needs a second client" — this
 was verified on 3-4 real clients 2026-08-16 (`working-notes.md`), including remote weapon

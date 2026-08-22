@@ -202,12 +202,16 @@ a slide into an attack and gives the last gun game rung something to build towar
 being the weapon you dread getting. **Built 2026-08-21** as `PlayerMovement.MomentumDamage` — a
 shared formula rather than a peel-only one, since the vine above reuses the exact same curve.
 
-### Ready to build: wall run, vault, ground slam, air brake
+### Built 2026-08-22: wall run, vault, ground slam, air brake
 
-Worked out 2026-08-22 so the next session on this can go straight to code instead of re-deriving
-the mechanics from the one-line descriptions above. Nothing here is built yet — this is the plan,
-not the feature. Every check below is a raycast or spherecast against `Hitbox.WorldMask`, never
-`Collider.bounds` reasoning, per the mesh-collider note earlier in this section.
+Worked out earlier the same day, built the same day. The plan below is left in place as the
+accurate account of how each works, not just a proposal - every check is a raycast against
+`Hitbox.WorldMask`, never `Collider.bounds` reasoning, per the mesh-collider note earlier in this
+section. All four live in `PlayerMovement.cs`, wall run's camera lean in
+`PlayerController.Look()`. None add net speed on their own - vault and the slam trade height for
+control, the air brake removes speed, wall run preserves whatever was already there - so
+`maxHorizontalSpeed` still governs how fast any combination of them can add up to. Not yet
+played by a person; see `bug-log.md` and `roadmap.md`'s Unverified section.
 
 **Air brake and ground slam share one input, disambiguated by trajectory, not timing.** Both are
 "press the slide/walk key while airborne," and a tap-vs-hold read would add real latency to
