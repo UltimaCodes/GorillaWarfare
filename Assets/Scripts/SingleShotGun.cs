@@ -503,7 +503,7 @@ public class SingleShotGun : Gun
 
         float damage = Info.DamageAtRange(hit.distance);
 
-        // Momentum melee. Planned in weapon-ideas.md, built 2026-08-21: the peel does more the
+        // Momentum melee. Planned in ideas.md, built 2026-08-21: the peel does more the
         // faster you were travelling when it landed, so the last gun game rung is something to
         // build speed toward rather than the weapon you dread getting stuck with. Range falloff
         // above already handles distance; this is the same idea for speed instead.
@@ -610,24 +610,51 @@ public class SingleShotGun : Gun
         // the live rotation meant an interrupted swing became the new rest, and the peel walked
         // a little further round with every stab until it was upside down.
         Quaternion held = meleeHeld;
-        Quaternion driven = held * Quaternion.Euler(-Info.meleeSwing, 0f, 0f);
 
-        const float outFor = 0.06f;
-        const float backFor = 0.14f;
+        // Retuned 2026-08-22 - reported as "too static". The old swing was one rotation on one
+        // axis, linearly interpolated, straight from rest to full extension - which is exactly
+        // what a hinge does, and reads as one because there was never anywhere for the motion to
+        // come *from*. Added a windup (a small pull back and twist before the stab) so the blade
+        // has a start, a middle and a stop instead of a single lerp, a second axis so it reads as
+        // a stab rather than a hinge swinging on rails, and eased time instead of linear so the
+        // strike accelerates into contact instead of moving at one constant speed throughout.
+        Quaternion windup = held * Quaternion.Euler(Info.meleeSwing * 0.22f, -9f, 0f);
+        Quaternion driven = held * Quaternion.Euler(-Info.meleeSwing, 11f, 0f);
 
-        for (float t = 0f; t < outFor; t += Time.unscaledDeltaTime)
+        const float windFor = 0.05f;
+        const float outFor = 0.08f;
+        const float backFor = 0.16f;
+
+        const float windLunge = -0.05f;
+        const float outLunge = 0.34f;
+
+        for (float t = 0f; t < windFor; t += Time.unscaledDeltaTime)
         {
-            float k = t / outFor;
-            blade.localRotation = Quaternion.Slerp(held, driven, k);
-            blade.localPosition = restPosition + Vector3.forward * (0.28f * k);
+            float k = EaseOut(t / windFor);
+            blade.localRotation = Quaternion.Slerp(held, windup, k);
+            blade.localPosition = restPosition + Vector3.forward * (windLunge * k);
             yield return null;
         }
 
+        for (float t = 0f; t < outFor; t += Time.unscaledDeltaTime)
+        {
+            float k = EaseIn(t / outFor);
+            blade.localRotation = Quaternion.Slerp(windup, driven, k);
+            blade.localPosition = Vector3.Lerp(restPosition + Vector3.forward * windLunge,
+                                               restPosition + Vector3.forward * outLunge, k);
+            yield return null;
+        }
+
+        // A small shake on contact, same as a gunshot gets - the peel is the one weapon in the
+        // game that lands its hit at melee range, right in front of the camera, and had nothing
+        // marking the moment at all.
+        Juice.Shake(0.35f);
+
         for (float t = 0f; t < backFor; t += Time.unscaledDeltaTime)
         {
-            float k = t / backFor;
+            float k = EaseOut(t / backFor);
             blade.localRotation = Quaternion.Slerp(driven, held, k);
-            blade.localPosition = Vector3.Lerp(restPosition + Vector3.forward * 0.28f, restPosition, k);
+            blade.localPosition = Vector3.Lerp(restPosition + Vector3.forward * outLunge, restPosition, k);
             yield return null;
         }
 
@@ -635,6 +662,9 @@ public class SingleShotGun : Gun
         blade.localPosition = restPosition;
         stabRoutine = null;
     }
+
+    static float EaseIn(float k) => k * k;
+    static float EaseOut(float k) => 1f - (1f - k) * (1f - k);
 
     Transform visualRoot;
 
