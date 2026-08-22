@@ -7,9 +7,16 @@ using UnityEngine;
 // lamp on and off in your face, because that is exactly what it was. A muzzle flash is a shape,
 // not an illumination - the light is the small part.
 //
-// So it is a sprite now, billboarded at the barrel tip, with a light that is a fifth as bright
-// and less than half the range purely to catch the wall behind it. Four sprites picked at random
-// with a random roll, so two shots never look like the same frame played twice.
+// So it is a real ParticleSystem now, billboarded at the barrel tip, with a light that is a fifth
+// as bright and less than half the range purely to catch the wall behind it.
+//
+// Rebuilt 2026-08-22 from a single hand-placed FlashSprite billboard, reported as looking bad
+// and specifically as not using Unity's actual particle system - both true. One quad is one
+// shape at one size; a burst is several, each with its own size, speed and spin, which is what a
+// real muzzle flash actually looks like - overlapping cones of debris, not a single sticker. Uses
+// `Emit()` rather than `Play()` on every shot, deliberately - `Play()` restarts the system and
+// clears whatever's still alive, and the rifle is automatic. A shot landing mid-burst from the
+// last one needs to add to it, not cut it off.
 public class MuzzleFlash : MonoBehaviour
 {
     [Tooltip("How bright the accompanying light is. Deliberately small - the sprite is the "
@@ -29,9 +36,15 @@ public class MuzzleFlash : MonoBehaviour
 
     [SerializeField] float flashSeconds = 0.06f;
 
+    [Tooltip("Particles per shot.")]
+    [SerializeField] int burstCount = 7;
+
     static Sprite[] shapes;
+    static Material additive;
 
     Light flash;
+    ParticleSystem particles;
+    ParticleSystemRenderer particlesView;
     float level;
     float tipDistance = 0.35f;
 
@@ -39,6 +52,21 @@ public class MuzzleFlash : MonoBehaviour
     /// different places, and drawing from the camera makes shots appear to come out of your
     /// forehead and go edge-on invisible at exactly the range you want the feedback.
     public Transform Tip => flash != null ? flash.transform : transform;
+
+    /// <summary>
+    /// Hides or shows the burst renderer while scoped, the same way `SingleShotGun.SetVisible`
+    /// already hides the weapon model itself. Added 2026-08-22 - the old FlashSprite version was
+    /// a fresh, self-destroying object per shot and was essentially never alive at the moment of
+    /// an aim toggle, so nothing had ever needed to hide it on purpose. This one is a persistent
+    /// `ParticleSystemRenderer` that exists for the weapon's whole lifetime, whether or not it's
+    /// currently emitting - which is exactly the kind of renderer `SetVisible` exists to catch,
+    /// it just didn't know this one existed yet.
+    /// </summary>
+    public void SetVisible(bool visible)
+    {
+        if (particlesView != null)
+            particlesView.enabled = visible;
+    }
 
     /// Where the business end is, in the weapon's local space.
     public void SetTipDistance(float distance)
@@ -76,6 +104,65 @@ public class MuzzleFlash : MonoBehaviour
         flash.range = range;
         flash.intensity = 0f;
         flash.enabled = false;
+
+        BuildParticles(host.transform);
+    }
+
+    void BuildParticles(Transform tip)
+    {
+        GameObject host = new GameObject("~MuzzleBurst");
+        host.transform.SetParent(tip, false);
+
+        particles = host.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = particles.main;
+        main.loop = false;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.gravityModifier = 0f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.035f, 0.075f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 2.4f);
+        main.startSize = new ParticleSystem.MinMaxCurve(flashSize * 0.4f, flashSize * 0.95f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 2f * Mathf.PI);
+        main.startColor = new Color(1f, 0.86f, 0.55f, 1f);
+        main.maxParticles = 64;
+
+        // No emission on its own - Fire() calls Emit() directly, so a shot always adds to
+        // whatever's already alive instead of the system deciding when to burst.
+        ParticleSystem.EmissionModule emission = particles.emission;
+        emission.rateOverTime = 0f;
+        emission.rateOverDistance = 0f;
+
+        // A narrow forward cone rather than a sphere - gas leaving a barrel travels roughly one
+        // way, not in every direction at once.
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 16f;
+        shape.radius = 0.01f;
+
+        // Squared fade, same shape every other flash in this game fades on - holds near full
+        // brightness for most of its short life, then leaves quickly rather than dimming evenly.
+        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = particles.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient fade = new Gradient();
+        fade.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.4f, 0.3f), new GradientAlphaKey(0f, 1f) });
+        colorOverLifetime.color = fade;
+
+        // Grows slightly then holds, rather than only shrinking - a flash that only fades looks
+        // like a light going out, one that expands looks like gas actually leaving the barrel.
+        ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = particles.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f,
+            new AnimationCurve(new Keyframe(0f, 0.7f), new Keyframe(0.4f, 1.15f), new Keyframe(1f, 1f)));
+
+        particlesView = host.GetComponent<ParticleSystemRenderer>();
+        particlesView.renderMode = ParticleSystemRenderMode.Billboard;
+        particlesView.sharedMaterial = SharedAdditive();
+        particlesView.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        particlesView.receiveShadows = false;
+        particlesView.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
     }
 
     /// <summary>
@@ -123,23 +210,42 @@ public class MuzzleFlash : MonoBehaviour
         if (flash != null)
             flash.enabled = true;
 
-        Sprite[] set = Shapes();
-
-        if (set.Length == 0 || flash == null)
+        if (particles == null || particlesView == null)
             return;
 
-        // Parented to the tip, so the flash rides the weapon through recoil rather than hanging
-        // in the air where the barrel used to be.
-        //
-        // It grows slightly over its life. A flash that only fades looks like a light going out;
-        // one that expands looks like gas leaving a barrel, which is what it is.
-        FlashSprite.Spawn(set[Random.Range(0, set.Length)],
-                          flash.transform.position,
-                          flashSize * Mathf.Max(0.6f, tipDistance / 0.35f),
-                          flashSize * Mathf.Max(0.6f, tipDistance / 0.35f) * 1.45f,
-                          flashSeconds,
-                          new Color(1f, 0.86f, 0.55f, 1f),
-                          flash.transform);
+        Sprite[] set = Shapes();
+
+        if (set.Length > 0)
+        {
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            particlesView.GetPropertyBlock(block);
+            block.SetTexture("_MainTex", set[Random.Range(0, set.Length)].texture);
+            particlesView.SetPropertyBlock(block);
+        }
+
+        // A longer weapon's tip sits further from the grip, which reads as a bigger gun and
+        // wants a bigger flash - the same scaling the old single-sprite version used.
+        float scale = Mathf.Max(0.6f, tipDistance / 0.35f);
+        ParticleSystem.MainModule main = particles.main;
+        main.startSize = new ParticleSystem.MinMaxCurve(flashSize * 0.4f * scale, flashSize * 0.95f * scale);
+
+        // Emit rather than Play - adds to whatever's already alive instead of restarting the
+        // system and clearing it, which matters the moment an automatic weapon fires again before
+        // the last burst has finished dying.
+        particles.Emit(burstCount);
+    }
+
+    static Material SharedAdditive()
+    {
+        if (additive != null)
+            return additive;
+
+        Shader shader = Shader.Find("Particles/Additive")
+                        ?? Shader.Find("Legacy Shaders/Particles/Additive")
+                        ?? Shader.Find("Sprites/Default");
+
+        additive = new Material(shader) { name = "~muzzleBurst", enableInstancing = true };
+        return additive;
     }
 
     void Update()

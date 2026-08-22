@@ -88,6 +88,19 @@ public static class GameAudio
     public const string Heartbeat = "Heartbeat";
     public const float HeartbeatVolume = 0.55f;
 
+    /// <summary>
+    /// The new movement tech's own banks - vault, air brake, wall run, ground slam. Added
+    /// 2026-08-22 alongside the mechanics themselves. None of these have sourced audio yet, so
+    /// every call site pairs one of these with a fallback bank and an explicit pitch shift via
+    /// `PlayShaped` below, the same graceful-empty-folder pattern every other bank in this file
+    /// already uses (Shield falling back to Impact, Slide falling back to Footstep, and so on).
+    /// Drop real clips into any of these folders and they take over with no code change.
+    /// </summary>
+    public const string Vault = "Vault";
+    public const string AirBrake = "AirBrake";
+    public const string WallRun = "WallRun";
+    public const string Slam = "Slam";
+
     // One place for how loud everything is, rather than a number at each call site.
     //
     // The ordering is what matters more than the values: hit and kill confirmation sit above
@@ -312,6 +325,33 @@ public static class GameAudio
         src.spatialBlend = 0f;
         src.volume = HeartbeatVolume * Mathf.Clamp01(strength) * GameSettings.SfxVolume;
         src.pitch = pitch;
+        src.PlayOneShot(clip);
+    }
+
+    /// <summary>
+    /// A bank with an explicit fallback and a deliberate pitch shift rather than a random wobble -
+    /// for a new bank that doesn't have its own sourced audio yet, so it borrows a shape close to
+    /// the one it wants rather than saying nothing at all. See the movement-tech banks above.
+    /// </summary>
+    public static void PlayShaped(string bank, float volume, float pitch,
+                                  string fallbackBank, float fallbackPitch)
+    {
+        AudioClip clip = Pick(bank);
+        float actualPitch = pitch;
+
+        if (clip == null)
+        {
+            clip = Pick(fallbackBank);
+            actualPitch = fallbackPitch;
+        }
+
+        if (clip == null)
+            return;
+
+        AudioSource src = NextSource();
+        src.spatialBlend = 0f;
+        src.volume = volume * GameSettings.SfxVolume;
+        src.pitch = actualPitch;
         src.PlayOneShot(clip);
     }
 

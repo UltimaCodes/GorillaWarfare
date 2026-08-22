@@ -270,6 +270,8 @@ MonoBehaviour:
   mouseSensitivity: 3
   cameraHolder: {fileID: 2293998585120115180}
   crouchCameraDrop: 0.35
+  wallRunRollDegrees: 12
+  wallRunRollSpeed: 8
   items: []
   weaponViewOffset: {x: 0.4, y: 0.26, z: 0.8}
   weaponViewRotation: {x: -4, y: -14, z: 8}

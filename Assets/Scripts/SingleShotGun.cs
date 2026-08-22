@@ -198,6 +198,9 @@ public class SingleShotGun : Gun
             if (r != null)
                 r.enabled = visible;
         }
+
+        if (muzzle != null)
+            muzzle.SetVisible(visible);
     }
 
     /// Tints the banana by how much of the magazine is left. A property block rather than a
@@ -235,12 +238,22 @@ public class SingleShotGun : Gun
             shotsInBurst = 0;
     }
 
+    // Degrees a second the reload tumble spins at. Retuned 2026-08-22 - one full 360 stretched
+    // across the *whole* reload was "unbearably slow" on anything but the shortest magazine,
+    // because a longer reloadTime just meant a slower single spin rather than more of them.
+    // Fixing the rate instead of the rotation count means a long reload spins the weapon several
+    // times at the same brisk speed a short one spins it once, rather than everything crawling
+    // to fit one rotation into however long the magazine takes.
+    const float reloadSpinRate = 900f;
+
     /// <summary>
     /// A full end-over-end tumble for the duration of the reload, so the weapon visibly does
     /// something instead of just sitting there for reloadTime seconds while ammo silently
-    /// refills. Timed to land exactly on a full 360 by the moment TickReload actually swaps the
-    /// magazine, so the flip and the sound finish together rather than the model snapping back
-    /// mid-spin.
+    /// refills. Always lands exactly on a whole multiple of 360 by the moment TickReload actually
+    /// swaps the magazine, so the flip and the sound finish together rather than the model
+    /// snapping back mid-spin - the spin count is rounded to the nearest whole lap at
+    /// `reloadSpinRate`, rather than the rate bending to fit exactly one lap regardless of how
+    /// long the reload actually takes.
     ///
     /// Skipped for melee - Reload() already refuses to start one (no ammo means Ammo is always
     /// at least magazineSize, the guard that turns Reload() into a no-op), but this still has to
@@ -261,7 +274,8 @@ public class SingleShotGun : Gun
         float elapsed = Info.reloadTime - (reloadDoneAt - Time.time);
         float t = Info.reloadTime > 0.01f ? Mathf.Clamp01(elapsed / Info.reloadTime) : 1f;
 
-        visualRoot.localRotation = Quaternion.Euler(t * 360f, 0f, 0f);
+        float laps = Mathf.Max(1f, Mathf.Round(Info.reloadTime * reloadSpinRate / 360f));
+        visualRoot.localRotation = Quaternion.Euler(t * laps * 360f, 0f, 0f);
     }
 
     /// Reload keeps running while stowed, so switching away and back doesn't restart it. The

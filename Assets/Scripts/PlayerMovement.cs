@@ -276,8 +276,77 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float bhopGrace = 0.14f;
 
     [Tooltip("Fraction of your speed kept when you hop within the grace window instead of "
-             + "taking a frame of friction. One means a perfect hop costs nothing.")]
-    [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 1f;
+             + "taking a frame of friction. One means a perfect hop costs nothing.\n\n"
+             + "Retuned from 1 on 2026-08-22 - reported as gaining WAY too much speed WAY too "
+             + "quickly. Root cause was a side effect of the same-day fix for the slide-hop "
+             + "redirect complaint: airSpeedCap went from 0.762 to 2.5 so air-strafing could "
+             + "meaningfully steer a hop, but that also means *every* jump, not just a slide-hop "
+             + "one, can gain up to 2.5 m/s a hop from ordinary strafing - and at bhopKeep 1, a "
+             + "perfect landing lost nothing to offset it, so a plain jump-jump-jump chain with "
+             + "no sliding at all compounded without limit. This only touches a landing that isn't "
+             + "entering a slide (UpdateStance already routes a fast landing into the slide's own "
+             + "chain/exhaustion system instead), so the slide-hop redirect fix itself is untouched "
+             + "- this is pure-bhop specifically.")]
+    [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 0.92f;
+
+    [Header("Vault")]
+    [Tooltip("Minimum forward speed to trigger an auto-vault. Below this you just walk into it - "
+             + "vaulting a ledge you're barely moving toward would look like levitating.")]
+    [SerializeField] float vaultMinSpeed = 3.2f;
+
+    [Tooltip("Ledge height range that counts as vaultable, in metres. Below the low end it's not "
+             + "worth a vault - just walk over it. Above the high end it's a wall, not a ledge, "
+             + "and belongs to wall run instead.")]
+    [SerializeField] float vaultMinHeight = 0.35f;
+    [SerializeField] float vaultMaxHeight = 1.3f;
+
+    [SerializeField] float vaultCheckDistance = 0.7f;
+    [SerializeField] float vaultImpulse = 4.6f;
+    [SerializeField] float vaultCooldown = 0.5f;
+
+    float vaultCooldownUntil = -99f;
+
+    [Header("Wall run")]
+    [Tooltip("Minimum horizontal speed to latch onto a wall. Below this it reads as leaning on a "
+             + "wall, not running along it.")]
+    [SerializeField] float wallRunMinSpeed = 5f;
+
+    [Tooltip("Fraction of normal gravity while wall running. Not zero - full weightlessness reads "
+             + "as flying, not running; a small pull down is what keeps it feeling like a wall "
+             + "under your feet rather than a stopped clock.")]
+    [Range(0.05f, 0.6f)] [SerializeField] float wallRunGravityScale = 0.22f;
+
+    [SerializeField] float wallRunRise = 1.2f;
+    [SerializeField] float wallRunMaxSeconds = 1.25f;
+    [SerializeField] float wallRunCheckDistance = 0.8f;
+    [SerializeField] float wallJumpAway = 5.5f;
+    [SerializeField] float wallJumpUp = 6.4f;
+
+    [Tooltip("Cooldown after leaving a wall run before another one can start, so jumping off "
+             + "doesn't just re-latch the same wall a frame later.")]
+    [SerializeField] float wallRunReentryDelay = 0.4f;
+
+    bool wallRunning;
+    Vector3 wallNormal;
+    float wallRunEndsAt;
+    float wallRunBlockedUntil = -99f;
+
+    /// Whether a wall run is currently active. Public the same way Sliding/Crouching are, so the
+    /// camera can lean toward the wall while it's happening.
+    public bool WallRunning => wallRunning;
+    public Vector3 WallNormal => wallNormal;
+
+    [Header("Air brake and ground slam")]
+    [Tooltip("One key, two moves, told apart by which way you're already going rather than by "
+             + "timing a tap against a hold - pressing it while rising or at the apex brakes, "
+             + "pressing it while already falling slams. Either way is instant: no wait-and-see "
+             + "delay to tell a tap from a hold would have cost the fast one its whole point.")]
+    [SerializeField] float airBrakeKeep = 0.12f;
+
+    [SerializeField] float airBrakeMinSpeed = 3f;
+    [SerializeField] float groundSlamSpeed = 19f;
+
+    bool slamming;
 
     CharacterController controller;
     Vector3 velocity;
@@ -435,18 +504,38 @@ public class PlayerMovement : MonoBehaviour
         // Landing is worth remembering, because a hop taken shortly after it should keep the
         // speed you arrived with rather than pay a frame of friction for touching the floor.
         if (grounded && wasAirborne)
+        {
             landedAt = Time.time;
 
+            if (slamming)
+            {
+                SlamLandingEffects();
+                slamming = false;
+            }
+
+            if (wallRunning)
+                EndWallRun(false);
+        }
+
         UpdateStance(listening, dt);
+        UpdateAirAction(listening);
 
         Vector3 wishDir = WishDirection();
 
         float wishSpeed = (crouching ? crouchSpeed : maxGroundSpeed) * AdrenalineSpeed;
 
+        // Vault and wall run each get first refusal on their own half of the world (ground and
+        // air respectively) before falling back to the ordinary move - see ideas.md's "ready to
+        // build" plan, written the day before these landed, for why each is shaped the way it is.
         if (grounded)
-            GroundMove(wishDir, wishSpeed, wantsJump, dt);
-        else
+        {
+            if (!TryVault(wishDir))
+                GroundMove(wishDir, wishSpeed, wantsJump, dt);
+        }
+        else if (!UpdateWallRun(wantsJump, dt))
+        {
             AirMove(wishDir, wishSpeed, dt);
+        }
 
         // The one place total speed is actually bounded, rather than just how often something is
         // allowed to add more of it. Vertical is untouched - this is about bhop and slide chains
@@ -733,6 +822,357 @@ public class PlayerMovement : MonoBehaviour
         // No friction in the air - this is what preserves momentum between hops.
         Accelerate(wishDir, Mathf.Min(wishSpeed, airSpeedCap), airAccel, dt);
         velocity.y -= gravity * dt;
+    }
+
+    /// <summary>
+    /// Run at a ledge below chest height and go over it without stopping.
+    ///
+    /// A clearance check, then one upward impulse - not a scripted position tween. Three
+    /// raycasts, all along the direction actually being travelled rather than wherever the
+    /// camera happens to be aimed: one at knee height to find a ledge, one at chest height that
+    /// has to find *nothing* (a wall too tall to vault blocks it there), and one straight down
+    /// from just above the ledge to see where it actually lands and how tall it really is. Physics
+    /// carries the rest, same as a jump - this only supplies the one number a jump doesn't have.
+    /// </summary>
+    bool TryVault(Vector3 wishDir)
+    {
+        if (Time.time < vaultCooldownUntil)
+            return false;
+
+        Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+        float speed = flat.magnitude;
+
+        if (speed < vaultMinSpeed)
+            return false;
+
+        Vector3 dir = flat.normalized;
+        Vector3 kneeOrigin = transform.position + Vector3.up * vaultMinHeight;
+
+        if (!Physics.Raycast(kneeOrigin, dir, out RaycastHit low, vaultCheckDistance,
+                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        // Too tall to vault if something also blocks the chest - that's a wall, not a ledge.
+        Vector3 chestOrigin = transform.position + Vector3.up * vaultMaxHeight;
+        if (Physics.Raycast(chestOrigin, dir, vaultCheckDistance + 0.25f,
+                            Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        Vector3 above = low.point + dir * 0.35f + Vector3.up * (vaultMaxHeight + 0.4f);
+        if (!Physics.Raycast(above, Vector3.down, out RaycastHit landing, vaultMaxHeight + 0.8f,
+                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        float ledgeHeight = landing.point.y - transform.position.y;
+        if (ledgeHeight < vaultMinHeight || ledgeHeight > vaultMaxHeight)
+            return false;
+
+        velocity.y = Mathf.Max(velocity.y, vaultImpulse);
+        grounded = false;
+        vaultCooldownUntil = Time.time + vaultCooldown;
+
+        VaultEffects(low.point);
+        return true;
+    }
+
+    /// <summary>
+    /// Hold toward a wall while airborne and above a speed threshold, and stick to it.
+    ///
+    /// Returns whether it owned this frame's velocity, so Update() knows whether to fall back to
+    /// AirMove. While active, gravity is scaled down rather than removed - full weightlessness
+    /// reads as flying, and the wall stops being a wall - and velocity is clipped to the wall's
+    /// own tangent plane the same way a wall collision already is elsewhere, just every frame
+    /// instead of only on contact, so steering along it doesn't slowly drift back into the wall
+    /// or away from it. Ends on a timer, dropping below speed, losing the wall, or jumping - the
+    /// jump is the payoff and pushes away from the wall as well as up.
+    /// </summary>
+    bool UpdateWallRun(bool wantsJump, float dt)
+    {
+        if (wallRunning)
+        {
+            if (wantsJump)
+            {
+                EndWallRun(true);
+                return false;
+            }
+
+            bool stillWall = Physics.Raycast(transform.position, -wallNormal,
+                                             wallRunCheckDistance + 0.15f, Hitbox.WorldMask,
+                                             QueryTriggerInteraction.Ignore);
+
+            if (!stillWall || HorizontalSpeed < wallRunMinSpeed * 0.7f || Time.time >= wallRunEndsAt)
+            {
+                EndWallRun(false);
+                return false;
+            }
+
+            velocity -= wallNormal * Vector3.Dot(velocity, wallNormal);
+            velocity.y = Mathf.Lerp(velocity.y, wallRunRise, 1f - Mathf.Exp(-6f * dt));
+            velocity.y -= gravity * wallRunGravityScale * dt;
+
+            WallRunTickEffects(dt);
+            return true;
+        }
+
+        if (Time.time < wallRunBlockedUntil || HorizontalSpeed < wallRunMinSpeed)
+            return false;
+
+        Vector3 right = transform.right;
+        RaycastHit hit;
+
+        bool hitRight = Physics.Raycast(transform.position, right, out RaycastHit rHit,
+                                        wallRunCheckDistance, Hitbox.WorldMask,
+                                        QueryTriggerInteraction.Ignore);
+
+        if (hitRight && Vector3.Dot(velocity, right) > 0.3f)
+        {
+            hit = rHit;
+        }
+        else if (Physics.Raycast(transform.position, -right, out RaycastHit lHit,
+                                 wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                && Vector3.Dot(velocity, -right) > 0.3f)
+        {
+            hit = lHit;
+        }
+        else
+        {
+            return false;
+        }
+
+        // Only a genuine wall - near horizontal normal. A steep ramp or a low ceiling shouldn't
+        // start one just because the raycast happened to clip it.
+        if (Mathf.Abs(hit.normal.y) > 0.3f)
+            return false;
+
+        wallRunning = true;
+        wallNormal = hit.normal;
+        wallRunEndsAt = Time.time + wallRunMaxSeconds;
+        wallRunDustTimer = 0f;
+        grounded = false;
+
+        WallRunStartEffects();
+        return true;
+    }
+
+    void EndWallRun(bool jumpOff)
+    {
+        wallRunning = false;
+        wallRunBlockedUntil = Time.time + wallRunReentryDelay;
+
+        if (jumpOff)
+        {
+            velocity += wallNormal * wallJumpAway;
+            velocity.y = wallJumpUp;
+            jumpPressedAt = -99f;
+
+            WallJumpEffects();
+        }
+    }
+
+    /// <summary>
+    /// One key, two moves - told apart by which way the player is already going rather than by
+    /// timing a tap against a hold. Pressing it while rising or at the apex (`velocity.y >= 0`)
+    /// brakes; pressing it while already falling slams. Either way is instant: waiting to see
+    /// whether a press turns into a hold would have cost the faster of the two its whole point.
+    /// </summary>
+    void UpdateAirAction(bool listening)
+    {
+        if (listening || grounded || wallRunning || Grappling)
+            return;
+
+        if (!KeyBinds.Pressed(KeyBinds.Action.Walk))
+            return;
+
+        if (velocity.y < -0.5f)
+            GroundSlam();
+        else
+            AirBrake();
+    }
+
+    void AirBrake()
+    {
+        Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+        float speed = flat.magnitude;
+
+        if (speed < airBrakeMinSpeed)
+            return;
+
+        Vector3 direction = flat / speed;
+
+        velocity.x *= airBrakeKeep;
+        velocity.z *= airBrakeKeep;
+
+        AirBrakeEffects(direction);
+    }
+
+    void GroundSlam()
+    {
+        velocity.y = -groundSlamSpeed;
+        slamming = true;
+
+        GroundSlamStartEffects();
+    }
+
+    // ---------------------------------------------------------------- movement tech effects
+    //
+    // One shared burst rather than four near-identical ParticleSystem setups - vault dust, a wall
+    // run's scuff, an air brake's kicked-back debris and a slam's landing ring only differ in the
+    // numbers passed in. Real particles with real velocity throughout, not a static billboard
+    // that fades in place - see BulletDecal.cs's own note on why that specifically reads as weak.
+
+    static Material moveBurstMaterial;
+    static Sprite[] moveBurstShapes;
+    float wallRunDustTimer;
+
+    static Sprite MoveBurstShape(string prefix)
+    {
+        if (moveBurstShapes == null)
+            moveBurstShapes = Resources.LoadAll<Sprite>("Particles/Boom");
+
+        if (moveBurstShapes.Length == 0)
+            return null;
+
+        foreach (Sprite s in moveBurstShapes)
+        {
+            if (s.name.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+                return s;
+        }
+
+        return moveBurstShapes[0];
+    }
+
+    static Material MoveBurstMaterial()
+    {
+        if (moveBurstMaterial != null)
+            return moveBurstMaterial;
+
+        Shader shader = Shader.Find("Particles/Additive")
+                        ?? Shader.Find("Legacy Shaders/Particles/Additive")
+                        ?? Shader.Find("Sprites/Default");
+
+        moveBurstMaterial = new Material(shader) { name = "~moveBurst", enableInstancing = true };
+        return moveBurstMaterial;
+    }
+
+    static void MovementBurst(Vector3 point, Vector3 direction, Color tint, string spritePrefix,
+                             int count, float coneAngle, float speedMin, float speedMax,
+                             float sizeMin, float sizeMax, float life, float gravityScale)
+    {
+        Sprite sprite = MoveBurstShape(spritePrefix);
+        if (sprite == null)
+            return;
+
+        GameObject host = new GameObject("~moveFx");
+        host.transform.position = point;
+        host.transform.rotation = direction.sqrMagnitude > 0.0001f
+            ? Quaternion.LookRotation(direction)
+            : Quaternion.identity;
+
+        ParticleSystem ps = host.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = false;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.7f, life);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(speedMin, speedMax);
+        main.startSize = new ParticleSystem.MinMaxCurve(sizeMin, sizeMax);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 2f * Mathf.PI);
+        main.startColor = tint;
+        main.gravityModifier = gravityScale;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+        main.maxParticles = 32;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)count) });
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = coneAngle;
+        shape.radius = 0.02f;
+
+        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient fade = new Gradient();
+        fade.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+        colorOverLifetime.color = fade;
+
+        ParticleSystemRenderer view = host.GetComponent<ParticleSystemRenderer>();
+        view.renderMode = ParticleSystemRenderMode.Billboard;
+        view.sharedMaterial = MoveBurstMaterial();
+        view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        view.receiveShadows = false;
+        view.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        block.SetTexture("_MainTex", sprite.texture);
+        view.SetPropertyBlock(block);
+
+        ps.Play();
+    }
+
+    static readonly Color DustTint = new Color(0.72f, 0.66f, 0.5f);
+
+    void VaultEffects(Vector3 at)
+    {
+        MovementBurst(at, Vector3.up, DustTint, "circle", 5, 30f, 0.6f, 1.6f, 0.03f, 0.07f, 0.18f, 0.6f);
+        GameAudio.PlayShaped(GameAudio.Vault, 0.45f, 0.75f, GameAudio.Footstep, 0.55f);
+    }
+
+    void AirBrakeEffects(Vector3 backward)
+    {
+        Juice.Shake(0.3f);
+        MovementBurst(transform.position, -backward, Color.white, "star", 6, 40f, 1.5f, 3f,
+                     0.03f, 0.06f, 0.16f, 0.3f);
+        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 1.3f, GameAudio.Slide, 1.6f);
+    }
+
+    void GroundSlamStartEffects()
+    {
+        GameAudio.PlayShaped(GameAudio.Slam, 0.4f, 1f, GameAudio.Vine, 0.7f);
+    }
+
+    void SlamLandingEffects()
+    {
+        Juice.Hit(0.55f);
+        MovementBurst(transform.position, Vector3.up, DustTint, "circle", 10, 60f, 2f, 5f,
+                     0.05f, 0.12f, 0.25f, 0.8f);
+        GameAudio.PlayShaped(GameAudio.Slam, 0.7f, 0.8f, GameAudio.Explosion, 0.55f);
+    }
+
+    void WallRunStartEffects()
+    {
+        MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
+                     3, 30f, 0.4f, 1f, 0.02f, 0.04f, 0.12f, 0.3f);
+        GameAudio.PlayShaped(GameAudio.WallRun, 0.4f, 1.1f, GameAudio.Vine, 0.9f);
+    }
+
+    void WallRunTickEffects(float dt)
+    {
+        wallRunDustTimer -= dt;
+
+        if (wallRunDustTimer > 0f)
+            return;
+
+        wallRunDustTimer = 0.14f;
+        MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
+                     2, 25f, 0.3f, 0.8f, 0.02f, 0.04f, 0.1f, 0.3f);
+        GameAudio.PlayShaped(GameAudio.WallRun, 0.28f, 1f, GameAudio.Slide, 1.1f);
+    }
+
+    void WallJumpEffects()
+    {
+        Juice.Shake(0.25f);
+        GameAudio.PlayShaped(GameAudio.WallRun, 0.45f, 1.4f, GameAudio.Vine, 1.2f);
     }
 
     void ApplyFriction(float dt)
