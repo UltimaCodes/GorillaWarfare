@@ -18,6 +18,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
              + "while sliding' describes.")]
     [SerializeField] float crouchCameraDrop = 0.35f;
     Vector3 cameraHolderBasePos;
+
+    [Tooltip("How far the camera rolls while wall running, in degrees. Added 2026-08-22 with the "
+             + "wall run mechanic itself.")]
+    [SerializeField] float wallRunRollDegrees = 12f;
+    [SerializeField] float wallRunRollSpeed = 8f;
+    float wallRunRoll;
     // Populated at runtime by WeaponLoadout. Left serialized so the prefab's old entries are
     // visible, but they're replaced on spawn.
     [SerializeField] Item[] items;
@@ -897,10 +903,24 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         UpdateRecoil();
 
+        // A wall run that doesn't tilt the camera is the one movement addition that would look
+        // wrong without its visual half - added 2026-08-22 alongside the mechanic itself. Eased
+        // rather than snapped, same reasoning as the crouch drop below: latching onto a wall is a
+        // shove, not a cut. Sign picked so the top of the screen leans away from the wall, which
+        // reads as bracing against it rather than falling into it.
+        float targetRoll = 0f;
+        if (movement != null && movement.WallRunning)
+        {
+            float side = Vector3.Dot(transform.right, movement.WallNormal);
+            targetRoll = -Mathf.Sign(side) * wallRunRollDegrees;
+        }
+        wallRunRoll = Mathf.Lerp(wallRunRoll, targetRoll, 1f - Mathf.Exp(-wallRunRollSpeed * Time.deltaTime));
+
         // Recoil rides on top of the look angles rather than being folded into them, so
         // recovering doesn't undo where you actually pointed the mouse.
         transform.localEulerAngles = new Vector3(0f, horizontalLookRotation + recoilOffset.y, 0f);
-        cameraHolder.transform.localEulerAngles = new Vector3(verticalLookRotation - recoilOffset.x, 0f, 0f);
+        cameraHolder.transform.localEulerAngles =
+            new Vector3(verticalLookRotation - recoilOffset.x, 0f, wallRunRoll);
 
         // Drops the eye with the capsule. StanceFraction is already eased in PlayerMovement, so
         // this just follows it rather than running a second easing curve that could drift out of

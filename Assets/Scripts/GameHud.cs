@@ -1168,9 +1168,15 @@ public class GameHud : MonoBehaviour
         // Faster the closer to death, from about one beat a second to nearly three.
         float rate = 3f + amount * 5f;
         float phase = Time.unscaledTime * rate;
-        float beat = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(phase));
 
-        adrenalineEdge.color = new Color(0.75f, 0.03f, 0.06f, amount * beat * 0.72f);
+        // Retuned 2026-08-22 - reported as too intense. Peak alpha was 0.72 and the beat itself
+        // swung a full 0.45 between dim and bright; together that's most of the screen edge
+        // solid red at the worst moments, which reads as damage rather than a warning. Softened
+        // both: a gentler swing (0.32) on a higher floor (0.68), and a lower ceiling on the alpha
+        // (0.42) - still an unmissable pulse, not a strobe.
+        float beat = 0.68f + 0.32f * Mathf.Abs(Mathf.Sin(phase));
+
+        adrenalineEdge.color = new Color(0.75f, 0.03f, 0.06f, amount * beat * 0.42f);
 
         // Swelling slightly with the beat, so the edge breathes inward rather than only
         // brightening. Subtle, because a pumping screen is nauseating at any real size.

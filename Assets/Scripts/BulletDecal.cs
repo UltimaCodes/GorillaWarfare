@@ -175,9 +175,18 @@ public class BulletDecal : MonoBehaviour
     /// named "the impact puff" as one of its three jobs, alongside the muzzle flash and the
     /// explosion, but nothing ever actually called it for a bullet impact. The decal alone is a
     /// multiply blend the same colour as most of what it lands on, which reads as barely there
-    /// on a light surface - reported as the impact "disappearing". This is the part that was
-    /// actually missing: a small, fast burst right at the moment of the hit, the same shapes and
-    /// spawn pattern the grenade's own explosion already uses, just far smaller and quicker.
+    /// on a light surface - reported as the impact "disappearing".
+    ///
+    /// Rebuilt 2026-08-22, still reported as not appearing after the first pass. Looked at how
+    /// this is actually done elsewhere rather than guess again: the standard shape is a bright
+    /// static core plus debris that *travels* - start speed a few metres a second, a shape module
+    /// so it sprays rather than sitting still, real particles rather than a handful of
+    /// independent stickers. The old version's "sparks" were `FlashSprite`s - billboards that
+    /// fade in place at a fixed offset, with no velocity at all - which is exactly why this never
+    /// read as an impact: nothing in it actually moved. The core flash stays a `FlashSprite`
+    /// (a static bright point is correct for that part, per the same reference), but the debris is
+    /// a real `ParticleSystem` burst now, with a Cone shape and actual outward speed plus a little
+    /// gravity so it arcs and falls like debris rather than floating.
     /// </summary>
     static void Puff(Vector3 point, Vector3 normal, bool bloody)
     {
@@ -198,16 +207,85 @@ public class BulletDecal : MonoBehaviour
         // per-triangle normal has more room to be slightly wrong than a flat wall's.
         FlashSprite.Spawn(core, point + normal * 0.05f, 0.10f, 0.22f, 0.07f, tint);
 
-        // A handful of sparks kicked off the surface, biased along the normal so they read as
-        // debris leaving the impact rather than a ring painted on it.
-        int count = bloody ? 4 : 6;
+        SpawnDebris(point + normal * 0.05f, normal, tint, spark, bloody ? 6 : 9);
+    }
 
-        for (int i = 0; i < count; i++)
-        {
-            Vector3 away = (normal * 0.6f + Random.insideUnitSphere * 0.5f).normalized;
-            FlashSprite.Spawn(spark, point + away * 0.08f, 0.05f, 0.01f,
-                              Random.Range(0.12f, 0.2f), tint);
-        }
+    /// A short-lived, self-destroying ParticleSystem for debris that actually flies rather than
+    /// sitting in place - see Puff()'s doc comment for why this replaced a loop of FlashSprites.
+    static void SpawnDebris(Vector3 point, Vector3 normal, Color tint, Sprite sprite, int count)
+    {
+        if (sprite == null)
+            return;
+
+        GameObject host = new GameObject("~debris");
+        host.transform.position = point;
+        host.transform.rotation = Quaternion.LookRotation(normal);
+
+        ParticleSystem ps = host.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = false;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.24f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 3.6f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.02f, 0.05f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 2f * Mathf.PI);
+        main.startColor = tint;
+        main.gravityModifier = 1.1f;
+        main.maxParticles = 24;
+
+        // Cleans itself up the moment the last particle dies - nothing else has to track or
+        // destroy this the way FlashSprite tracked its own lifetime, since there's no per-frame
+        // behaviour left to run once Play() has fired the one burst.
+        main.stopAction = ParticleSystemStopAction.Destroy;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)count) });
+
+        // A forward-biased cone rather than a full sphere, so debris reads as leaving the impact
+        // point along the surface normal instead of an even spray in every direction at once.
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 35f;
+        shape.radius = 0.01f;
+
+        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient fade = new Gradient();
+        fade.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+        colorOverLifetime.color = fade;
+
+        ParticleSystemRenderer view = host.GetComponent<ParticleSystemRenderer>();
+        view.renderMode = ParticleSystemRenderMode.Billboard;
+        view.sharedMaterial = SharedDebrisMaterial();
+        view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        view.receiveShadows = false;
+        view.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        block.SetTexture("_MainTex", sprite.texture);
+        view.SetPropertyBlock(block);
+
+        ps.Play();
+    }
+
+    static Material debrisMaterial;
+
+    static Material SharedDebrisMaterial()
+    {
+        if (debrisMaterial != null)
+            return debrisMaterial;
+
+        Shader shader = Shader.Find("Particles/Additive")
+                        ?? Shader.Find("Legacy Shaders/Particles/Additive")
+                        ?? Shader.Find("Sprites/Default");
+
+        debrisMaterial = new Material(shader) { name = "~debris", enableInstancing = true };
+        return debrisMaterial;
     }
 
     static Sprite Pick(string prefix)

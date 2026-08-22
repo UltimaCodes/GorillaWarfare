@@ -64,12 +64,22 @@ public class Projectile : MonoBehaviour
         return shell;
     }
 
+    Transform glowSprite;
+
     /// <summary>
     /// A real light on the shell itself, not just a bright material - so a pineapple arcing
     /// through a dim room actually throws light on the walls it passes, which is what "glow"
     /// means for something that moves rather than something that sits still. One light per live
     /// shell is cheap enough; this game has never had more than a couple of these in flight at
     /// once, since they detonate on arrival rather than accumulating.
+    ///
+    /// Reported 2026-08-22 as not actually looking like it glows, and the light alone was always
+    /// going to have that problem - a point light lights up the *room*, it doesn't make the thing
+    /// casting it look lit from the outside looking at it. Added a soft additive billboard riding
+    /// alongside it, the same `Particles/Boom` bank and unlit-additive trick every other flash in
+    /// this game already uses, so the shell itself reads as the light source rather than merely
+    /// being near one. Unlike a `FlashSprite` burst this one doesn't fade - it's rebuilt to face
+    /// the camera every frame in `Update()` and lives exactly as long as the shell does.
     /// </summary>
     void BuildGlow()
     {
@@ -82,6 +92,86 @@ public class Projectile : MonoBehaviour
         light.intensity = 2.2f;
         light.range = 4f;
         light.shadows = LightShadows.None;
+
+        Sprite core = GlowSprite();
+        if (core == null)
+            return;
+
+        GameObject sprite = new GameObject("~glowSprite");
+        sprite.transform.SetParent(transform, false);
+        sprite.transform.localScale = Vector3.one * (Radius * 3.4f);
+
+        MeshFilter filter = sprite.AddComponent<MeshFilter>();
+        filter.sharedMesh = GlowQuad();
+
+        MeshRenderer view = sprite.AddComponent<MeshRenderer>();
+        view.sharedMaterial = GlowMaterial();
+        view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        view.receiveShadows = false;
+        view.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+
+        Color tint = info != null ? info.ripe : new Color(1f, 0.85f, 0.3f);
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        block.SetTexture("_MainTex", core.texture);
+        block.SetColor("_TintColor", tint);
+        block.SetColor("_Color", tint);
+        view.SetPropertyBlock(block);
+
+        glowSprite = sprite.transform;
+    }
+
+    static Sprite glowSpriteAsset;
+    static Mesh glowQuad;
+    static Material glowMaterial;
+
+    static Sprite GlowSprite()
+    {
+        if (glowSpriteAsset != null)
+            return glowSpriteAsset;
+
+        Sprite[] all = Resources.LoadAll<Sprite>("Particles/Boom");
+
+        foreach (Sprite s in all)
+        {
+            if (s.name.StartsWith("circle", System.StringComparison.OrdinalIgnoreCase))
+            {
+                glowSpriteAsset = s;
+                return s;
+            }
+        }
+
+        glowSpriteAsset = all.Length > 0 ? all[0] : null;
+        return glowSpriteAsset;
+    }
+
+    static Mesh GlowQuad()
+    {
+        if (glowQuad != null)
+            return glowQuad;
+
+        glowQuad = new Mesh { name = "~glowQuad" };
+        glowQuad.vertices = new[]
+        {
+            new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f),
+            new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f),
+        };
+        glowQuad.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
+        glowQuad.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+        glowQuad.RecalculateBounds();
+        return glowQuad;
+    }
+
+    static Material GlowMaterial()
+    {
+        if (glowMaterial != null)
+            return glowMaterial;
+
+        Shader shader = Shader.Find("Particles/Additive")
+                        ?? Shader.Find("Legacy Shaders/Particles/Additive")
+                        ?? Shader.Find("Sprites/Default");
+
+        glowMaterial = new Material(shader) { name = "~glow", enableInstancing = true };
+        return glowMaterial;
     }
 
     static Material trailMaterial;
@@ -196,6 +286,19 @@ public class Projectile : MonoBehaviour
         transform.position += move;
         transform.rotation = Quaternion.LookRotation(velocity.normalized);
         transform.Rotate(Vector3.right, Time.time * 720f, Space.Self);
+
+        // Faced independently of the shell's own tumble, the same way every FlashSprite already
+        // faces the camera regardless of whatever it's parented to.
+        if (glowSprite != null)
+        {
+            Camera camera = PlayerController.LocalCamera;
+
+            if (camera != null)
+            {
+                glowSprite.rotation = Quaternion.LookRotation(
+                    glowSprite.position - camera.transform.position, camera.transform.up);
+            }
+        }
 
         travelled += distance;
 
