@@ -45,6 +45,10 @@ open the project.
 "C:/Program Files/Unity/Hub/Editor/6000.2.9f1/Editor/Unity.exe" -batchmode -nographics   -projectPath "C:/DevProjects/Unity/OldProjects/FPS/GorillaWarfare"   -executeMethod PlayModeProbe.Run -logFile -
 ```
 
+Drop `-nographics` too if the run needs to produce real screenshots — with it, every `Capture()`
+call is silently skipped and the last real render can sit in `Logs/probe-shots/` looking current
+for days. See `bug-log.md`'s fourth pass.
+
 It spawns a player, checks it's carrying what the match rolled, kills it, and watches it come
 back. What it can't do is see a second client — offline mode is one player — so anything about
 remote copies still needs two people.
@@ -157,7 +161,8 @@ Moved out rather than dropped:
 
 ## M3 — Game loop
 
-Two modes.
+Three modes now — Team Deathmatch landed after this section was last written and was never added
+below. Corrected 2026-08-22.
 
 **Shared plumbing**
 - [x] Match state machine: warmup → live → over → next match
@@ -180,6 +185,13 @@ Two modes.
 - [x] Final rung is melee — killing with it wins the match
 - [x] Melee weapon exists (Peel, landed in M2)
 
+**Team deathmatch**
+- [x] Same weapon roll as free-for-all deathmatch, scored by side instead of by player
+- [x] Sides assigned through `PlayerColours.AssignTeams`, red against blue
+- [x] Winner is whichever side has more kills when the clock runs out, tied scores draw
+      (`WinningTeamKey`, separate from the free-for-all `WinnerKey` so a team result never gets
+      misread as a single player's)
+
 Everything about a match lives in room custom properties rather than in fields, which is what
 makes late joins and host migration fall out for free instead of each needing its own catch-up
 path. The clock is a deadline, not a countdown: `PhotonNetwork.Time` is server synchronised, so
@@ -189,8 +201,10 @@ every client works out the remaining time itself and nobody broadcasts a tick.
 in order. `PlayModeProbe` runs the actual game in Photon's offline mode and checks a player
 spawns with the weapons the match rolled, dies, and comes back.
 
-**Done when:** ~~both modes can be picked, played start to finish, and declare a winner without
-anyone touching anything.~~ DONE, apart from playing it with a second person.
+**Done when:** ~~all three modes can be picked, played start to finish, and declare a winner
+without anyone touching anything.~~ DONE — played on 3-4 real clients 2026-08-16, see
+`working-notes.md`. Team deathmatch specifically hasn't had its own dedicated playtest since
+landing after that date.
 
 ---
 
@@ -253,23 +267,28 @@ The big aesthetic one. See the philosophy section above.
 Kills, joins and leaves share one list rather than having one each. They compete for the same
 few lines of screen and the only thing deciding what you see is what happened most recently;
 two feeds would either overlap or need a third thing to arbitrate.
-- [ ] **Settings**, with:
-  - [ ] Crosshair — shape, size, thickness, gap, colour, dot, outline
-  - [ ] Graphics — resolution, fullscreen, quality, FOV, and room for shaders later
-  - [ ] Sensitivity — plus invert, and per-scope multiplier if zoom happens
-  - [ ] Audio — master, SFX, music separately
-  - [ ] Keybinds — full rebinding
-- [ ] Settings persist and apply live, not on restart
+- [x] **Settings**, with:
+  - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
+  - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
+  - [x] Sensitivity — plus invert and a separate ADS multiplier
+  - [x] Audio — master, SFX, music separately
+  - [x] Keybinds — full rebinding, read live so nothing else has to poll a stale key
+- [x] Settings persist and apply live, not on restart — every setter in `GameSettings` writes the
+      preference immediately, nothing waits on an apply button
 
-Note: a previous settings menu was built and reverted at your call. The code is recoverable from
-`git cherry-pick ba4405e` if any of it is worth keeping.
+Corrected 2026-08-22 — this whole section read as unbuilt (`[ ]` throughout) and wasn't; found
+while answering an unrelated question about what's left before Steam. `GameSettings`,
+`SettingsMenu` (five tabs: Aim, Audio, Video, Crosshair, Keys) and `Sandbox` are all in and
+working. The previous reverted attempt this note used to point at is superseded — nothing left
+worth cherry-picking out of `ba4405e`.
 
 ---
 
 ## M6 — Maps
 
 Full plan - four map concepts, the compound and the silo picked as the first two to build, and
-the map-voting design - lives in `maps-and-voting.md` rather than duplicated here. Summary:
+the map-voting design - lives in `ideas.md` (sections 5 and 6) rather than duplicated here.
+Summary:
 
 - [ ] **The Compound** as the first real map. Walled compound, inner courtyard, multi-storey
       building — clear sightlines across the yard, tight interior fights, roof access.
@@ -350,21 +369,43 @@ Things the checks can't reach, so they need a person:
   with the aim, and how the two look together is unseen
 - **the HUD's layout.** Every label is verified to say the right thing, and none of it has been
   looked at. The starting positions are arithmetic against a 1920x1080 reference, not taste
-- **anything that needs a second client.** The probe runs a real match in offline mode, which
-  covers spawning, loadouts, dying and respawning — but offline mode is one player, so it can't
-  see a remote copy of anybody. Weapons on someone else's hand, replicated aim, and the kill
-  feed firing on a client that didn't do the killing all still need two people.
 - whether match and respawn lengths feel right. Warmup 8s, deathmatch 5min, gun game 10min,
   scoreboard 12s, respawn 3s — all guesses, all one field each in `MatchState`.
+- **the two-handed grip pose**, specifically. `PlayModeProbe`'s numeric check passes (off hand
+  reliably above the gun hand on a two-handed weapon), but the only render available of it — the
+  probe's dead-on front angle — makes any pose foreshorten toward the camera and isn't a fair
+  angle to judge "does this look like holding a rifle" from. Reported 2026-08-22 as missing
+  entirely; genuinely unclear from what's been measured so far whether that's a real pose problem
+  or just a bad test angle. Needs either a better render angle or a person actually looking at it
+  in play — not a third guess from reasoning about the rig, see `bug-log.md`'s note on the peel's
+  melee hold for why that specifically doesn't work on this rig.
+- **team deathmatch specifically.** Landed after the 3-4 client playtest on 2026-08-16 covered
+  the rest of M3, so it's shared the same client-authoritative, unreviewed-by-a-server plumbing
+  as everything else but hasn't had its own dedicated session.
+
+Previously listed here and corrected 2026-08-22: "anything that needs a second client" — this
+was verified on 3-4 real clients 2026-08-16 (`working-notes.md`), including remote weapon
+switching, replicated aim and the kill feed firing on a client that didn't do the killing. That
+entry sat here for over a week after it stopped being true.
 
 ## Known limitations
 
 Not tasks, but things that are true and worth knowing before they bite.
 
 - **Hit registration is client-authoritative.** The shooter raycasts locally and tells the
-  victim they were hit. Fine among friends, trivially cheatable if this ever goes wider.
+  victim they were hit. Fine among friends, trivially cheatable if this ever goes wider. Kept on
+  purpose, not just left - it's a real part of why shots feel instant. Confirmed 2026-08-22:
+  staying client-authoritative for the Steam launch itself, but a workaround worth a real look
+  once the PUN migration below happens - server-side plausibility checks on top of the same
+  instant local feedback, rather than moving authority off the client entirely and losing the
+  feel that was the reason to keep this in the first place.
 - **PUN 2 is end-of-life.** No more updates from Exit Games. It works and we deliberately chose
-  to stay (see below), but it won't get fixes.
+  to stay (see below), but it won't get fixes. Confirmed 2026-08-22: the migration off PUN is
+  planned but deliberately sequenced *after* the Steam launch, not before it - see
+  `working-notes.md`'s open items for the reasoning. Also on the list for whenever that migration
+  happens: public/private rooms, with a password on private ones, since Photon's peer-hosted
+  model has never actually stopped anyone from inviting whoever they want into a room today - the
+  friends-only posture is a convention, not something enforced anywhere.
 - **The Photon App ID is committed** in `PhotonServerSettings.asset`, and the repo is public.
   It's a client-side ID so it was always going to ship inside builds, but anyone reading the repo
   can now burn your free-tier quota. Worth regenerating if the game gets any attention.

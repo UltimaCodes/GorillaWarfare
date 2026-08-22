@@ -4,7 +4,7 @@ using Photon.Pun;
 /// <summary>
 /// The vine grapple: latch onto a vantage point or an enemy and get pulled there fast.
 ///
-/// Planned in weapon-ideas.md as closer to Attack on Titan's omnidirectional mobility gear than
+/// Planned in ideas.md as closer to Attack on Titan's omnidirectional mobility gear than
 /// the original world-geometry-only version of that entry. Built 2026-08-21.
 ///
 /// Present on every player, owner and remote copies alike - unlike PlayerMovement or SpeedRush,
