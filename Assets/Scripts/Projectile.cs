@@ -65,6 +65,8 @@ public class Projectile : MonoBehaviour
     }
 
     Transform glowSprite;
+    float glowScale;
+    float glowSeed;
 
     /// <summary>
     /// A real light on the shell itself, not just a bright material - so a pineapple arcing
@@ -89,8 +91,8 @@ public class Projectile : MonoBehaviour
         Light light = host.AddComponent<Light>();
         light.type = LightType.Point;
         light.color = info != null ? info.ripe : new Color(1f, 0.85f, 0.3f);
-        light.intensity = 2.2f;
-        light.range = 4f;
+        light.intensity = 3.2f;
+        light.range = 5f;
         light.shadows = LightShadows.None;
 
         Sprite core = GlowSprite();
@@ -99,7 +101,9 @@ public class Projectile : MonoBehaviour
 
         GameObject sprite = new GameObject("~glowSprite");
         sprite.transform.SetParent(transform, false);
-        sprite.transform.localScale = Vector3.one * (Radius * 3.4f);
+        glowScale = Radius * 5f;
+        glowSeed = Random.Range(0f, 100f);
+        sprite.transform.localScale = Vector3.one * glowScale;
 
         MeshFilter filter = sprite.AddComponent<MeshFilter>();
         filter.sharedMesh = GlowQuad();
@@ -298,6 +302,13 @@ public class Projectile : MonoBehaviour
                 glowSprite.rotation = Quaternion.LookRotation(
                     glowSprite.position - camera.transform.position, camera.transform.up);
             }
+
+            // A dead-flat glow reads as a sticker, not a light source - a slow pulse (Perlin
+            // rather than a sine, same reasoning as every other wobble in this game: it swings
+            // instead of ticking metronomically) is what sells "still burning" while it's in the
+            // air. Seeded per-shell so two in flight at once don't pulse in lockstep.
+            float pulse = 0.85f + Mathf.PerlinNoise(glowSeed, Time.time * 2.2f) * 0.3f;
+            glowSprite.localScale = Vector3.one * (glowScale * pulse);
         }
 
         travelled += distance;

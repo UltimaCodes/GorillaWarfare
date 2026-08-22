@@ -202,13 +202,17 @@ important entry: movement tech is only fun when you can *stop*, because otherwis
 jump ends in a wall. It is also the counter-play - the person who can stop is the person who can
 shoot.
 
-**Ground pound needed its own key.** It and the air brake used to share the slide/crouch key,
-told apart by vertical velocity - falling meant slam, rising meant brake. Reported 2026-08-22 as
-making ordinary sliding hard to do: landing is always falling, so pressing the key to buffer a
-slide for touchdown kept firing a slam instead, every time. `KeyBinds.Action.GroundPound`
-(`LeftControl` by default) now owns the slam outright; the air brake's rising-only condition
-never had this conflict, since you can't be about to land while still going up, so it stayed on
-the shared key.
+**Ground pound and the air brake both ended up with their own keys.** All three (slide, slam,
+brake) used to share one key, told apart by vertical velocity - falling meant slam, rising meant
+brake. Reported 2026-08-22 as making ordinary sliding hard to do: landing is always falling, so
+pressing the key to buffer a slide for touchdown kept firing a slam instead, every time. Gave
+ground pound its own key (`KeyBinds.Action.GroundPound`, `LeftControl`) and left the air brake on
+the shared key, reasoning that "you can't be about to land while still going up" meant no
+conflict there. That reasoning missed a slide-hop chain specifically: re-pressing the shared key
+*while still rising* out of the last hop, to buffer the next slide, satisfied the brake's own
+condition just as well and fired it instead - reported 2026-08-23 as "you can't slide-hop any
+more." Gave the air brake its own key too (`KeyBinds.Action.AirBrake`, `LeftAlt`) rather than
+patch the shared-key logic a second time.
 
 **Momentum melee.** The peel does more damage the faster you are travelling when it lands. Turns
 a slide into an attack and gives the last gun game rung something to build toward, instead of

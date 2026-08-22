@@ -23,7 +23,7 @@ MonoBehaviour:
   pelletsPerShot: 1
   melee: 1
   fireKnockback: 0
-  meleeHold: {x: -15, y: 0, z: 180}
+  meleeHold: {x: -20, y: 0, z: 0}
   meleeSwing: 65
   twoHanded: 0
   magazineSize: 0
@@ -31,7 +31,7 @@ MonoBehaviour:
   reloadTime: 0
   layeredAbove: 0.45
   muzzleFlash: 1
-  reticle: 2
+  reticle: 0
   reticleSpreadScale: 0.0
   ripens: 1
   unripe: {r: 0.55, g: 0.78, b: 0.22, a: 1}

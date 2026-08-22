@@ -48,6 +48,18 @@ public static class KeyBinds
         /// instead, on every single jump. Same "appended at the end" reasoning as Grapple above.
         /// </summary>
         GroundPound,
+
+        /// <summary>
+        /// The air brake, split off Walk the same day for the same reason GroundPound was: it
+        /// still shared Walk with the slide buffer, told apart by "rising means brake" on the
+        /// theory that you can't be about to land while still going up - true for an ordinary
+        /// jump, false for a slide-hop chain, where re-pressing Walk to buffer the *next* slide
+        /// happens exactly while still rising out of the last one. That press satisfied the
+        /// brake's own condition just as well and fired it instead, killing the chain's speed on
+        /// the very re-press that was supposed to extend it - reported as "you can't slide-hop
+        /// any more." Appended at the end, same convention as everything above it.
+        /// </summary>
+        AirBrake,
     }
 
     /// Raised when a binding changes, so anything showing one can redraw.
@@ -70,6 +82,7 @@ public static class KeyBinds
         KeyCode.Escape,     // Menu
         KeyCode.G,          // Grapple
         KeyCode.LeftControl, // GroundPound
+        KeyCode.LeftAlt,    // AirBrake
     };
 
     static readonly KeyCode[] bound = (KeyCode[])Defaults.Clone();
@@ -240,6 +253,7 @@ public static class KeyBinds
             case Action.Menu: return "menu";
             case Action.Grapple: return "grapple (hold)";
             case Action.GroundPound: return "ground pound";
+            case Action.AirBrake: return "air brake";
             default: return action.ToString();
         }
     }

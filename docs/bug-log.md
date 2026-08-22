@@ -731,3 +731,115 @@ create-room-then-load pattern `PlayModeProbe` already uses successfully for its 
 runs. Re-ran `SandboxDummyCheck` after this second fix: 4 dummies found, each with its 13 hitboxes,
 positioned in the actual loaded `Game` scene. Removed the check afterward, per the usual
 convention for these throwaway diagnostics.
+
+# Ninth pass — UI shake for real, a slide-hop regression, and the peel's actual orientation, 2026-08-23
+
+## The HUD still didn't shake
+
+The previous pass's fix drove `canvasRect.anchoredPosition` directly - and that field belongs to
+the root `Canvas`, which `HudBuilder` sets to `RenderMode.ScreenSpaceOverlay`. Unity ignores an
+overlay canvas's *own* RectTransform entirely when placing it on screen; it always fills the
+viewport exactly regardless of anchored position, local rotation or scale. Driving it was writing
+to a value nothing ever reads. Fixed by inserting a child RectTransform (`~HudShakeRoot`) between
+the canvas and everything currently under it - built at runtime in `GameHud.Awake()` by
+reparenting every existing direct child into it once, so nothing about `HudBuilder`'s own prefab
+had to change. A canvas's *children* have no such exemption, so the shake now actually moves
+something the renderer looks at.
+
+## Bhop circle-strafing gained speed "a lot, really quickly"
+
+`airSpeedCap` (the per-hop air-strafe ceiling) was raised from the authentic CS:S value (0.762)
+to 2.5 two passes ago, specifically so a slide-hop's redirect had room to work - but `AirMove`
+handed that same generous cap to *every* jump, chained off a slide or not. Combined with
+`airAccel` already sitting above the CS:S reference value too, plain circle-strafing (no slide
+involved at all) was gaining speed at roughly 4x the authentic rate. Split the cap in two:
+`pureBhopAirSpeedCap` (0.9, close to the original) applies outside an active slide-hop chain,
+`airSpeedCap` (2.5) still applies while one is running (`Time.time < chainExpires`, the same
+signal the chain-bonus system already reads). A slide-hop keeps the room it was given; naked
+circle-jumping does not.
+
+## Slide-hopping stopped working, and it was the air brake's fault
+
+Reported as "you can't slide-hop any more for some reason." Ground pound moved off Walk a pass ago
+specifically because landing is always falling, and the air brake was left behind on the reasoning
+that "you can't be about to land while still going up" - true for an ordinary jump, false for a
+slide-hop chain specifically: re-pressing Walk *while still rising* out of the last hop, to buffer
+the next slide for touchdown, is exactly the input pattern a chain runs on. That press satisfied
+the air brake's rising-only condition just as well and fired it, cutting horizontal speed to 12%
+on the exact input meant to extend the chain. Gave the air brake its own key
+(`KeyBinds.Action.AirBrake`, `LeftAlt` by default) - same fix shape as ground pound's, and for the
+same underlying reason: the "vertical velocity tells them apart" premise never accounted for a
+press that means two different things depending on what happens next, only different things
+depending on what already happened.
+
+## Wall running "gets you stuck on walls for a second"
+
+Every frame of an active wall run clips velocity to exactly zero along the wall's own normal, on
+purpose - that's what keeps you tracking the wall's surface instead of drifting off it. The
+consequence: at the instant a run ends *passively* (released, lost the wall, timed out), velocity
+has precisely nothing pointing away from that surface. Nothing carries you off it - you keep
+contacting the same wall under gravity, and `OnControllerColliderHit` keeps re-clipping the same
+nothing, which reads as being stuck rather than falling away. The deliberate wall-jump exit already
+had a payoff push (`wallJumpAway`); the passive exit had none at all. Added a much smaller
+`wallRunPassiveSeparation` push (1.1 against wall-jump's 5.5) on any non-jump `EndWallRun` - just
+enough to actually separate, not a second payoff.
+
+## The peel's melee hold was pointing backward, not forward
+
+Reported as "hasn't been rotated yet" and "should have a crosshair." Two separate, real bugs:
+
+**The rotation.** `meleeHold: {x: -15, y: 0, z: 180}` was verified by rendering it, four passes
+ago - and misread. `WeaponCheck`'s own independent measurement (`bananaPeel points forward, z
+should be the longest axis`) confirms the raw mesh's long axis is +Z at identity, same as every
+other weapon; a 180° rotation around Y maps +Z to -Z, which reverses a shape's forward direction
+outright rather than merely angling it. The old calibration render's "front" view looked plausible
+at a glance because a foreshortened cross-section of a curved shape still reads as *something* -
+it just wasn't reading as "pointed at the enemy." Re-rendered with `Tools/Gorilla Warfare/
+Photograph the peel` at several candidate values instead of reasoning about it a third time (this
+exact system has been wrong twice before, see the third pass above); `{x: -20, y: 0, z: 0}` - no Y
+rotation at all - reads correctly forward-and-down from both the oblique and first-person-facing
+camera angles. Also added `Peel` to `PlayModeProbe.CaptureEveryWeapon`'s own screenshot loop
+(`viewmodel-peel.png`) - it was never in `WeaponLoadout.AllWeapons` (deliberately; that list is
+the random-roll pool and melee is guaranteed separately), which meant nothing had ever screenshotted
+it being *held*, only the isolated calibration renders.
+
+**The crosshair.** `Peel.asset` had `reticle: Dot` - correct for a spread weapon where drawing the
+cone is noise, wrong for melee, which has no spread to hide. `Dot` style suppresses all four tick
+marks unconditionally and the dot itself only draws when `GameSettings.CrosshairDot` is on, which
+defaults `false` - so with default settings the peel drew no reticle at all. Changed to `Cross`,
+same as everything else that doesn't have a specific reason not to.
+
+**A found-but-not-the-bug side note:** the `viewmodel-X` screenshot loop's own camera framing
+turned out to show nothing recognizable for *any* weapon, not just the peel - `map-floor.png`,
+meant to be a deliberately tilted-down shot, is pixel-identical to a normal level view. Traced to
+`PlayerController.Look()` recomputing `cameraHolder`'s rotation from `verticalLookRotation` every
+single frame regardless of what anything else just set - correct for real input, but batch mode
+has no real mouse, so `verticalLookRotation` never moves and any manual test override to the
+camera's rotation is overwritten the very next frame. Pre-existing, unrelated to anything changed
+this pass, and not fixed here - noted so the next person chasing a "why is nothing in this
+screenshot" question doesn't spend as long on it as this one did.
+
+## Grenade (pineapple) glow, brightened rather than re-diagnosed
+
+Reported as still not reading as glowing. The existing implementation (a real point light plus a
+camera-facing additive billboard, from the sixth pass) is structurally sound - reviewed rather than
+rebuilt, since nothing about it looks broken. Raised the light's intensity (2.2 to 3.2) and the
+billboard's base scale (3.4x radius to 5x), and added a slow Perlin pulse to the billboard's size
+so it reads as something still burning in flight rather than a static decal riding along with it.
+
+## New: the picture itself reacts to a hit, not just the camera and the HUD
+
+Added while asked for "more oomph" generally, rather than for a specific report. `ShaderStack`'s
+post-processing presets (`Full`/`Overripe`) already carry a `Vignette` and, on `Overripe`, a
+`ChromaticAberration` - both static, set once per preset and never touched again. Added
+`ShaderStack.Pulse(strength)`, called from `Juice.Hit`/`Juice.Shake` alongside the existing
+screenshake, which bumps both settings' intensity above the preset's own baseline and decays it
+back on unscaled time (same reasoning as everything else that has to survive hitstop). Only wired
+up when the active preset already added that setting - a player who picked `Clean` for a plainer
+picture or a better framerate doesn't get `Overripe`'s aberration smuggled in through a hit
+reaction. `Full`'s post-processing stack itself was already built and working (`ShaderStack.cs`,
+undated in its own comments but clearly pre-existing) - `roadmap.md`'s M7 section had this listed
+as `[ ]` despite it being live; corrected alongside this pass. Same story for the multikill
+callout system (`GameHud.ShowKill`/`MultikillName`, `PlayerController.RewardKill`) - fully built,
+already themed ("OVERRIPE", "BLENDED", "FRUIT SALAD"), found while looking for exactly this
+feature to build and confirmed already shipped instead.

@@ -153,6 +153,7 @@ public class GameHud : MonoBehaviour
 
     PlayerController player;
     RectTransform canvasRect;
+    RectTransform shakeRoot;
 
     float hitFlash;
     bool lastHitWasHead;
@@ -185,6 +186,43 @@ public class GameHud : MonoBehaviour
     }
 
     /// <summary>
+    /// Wraps every existing HUD element in one child RectTransform the shake can actually move.
+    ///
+    /// The canvas is Screen Space - Overlay (HudBuilder), and Unity ignores an overlay canvas's
+    /// *own* RectTransform entirely when placing it - it always fills the screen exactly regardless
+    /// of anchoredPosition, which is why driving canvasRect directly did nothing at all ("the UI
+    /// still doesn't shake"). A child RectTransform underneath it has no such exemption. Built at
+    /// runtime rather than in HudBuilder so nothing about the existing prefab/hierarchy has to
+    /// change - every current direct child of the canvas is reparented under this one, once, and
+    /// everything drawn from here on (added by other systems after this runs) still lands directly
+    /// on the canvas and won't shake, so this has to run before anything else populates it.
+    /// </summary>
+    static RectTransform BuildShakeRoot(RectTransform canvasRect)
+    {
+        GameObject host = new GameObject("~HudShakeRoot", typeof(RectTransform));
+        RectTransform rect = (RectTransform)host.transform;
+        rect.SetParent(canvasRect, false);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        int count = canvasRect.childCount;
+        Transform[] existing = new Transform[count];
+        for (int i = 0; i < count; i++)
+            existing[i] = canvasRect.GetChild(i);
+
+        foreach (Transform child in existing)
+        {
+            if (child != rect)
+                child.SetParent(rect, false);
+        }
+
+        rect.SetAsFirstSibling();
+        return rect;
+    }
+
+    /// <summary>
     /// Handed over by the local PlayerController when it spawns.
     ///
     /// Null between dying and respawning, which is why everything below checks before reading
@@ -198,7 +236,10 @@ public class GameHud : MonoBehaviour
 
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas != null)
+        {
             canvasRect = (RectTransform)canvas.transform;
+            shakeRoot = BuildShakeRoot(canvasRect);
+        }
 
         // Made here if the scene doesn't have one. The dot arrived after the HUD was built,
         // and re-running the builder to add it would throw away any restyling done since - so
@@ -525,12 +566,12 @@ public class GameHud : MonoBehaviour
     /// </summary>
     void UpdateHudShake()
     {
-        if (canvasRect == null)
+        if (shakeRoot == null)
             return;
 
         if (hudShakeSeed < 0f)
         {
-            canvasRestPos = canvasRect.anchoredPosition;
+            canvasRestPos = shakeRoot.anchoredPosition;
             hudShakeSeed = Random.Range(0f, 100f);
         }
 
@@ -538,7 +579,7 @@ public class GameHud : MonoBehaviour
 
         if (amount <= 0.001f)
         {
-            canvasRect.anchoredPosition = canvasRestPos;
+            shakeRoot.anchoredPosition = canvasRestPos;
             return;
         }
 
@@ -549,7 +590,7 @@ public class GameHud : MonoBehaviour
             (Mathf.PerlinNoise(hudShakeSeed, time) - 0.5f) * 2f,
             (Mathf.PerlinNoise(hudShakeSeed + 11f, time) - 0.5f) * 2f) * (maxPixels * amount);
 
-        canvasRect.anchoredPosition = canvasRestPos + offset;
+        shakeRoot.anchoredPosition = canvasRestPos + offset;
     }
 
     /// <summary>

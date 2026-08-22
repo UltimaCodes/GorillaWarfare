@@ -102,13 +102,16 @@ public class Juice : MonoBehaviour
             j.stopUntil = until;
 
         j.shake = Mathf.Max(j.shake, maxShake * strength);
+        ShaderStack.Pulse(strength);
     }
 
     /// A shake with no stop, for firing. Feeling the gun go off shouldn't cost you frames.
     public static void Shake(float strength)
     {
         Juice j = Instance;
-        j.shake = Mathf.Max(j.shake, maxShake * Mathf.Clamp01(strength) * 0.5f);
+        strength = Mathf.Clamp01(strength);
+        j.shake = Mathf.Max(j.shake, maxShake * strength * 0.5f);
+        ShaderStack.Pulse(strength * 0.5f);
     }
 
     void LateUpdate()

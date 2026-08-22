@@ -60,6 +60,17 @@ public class PlayerMovement : MonoBehaviour
              + "who does strafe properly still gains more than one who doesn't.")]
     [SerializeField] float airSpeedCap = 2.5f;
 
+    [Tooltip("The air speed cap used when NOT in an active slide-hop chain (chainExpires elapsed). "
+             + "Reported 2026-08-22: circling in the air while bunnyhopping - no slide involved at "
+             + "all - gained speed 'a lot, really quickly'. airSpeedCap above is 3.3x the authentic "
+             + "CS:S value specifically so a slide-hop's redirect has real room to work, but that "
+             + "generosity was being handed to *every* jump, chained or not, since AirMove never "
+             + "distinguished the two. This is close to the original CS:S number (0.762) instead - "
+             + "plain circle-strafe bhop earns speed at roughly the authentic, slow-learning-curve "
+             + "rate again, while a genuine slide-hop chain (chainExpires still running) keeps the "
+             + "generous cap that redirect fix needed.")]
+    [SerializeField] float pureBhopAirSpeedCap = 0.9f;
+
     [Header("Jump")]
     [SerializeField] float jumpSpeed = 6.86f;
     [SerializeField] float gravity = 20.32f;
@@ -304,6 +315,16 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Cooldown after leaving a wall run before another one can start, so jumping off "
              + "doesn't just re-latch the same wall a frame later.")]
     [SerializeField] float wallRunReentryDelay = 0.4f;
+
+    [Tooltip("Small push away from the wall on an exit that isn't a wall-jump - releasing, losing "
+             + "the wall, or timing out. Reported as 'gets you stuck on walls for a second': every "
+             + "frame of an active wall run clips velocity to exactly zero along the wall normal, "
+             + "so at the instant it ends passively there is precisely no speed pointing away from "
+             + "the surface - nothing carries you off it, and OnControllerColliderHit keeps "
+             + "re-clipping the same nothing while you slide along it under gravity instead of "
+             + "actually falling away. Well under wallJumpAway, which is the deliberate payoff for "
+             + "actually jumping off - this only has to be enough to separate.")]
+    [SerializeField] float wallRunPassiveSeparation = 1.1f;
 
     bool wallRunning;
     Vector3 wallNormal;
@@ -803,8 +824,12 @@ public class PlayerMovement : MonoBehaviour
 
     void AirMove(Vector3 wishDir, float wishSpeed, float dt)
     {
+        // The generous cap is earned by a live slide-hop chain, not by being airborne at all -
+        // see pureBhopAirSpeedCap's own tooltip for why plain circling was gaining speed too fast.
+        float cap = Time.time < chainExpires ? airSpeedCap : pureBhopAirSpeedCap;
+
         // No friction in the air - this is what preserves momentum between hops.
-        Accelerate(wishDir, Mathf.Min(wishSpeed, airSpeedCap), airAccel, dt);
+        Accelerate(wishDir, Mathf.Min(wishSpeed, cap), airAccel, dt);
         velocity.y -= gravity * dt;
     }
 
@@ -910,18 +935,23 @@ public class PlayerMovement : MonoBehaviour
 
             WallJumpEffects();
         }
+        else
+        {
+            velocity += wallNormal * wallRunPassiveSeparation;
+        }
     }
 
     /// <summary>
-    /// Air brake and ground slam, on separate keys as of 2026-08-22.
+    /// Air brake and ground slam, both off Walk entirely as of this pass.
     ///
-    /// They used to share Walk, told apart by vertical velocity - falling meant slam, rising
-    /// meant brake - which broke the moment it met the slide buffer, which *also* reads Walk
-    /// while airborne to remember a slide for landing. Landing is always falling, so trying to
-    /// buffer a slide kept firing a slam instead, every time. Ground pound now has its own key
-    /// (`KeyBinds.Action.GroundPound`) and doesn't touch Walk at all. The air brake stays on Walk
-    /// but keeps its rising-only condition - it never conflicted with the slide buffer in the
-    /// first place, since you can't be about to land while still going up.
+    /// Ground pound moved first (see GroundPound's own doc comment) because landing is always
+    /// falling, which made it fire on every buffered slide. The air brake looked safe left behind
+    /// - "you can't be about to land while still going up" - but that reasoning only covers an
+    /// ordinary jump. A slide-hop chain re-presses Walk *while still rising* out of the last hop,
+    /// specifically to buffer the next slide for touchdown, and that press satisfied the brake's
+    /// rising-only condition just as well and fired it instead - killing the chain's speed on the
+    /// exact input that was supposed to extend it. Reported as "you can't slide-hop any more."
+    /// Its own key now (`KeyBinds.Action.AirBrake`), same fix shape as GroundPound's.
     /// </summary>
     void UpdateAirAction(bool listening)
     {
@@ -931,7 +961,7 @@ public class PlayerMovement : MonoBehaviour
         if (KeyBinds.Pressed(KeyBinds.Action.GroundPound) && Time.time >= groundSlamCooldownUntil)
             GroundSlam();
 
-        if (KeyBinds.Pressed(KeyBinds.Action.Walk) && velocity.y >= 0f)
+        if (KeyBinds.Pressed(KeyBinds.Action.AirBrake) && velocity.y >= 0f)
             AirBrake();
     }
 

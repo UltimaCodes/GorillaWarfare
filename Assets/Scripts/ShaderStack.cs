@@ -30,6 +30,44 @@ public class ShaderStack : MonoBehaviour
     Camera attached;
     int volumeLayer;
 
+    // ---- pulse ----
+    //
+    // The static preset picks a mood; this is what makes the picture itself react to a hit
+    // instead of just the camera and the HUD. Added because everything that already flinches on
+    // impact - Juice's shake, GameHud's own copy of it - moves things around but never touches
+    // the actual image, which is exactly what a colour-grading/vignette/aberration stack is for.
+    // Riding on Juice's own strength value rather than adding a second one, so a body shot and a
+    // kill differ here by exactly the same ratio they already differ by everywhere else.
+    Vignette vignetteRef;
+    ChromaticAberration fringeRef;
+    float baseVignette;
+    float baseFringe;
+    float pulseAmount;
+
+    /// <param name="strength">0 to 1, same scale as Juice.Hit/Juice.Shake.</param>
+    public static void Pulse(float strength)
+    {
+        if (Instance != null)
+            Instance.pulseAmount = Mathf.Max(Instance.pulseAmount, Mathf.Clamp01(strength));
+    }
+
+    void Update()
+    {
+        if (pulseAmount <= 0.0001f)
+            return;
+
+        // Unscaled - a kill's own hitstop is usually dragging Time.timeScale down at the exact
+        // moment this fires, and a pulse that only decays on scaled time would hang at full
+        // strength for the whole freeze instead of actually reading as a pulse.
+        pulseAmount = Mathf.MoveTowards(pulseAmount, 0f, Time.unscaledDeltaTime * 2.2f);
+
+        if (vignetteRef != null)
+            vignetteRef.intensity.value = baseVignette + pulseAmount * 0.3f;
+
+        if (fringeRef != null)
+            fringeRef.intensity.value = baseFringe + pulseAmount * 0.7f;
+    }
+
     void Awake()
     {
         Instance = this;
@@ -184,6 +222,10 @@ public class ShaderStack : MonoBehaviour
                 ApplyAntialiasing(layer);
         }
 
+        vignetteRef = null;
+        fringeRef = null;
+        pulseAmount = 0f;
+
         if (GameSettings.Shaders == GameSettings.ShaderPreset.Off && !GameSettings.MotionBlur)
             return;
 
@@ -198,6 +240,22 @@ public class ShaderStack : MonoBehaviour
         volume.isGlobal = true;
         volume.priority = 100f;
         volume.profile = profile;
+
+        // Only wired up if the current preset already put these in the profile - a pulse has
+        // nothing to push on top of if Clean's own vignette was never added, and Off already
+        // returned above. Nobody who picked a lighter preset for their eyes or their framerate
+        // should get the heavier one's effects smuggled in through a hit reaction.
+        if (profile.TryGetSettings(out Vignette vignette))
+        {
+            vignetteRef = vignette;
+            baseVignette = vignette.intensity.value;
+        }
+
+        if (profile.TryGetSettings(out ChromaticAberration fringe))
+        {
+            fringeRef = fringe;
+            baseFringe = fringe.intensity.value;
+        }
     }
 
     /// <summary>

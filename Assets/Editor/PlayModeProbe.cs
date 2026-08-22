@@ -1001,7 +1001,14 @@ public class ProbeRunner : MonoBehaviour
             yield return null;
         }
 
-        foreach (string weapon in WeaponLoadout.AllWeapons)
+        // Peel isn't in AllWeapons - it's the guaranteed melee weapon, never one of the ones a
+        // random loadout rolls - but that's exactly why nothing had ever screenshotted it here.
+        // Its held pose was being judged from an isolated calibration render instead of a real
+        // equipped shot; added explicitly so it gets the same "a person can actually look at this"
+        // treatment as everything else in this loop.
+        List<string> toCapture = new List<string>(WeaponLoadout.AllWeapons) { "Peel" };
+
+        foreach (string weapon in toCapture)
         {
             PlayerController.PublishLoadout(new[] { weapon });
 

@@ -282,7 +282,10 @@ two feeds would either overlap or need a third thing to arbitrate.
 - [x] **Screenshake now shakes the UI too** — reported directly, since a screen-space overlay
       canvas doesn't move with the camera at all and was the one thing on screen a hit never
       touched. `Juice.Amount` exposes the current shake normalised 0-1; `GameHud` reads it to
-      offset the whole canvas with the same Perlin-noise wobble the camera itself uses.
+      offset a shake root with the same Perlin-noise wobble the camera itself uses. First attempt
+      drove the canvas's own RectTransform directly and did nothing at all - Unity ignores an
+      overlay canvas's own transform when placing it. Fixed 2026-08-23 by shaking a child
+      RectTransform instead, which has no such exemption - see `bug-log.md`'s ninth pass.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
@@ -349,7 +352,13 @@ how many clusters) - not played yet, see Unverified.
       whatever surface they land on. Blood is red, sticks to the body, and goes when it does
 - [ ] Replace the remaining placeholder textures (the menu still uses them)
 - [ ] Environment art matching the philosophy
-- [ ] Post-processing: the palette-mangling that sells the Cruelty Squad look
+- [x] **Post-processing: the palette-mangling that sells the Cruelty Squad look.** Corrected
+      2026-08-23 - this was already fully built (`ShaderStack.cs`: ambient occlusion, bloom,
+      colour grading, vignette, an `Overripe` preset with chromatic aberration and coloured grain
+      pushed "past the point of good taste") and had just never been marked done here. Found while
+      looking for a post-processing gap to fill for "more oomph" and discovering there wasn't one -
+      extended instead with `ShaderStack.Pulse()`, a temporary vignette/aberration boost on every
+      hit and kill, see `bug-log.md`'s ninth pass.
 - [x] Screenshake and hitstop — `Juice`, on the camera, all unscaled time. Both retuned
       2026-08-22: shake gained a rotational component (position alone read as nothing), and the
       freeze itself was reported as "doesn't work" — 110ms at 6% speed on a kill was closer to a
@@ -360,6 +369,13 @@ how many clusters) - not played yet, see Unverified.
 - [x] **Melee swing.** `SingleShotGun.StabSwing()` - a fast jab forward, a slower settle back,
       driven by maths off the weapon's own held pose rather than a clip, unscaled time so
       hitstop doesn't freeze it mid-jab.
+- [x] **The peel's held rotation actually points forward now, and it has a crosshair.** The old
+      `meleeHold` included a 180° turn around the model's own vertical axis, which - for a shape
+      whose long axis is forward at identity, confirmed independently by `WeaponCheck` - reverses
+      it outright rather than merely angling it; verified wrong by rendering several candidates,
+      not reasoned about a third time. Its reticle was also `Dot`, which draws nothing at all
+      unless a `CrosshairDot` setting most players never turn on is active. Both fixed 2026-08-23,
+      see `bug-log.md`'s ninth pass.
 - [x] **Check hitbox alignment against the mesh.** Actually looked at, 2026-08-22, with
       `Tools/Gorilla Warfare/Photograph the hitboxes` - and it was worse than "never checked":
       the auto-fit measured the arm at 0.66m radius, wider than the torso, because this rig's
@@ -404,6 +420,17 @@ Separate from M0 because it needs a person playing it, not a fix.
       `cameraHolder` pulls the camera back along its own offset when it would clip, done in world
       space on the holder rather than the camera's own local transform so it doesn't fight
       `Juice`'s screenshake, which owns that transform's rest state.
+- [x] **Bhop circle-strafing no longer gains speed absurdly fast outside a slide-hop.** The
+      generous `airSpeedCap` (2.5, raised for the slide-hop redirect fix) was being handed to
+      every jump regardless of whether a slide was involved. Now gated on an active chain window;
+      plain circle-jumping uses a much smaller, closer-to-authentic cap instead. See `bug-log.md`'s
+      ninth pass.
+- [x] **Slide-hopping works again.** Was broken by the air brake, still sharing Walk with the
+      slide buffer - re-pressing Walk to buffer the next slide while still rising out of the last
+      hop fired the brake instead, killing the chain's speed. Air brake now has its own key.
+- [x] **Wall running no longer leaves you stuck against the wall on a passive exit.** The run's own
+      per-frame clip zeroes velocity away from the wall by design; ending without jumping off left
+      nothing to carry you away from it. Small separation push added on that exit only.
 - [x] **Bhop retuned again.** Reported as gaining way too much speed way too fast - a side effect
       of the same-day airSpeedCap raise for slide-hop redirect making *every* jump gain more from
       strafing, not just a slide-hop one. `bhopKeep` down from 1 to 0.92 so a perfect landing
