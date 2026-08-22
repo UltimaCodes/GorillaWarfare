@@ -430,12 +430,15 @@ Things the checks can't reach, so they need a person:
   heights (checked directly in the scene file after a real bug in that same math), but the
   numbers themselves - tier count, scale, how tall a formation ends up, how far apart they sit -
   are a first pass same as everything else on this list.
-- **wall run, vault, ground slam and air brake, entirely.** Built and verified not to throw, but
-  every number in them (speed thresholds, ledge heights, the wall-run timer, the impulses) is a
-  first guess reasoned from the existing constants, the same way every other feel number in this
-  project has needed a person before it could be trusted. Explicitly asked to be balanced, not
-  overpowered - the reasoning for why they shouldn't compound is written where they're built, but
-  reasoning is not the same claim as having been played.
+- **wall run, vault, ground slam and air brake.** Had their first real playtest 2026-08-22, which
+  is exactly what this entry existed to wait for - three of the four came back with real
+  problems (ground pound firing on every slide-buffer attempt, wall run's auto-latch being
+  unpredictable to start or stop on purpose, vault never triggering because it only checked while
+  grounded and an actual attempt is never grounded by the time it matters). All three redesigned
+  the same day - see `bug-log.md`'s seventh pass. Still true of what's left: every number in them
+  (speed thresholds, ledge heights, the wall-run timer, the impulses) is a first guess, the same
+  way every other feel number in this project has needed a person before it could be trusted -
+  this pass changed *what* they do, not whether the specific numbers are right yet.
 
 Previously listed here and corrected 2026-08-22: "anything that needs a second client" — this
 was verified on 3-4 real clients 2026-08-16 (`working-notes.md`), including remote weapon

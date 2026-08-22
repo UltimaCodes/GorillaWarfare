@@ -2,8 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Full-screen toon outline, driven off the camera's own depth+normal buffer rather than pushed
-/// mesh geometry (see Custom/ToonOutline.shader, and Assets/Shaders/README.txt for why that one
-/// isn't what's actually wired up). One component on one camera outlines everything it sees -
+/// mesh geometry (see Assets/Shaders/README.txt for the mesh-based attempt this replaced -
+/// Custom/ToonOutline.shader, removed 2026-08-22 once nothing referenced it any more). One
+/// component on one camera outlines everything it sees -
 /// players, projectiles, weapons, world geometry - which is also the honest answer to "try it on
 /// other things too": there's no separate per-object step to remember to add.
 /// </summary>

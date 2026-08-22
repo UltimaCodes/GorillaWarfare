@@ -40,6 +40,14 @@ public static class KeyBinds
         /// Appended at the end rather than sorted in with the rest, so every existing binding
         /// keeps the same enum value.
         Grapple,
+        /// <summary>
+        /// The ground slam, on its own key as of 2026-08-22. It used to share Walk with slide and
+        /// crouch, told apart by vertical velocity - falling meant slam, rising meant air brake -
+        /// which sounded clean in the abstract and was wrong in practice: landing is *always*
+        /// falling, so trying to press Walk to buffer a slide for the landing kept firing a slam
+        /// instead, on every single jump. Same "appended at the end" reasoning as Grapple above.
+        /// </summary>
+        GroundPound,
     }
 
     /// Raised when a binding changes, so anything showing one can redraw.
@@ -61,6 +69,7 @@ public static class KeyBinds
         KeyCode.Tab,        // Scoreboard
         KeyCode.Escape,     // Menu
         KeyCode.G,          // Grapple
+        KeyCode.LeftControl, // GroundPound
     };
 
     static readonly KeyCode[] bound = (KeyCode[])Defaults.Clone();
@@ -230,6 +239,7 @@ public static class KeyBinds
             case Action.Scoreboard: return "scoreboard (hold)";
             case Action.Menu: return "menu";
             case Action.Grapple: return "grapple (hold)";
+            case Action.GroundPound: return "ground pound";
             default: return action.ToString();
         }
     }

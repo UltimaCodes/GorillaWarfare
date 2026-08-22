@@ -180,22 +180,35 @@ geometry isn't itself box-shaped. Non-convex static mesh colliders raycast norma
 `convex = true` requirement only bites a collider that also carries a non-kinematic `Rigidbody`,
 which none of this project's level geometry does.
 
-**Wall run.** Hold toward a wall while airborne and above a speed threshold, and you stick to it
-for a second or so, gravity mostly off, gaining a little height. Ends when you jump off, slow
-down, or run out of wall. The jump off it is the payoff and should push away as well as up.
+**Wall run.** Hold the slide/crouch key near a wall while airborne, and you stick to it for as
+long as it's held, gravity mostly off, gaining a little height - let go and you fall immediately.
+Retuned 2026-08-22 from an auto-latch (moving toward a wall fast enough, no button) after its
+first playtest came back as "really weird" - unpredictable to start or stop on purpose. A jump
+while attached is still the payoff, pushing away from the wall as well as up.
 
-**Vault.** Run at a ledge below chest height and go over it without stopping. Purely a smoothing
-mechanic - it removes the moment where speed dies against a knee-high box, which is the single
-most common way momentum is lost on any map.
+**Vault.** A second jump press while already airborne, near a ledge, carries you over it.
+Retuned 2026-08-22 from an automatic grounded-and-fast trigger that was reported as simply not
+working - it only ever checked while `grounded`, and the one thing an actual player does at a
+ledge worth vaulting is jump at it, which left `grounded` the moment they tried. Costs nothing if
+there's no ledge - press it in open air and nothing happens, no free double jump granted.
 
-**Ground slam.** Crouch in the air with speed and you come down hard, keeping the horizontal
-component. A way to convert height into distance, and it pairs with rocket jumping - up with the
-pineapple, across with the slam.
+**Ground slam.** Press a dedicated key (not the slide/crouch key - see below) while airborne and
+you come down hard, keeping the horizontal component. A way to convert height into distance, and
+it pairs with rocket jumping - up with the pineapple, across with the slam.
 
-**Air brake.** Tap slide in the air to kill horizontal speed almost instantly. Sounds
-counterproductive on a list about going fast, and it is the most important entry: movement tech
-is only fun when you can *stop*, because otherwise every rocket jump ends in a wall. It is also
-the counter-play - the person who can stop is the person who can shoot.
+**Air brake.** Tap the slide/crouch key while rising or at the apex to kill horizontal speed
+almost instantly. Sounds counterproductive on a list about going fast, and it is the most
+important entry: movement tech is only fun when you can *stop*, because otherwise every rocket
+jump ends in a wall. It is also the counter-play - the person who can stop is the person who can
+shoot.
+
+**Ground pound needed its own key.** It and the air brake used to share the slide/crouch key,
+told apart by vertical velocity - falling meant slam, rising meant brake. Reported 2026-08-22 as
+making ordinary sliding hard to do: landing is always falling, so pressing the key to buffer a
+slide for touchdown kept firing a slam instead, every time. `KeyBinds.Action.GroundPound`
+(`LeftControl` by default) now owns the slam outright; the air brake's rising-only condition
+never had this conflict, since you can't be about to land while still going up, so it stayed on
+the shared key.
 
 **Momentum melee.** The peel does more damage the faster you are travelling when it lands. Turns
 a slide into an attack and gives the last gun game rung something to build toward, instead of
