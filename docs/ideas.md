@@ -186,11 +186,11 @@ Retuned 2026-08-22 from an auto-latch (moving toward a wall fast enough, no butt
 first playtest came back as "really weird" - unpredictable to start or stop on purpose. A jump
 while attached is still the payoff, pushing away from the wall as well as up.
 
-**Vault.** A second jump press while already airborne, near a ledge, carries you over it.
-Retuned 2026-08-22 from an automatic grounded-and-fast trigger that was reported as simply not
-working - it only ever checked while `grounded`, and the one thing an actual player does at a
-ledge worth vaulting is jump at it, which left `grounded` the moment they tried. Costs nothing if
-there's no ledge - press it in open air and nothing happens, no free double jump granted.
+**Vault — removed 2026-08-22.** Retuned once already the same day (a second jump press while
+airborne, near a ledge, after the original grounded-and-fast trigger was reported as simply not
+working), then cut outright on its very next playtest with a direct "doesn't work, just remove
+it." Two attempts at the trigger condition in one day and neither read as vaulting to the person
+playing it; not worth a third guess. Nothing else in the movement stack depended on it.
 
 **Ground slam.** Press a dedicated key (not the slide/crouch key - see below) while airborne and
 you come down hard, keeping the horizontal component. A way to convert height into distance, and
@@ -218,13 +218,16 @@ shared formula rather than a peel-only one, since the vine above reuses the exac
 ### Built 2026-08-22: wall run, vault, ground slam, air brake
 
 Worked out earlier the same day, built the same day. The plan below is left in place as the
-accurate account of how each works, not just a proposal - every check is a raycast against
-`Hitbox.WorldMask`, never `Collider.bounds` reasoning, per the mesh-collider note earlier in this
-section. All four live in `PlayerMovement.cs`, wall run's camera lean in
-`PlayerController.Look()`. None add net speed on their own - vault and the slam trade height for
+accurate account of how each *was designed*, not a live spec any more — the first playtest the
+same day came back with real problems on three of the four (see `bug-log.md`'s seventh pass), and
+vault's own paragraph above is now marked removed rather than described here. Wall run's
+state-machine writeup further down (latch on speed + moving toward the wall, end on
+timer/speed-loss/losing-the-wall) describes the auto-latch original specifically; the current
+version is hold-based instead, per the main entry above this subsection - kept below anyway as the
+record of what didn't work and why it changed. Ground slam and the air brake's designs held up as
+originally built. None of the four add net speed on their own - the slam trades height for
 control, the air brake removes speed, wall run preserves whatever was already there - so
-`maxHorizontalSpeed` still governs how fast any combination of them can add up to. Not yet
-played by a person; see `bug-log.md` and `roadmap.md`'s Unverified section.
+`maxHorizontalSpeed` still governs how fast any combination of them can add up to.
 
 **Air brake and ground slam share one input, disambiguated by trajectory, not timing.** Both are
 "press the slide/walk key while airborne," and a tap-vs-hold read would add real latency to
@@ -246,7 +249,8 @@ matches the intuition of the same button meaning "stop" going up and "slam" comi
   heavy thud. `GameAudio` doesn't have anything this weighty yet; `Explosion` pitched down is the
   nearest existing fallback until something purpose-built exists.
 
-**Vault** is a clearance check, then one upward impulse — not a scripted position tween. Three
+**Vault** (removed — this paragraph is the record of the original design, not current behaviour)
+was a clearance check, then one upward impulse — not a scripted position tween. Three
 raycasts forward from the player, all at the speed/direction they're actually moving (not where
 they're aiming): one at knee height to find a ledge, one at chest height that must find *nothing*
 (too tall to vault if it does), and one straight down from just above the ledge to find where it

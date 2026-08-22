@@ -289,26 +289,6 @@ public class PlayerMovement : MonoBehaviour
              + "- this is pure-bhop specifically.")]
     [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 0.92f;
 
-    [Header("Vault")]
-    [Tooltip("How far forward the ledge check reaches. Triggered by a second jump press while "
-             + "airborne, not by speed alone - see TryVault().")]
-    [SerializeField] float vaultCheckDistance = 0.7f;
-
-    [Tooltip("Ledge height range relative to where the second jump was pressed, in metres. Below "
-             + "the low end you're falling onto it, not vaulting; above the high end it's out of "
-             + "a lunge's reach.")]
-    [SerializeField] float vaultMinHeight = -1.5f;
-    [SerializeField] float vaultMaxHeight = 2.2f;
-
-    [SerializeField] float vaultImpulse = 4.6f;
-    [SerializeField] float vaultCooldown = 0.5f;
-
-    float vaultCooldownUntil = -99f;
-
-    /// One vault attempt per airtime - reset the moment you land, set the moment you use your
-    /// second jump press to try one, whether or not it actually found a ledge.
-    bool vaultUsedThisAirtime;
-
     [Header("Wall run")]
     [Tooltip("Fraction of normal gravity while wall running. Not zero - full weightlessness reads "
              + "as flying, not running; a small pull down is what keeps it feeling like a wall "
@@ -345,6 +325,12 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float airBrakeMinSpeed = 3f;
     [SerializeField] float groundSlamSpeed = 19f;
 
+    [Tooltip("Seconds after landing a slam before another one can fire. Reported as spammable "
+             + "with no cooldown at all - jump, slam, land, jump, slam again, as fast as you can "
+             + "press the key.")]
+    [SerializeField] float groundSlamCooldown = 1.4f;
+
+    float groundSlamCooldownUntil = -99f;
     bool slamming;
 
     CharacterController controller;
@@ -505,24 +491,16 @@ public class PlayerMovement : MonoBehaviour
         if (grounded && wasAirborne)
         {
             landedAt = Time.time;
-            vaultUsedThisAirtime = false;
 
             if (slamming)
             {
                 SlamLandingEffects();
                 slamming = false;
+                groundSlamCooldownUntil = Time.time + groundSlamCooldown;
             }
 
             if (wallRunning)
                 EndWallRun(false);
-        }
-
-        // Vault: a second jump press while already airborne, checked against a ledge ahead.
-        // Capped at one attempt per airtime so holding jump can't spam raycasts every frame.
-        if (!grounded && !vaultUsedThisAirtime && !listening && KeyBinds.Pressed(KeyBinds.Action.Jump))
-        {
-            vaultUsedThisAirtime = true;
-            TryVault();
         }
 
         UpdateStance(listening, dt);
@@ -540,6 +518,8 @@ public class PlayerMovement : MonoBehaviour
         {
             AirMove(wishDir, wishSpeed, dt);
         }
+
+        UpdateWallRunScrape();
 
         // The one place total speed is actually bounded, rather than just how often something is
         // allowed to add more of it. Vertical is untouched - this is about bhop and slide chains
@@ -829,57 +809,6 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// A second jump press while already airborne, near a ledge, carries you over it.
-    ///
-    /// Retuned 2026-08-22 from an automatic grounded-and-fast trigger, reported as simply not
-    /// working - which tracks, because the old version only ever checked while `grounded`, and
-    /// the one thing an actual player does at a ledge worth vaulting is jump at it. The moment
-    /// they did, `grounded` went false and the check never ran again for that approach. Making
-    /// the second jump itself the trigger means it fires exactly when a player would naturally
-    /// reach for it, and it costs nothing if there's nothing to vault - press it in open air and
-    /// nothing happens, no free double jump granted.
-    ///
-    /// One raycast forward for a surface to climb, one down from just past it to find where it
-    /// actually is - generous on both, since the player is already mid-air with real velocity of
-    /// their own rather than standing still at a known height the way the grounded version could
-    /// assume.
-    /// </summary>
-    bool TryVault()
-    {
-        if (Time.time < vaultCooldownUntil)
-            return false;
-
-        Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
-        Vector3 dir = flat.sqrMagnitude > 0.01f ? flat.normalized : transform.forward;
-
-        if (!Physics.Raycast(transform.position, dir, out RaycastHit wall, vaultCheckDistance,
-                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-        {
-            return false;
-        }
-
-        Vector3 above = wall.point + dir * 0.4f + Vector3.up * 1.6f;
-        if (!Physics.Raycast(above, Vector3.down, out RaycastHit landing, 3.2f,
-                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-        {
-            return false;
-        }
-
-        float ledgeHeight = landing.point.y - transform.position.y;
-
-        // A genuine ledge within reach of a lunge - not so far below it is just falling onto
-        // something, not so far above a second jump could plausibly still reach it.
-        if (ledgeHeight < vaultMinHeight || ledgeHeight > vaultMaxHeight)
-            return false;
-
-        velocity += dir * (vaultImpulse * 0.7f) + Vector3.up * vaultImpulse;
-        vaultCooldownUntil = Time.time + vaultCooldown;
-
-        VaultEffects(landing.point);
-        return true;
-    }
-
-    /// <summary>
     /// Hold the slide/crouch key near a wall while airborne, and stick to it for as long as it's
     /// held.
     ///
@@ -999,7 +928,7 @@ public class PlayerMovement : MonoBehaviour
         if (listening || grounded || wallRunning || Grappling)
             return;
 
-        if (KeyBinds.Pressed(KeyBinds.Action.GroundPound))
+        if (KeyBinds.Pressed(KeyBinds.Action.GroundPound) && Time.time >= groundSlamCooldownUntil)
             GroundSlam();
 
         if (KeyBinds.Pressed(KeyBinds.Action.Walk) && velocity.y >= 0f)
@@ -1133,12 +1062,6 @@ public class PlayerMovement : MonoBehaviour
 
     static readonly Color DustTint = new Color(0.72f, 0.66f, 0.5f);
 
-    void VaultEffects(Vector3 at)
-    {
-        MovementBurst(at, Vector3.up, DustTint, "circle", 5, 30f, 0.6f, 1.6f, 0.03f, 0.07f, 0.18f, 0.6f);
-        GameAudio.PlayShaped(GameAudio.Vault, 0.45f, 0.75f, GameAudio.Footstep, 0.55f);
-    }
-
     void AirBrakeEffects(Vector3 backward)
     {
         Juice.Shake(0.3f);
@@ -1177,9 +1100,13 @@ public class PlayerMovement : MonoBehaviour
     {
         MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
                      3, 30f, 0.4f, 1f, 0.02f, 0.04f, 0.12f, 0.3f);
-        GameAudio.PlayShaped(GameAudio.WallRun, 0.4f, 1.1f, GameAudio.Vine, 0.9f);
     }
 
+    // Dust only - the audio half of running a wall moved to a continuous loop
+    // (UpdateWallRunScrape) instead of a one-shot fired every tick, which read as choppy machine-
+    // gunning of the same clip rather than a sustained sound. Kept as its own method rather than
+    // folded into the loop's own update, since dust wants a fixed cadence and volume wants to
+    // track speed/state continuously - two different things happening to share one timer badly.
     void WallRunTickEffects(float dt)
     {
         wallRunDustTimer -= dt;
@@ -1190,13 +1117,71 @@ public class PlayerMovement : MonoBehaviour
         wallRunDustTimer = 0.14f;
         MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
                      2, 25f, 0.3f, 0.8f, 0.02f, 0.04f, 0.1f, 0.3f);
-        GameAudio.PlayShaped(GameAudio.WallRun, 0.28f, 1f, GameAudio.Slide, 1.1f);
     }
 
     void WallJumpEffects()
     {
         Juice.Shake(0.25f);
         GameAudio.PlayShaped(GameAudio.WallRun, 0.45f, 1.4f, GameAudio.Vine, 1.2f);
+    }
+
+    AudioClip[] wallRunClips;
+    AudioSource wallRunScrape;
+    bool wasWallRunning;
+    float wallRunAudioSeed;
+
+    /// <summary>
+    /// A continuous loop for as long as a wall run lasts, the same shape `SpeedRush` already uses
+    /// for the slide scrape - attack and release at different rates, a bit of Perlin wobble so a
+    /// long run doesn't sit at one dead-flat pitch. Replaced a one-shot fired every 0.14s, which
+    /// read as the same clip machine-gunning rather than a sustained sound, and which fell back to
+    /// the `Slide` bank - reported as sounding like an actual slide, which a wall run very much
+    /// isn't. Called every frame regardless of `wallRunning` so the volume can release smoothly
+    /// on the frame it ends, the same reason `SpeedRush.UpdateScrape` isn't gated either.
+    /// </summary>
+    void UpdateWallRunScrape()
+    {
+        if (wallRunClips == null)
+        {
+            wallRunClips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.WallRun);
+
+            if (wallRunClips.Length == 0)
+                wallRunClips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Vine);
+        }
+
+        if (wallRunClips.Length == 0)
+            return;
+
+        if (wallRunScrape == null)
+        {
+            wallRunScrape = gameObject.AddComponent<AudioSource>();
+            wallRunScrape.loop = true;
+            wallRunScrape.playOnAwake = false;
+            wallRunScrape.spatialBlend = 0f;
+            wallRunScrape.volume = 0f;
+            wallRunAudioSeed = Random.Range(0f, 100f);
+        }
+
+        if (wallRunning && !wasWallRunning)
+        {
+            wallRunScrape.clip = wallRunClips[Random.Range(0, wallRunClips.Length)];
+            wallRunScrape.Stop();
+            wallRunScrape.Play();
+        }
+
+        wasWallRunning = wallRunning;
+
+        float wanted = wallRunning ? 0.42f * GameSettings.SfxVolume : 0f;
+        float rate = wanted > wallRunScrape.volume ? 10f : 22f;
+        wallRunScrape.volume = Mathf.MoveTowards(wallRunScrape.volume, wanted, Time.deltaTime * rate);
+
+        float wobble = (Mathf.PerlinNoise(wallRunAudioSeed, Time.time * 1.6f) - 0.5f) * 0.1f;
+        wallRunScrape.pitch = 0.95f + wobble;
+
+        if (wallRunScrape.volume > 0.001f && !wallRunScrape.isPlaying)
+            wallRunScrape.Play();
+        else if (wallRunScrape.volume <= 0.001f && wallRunScrape.isPlaying)
+            wallRunScrape.Stop();
     }
 
     void ApplyFriction(float dt)

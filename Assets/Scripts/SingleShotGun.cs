@@ -115,6 +115,7 @@ public class SingleShotGun : Gun
         // No per-object outline here - ScreenOutline on the local camera already outlines the
         // held weapon along with everything else in view.
         visualRoot = visual.transform;
+        reloadRestPosition = visualRoot.localPosition;
 
         // Melee is carried point-down from the moment it is drawn, not only while swinging.
         //
@@ -238,22 +239,20 @@ public class SingleShotGun : Gun
             shotsInBurst = 0;
     }
 
-    // Degrees a second the reload tumble spins at. Retuned 2026-08-22 - one full 360 stretched
-    // across the *whole* reload was "unbearably slow" on anything but the shortest magazine,
-    // because a longer reloadTime just meant a slower single spin rather than more of them.
-    // Fixing the rate instead of the rotation count means a long reload spins the weapon several
-    // times at the same brisk speed a short one spins it once, rather than everything crawling
-    // to fit one rotation into however long the magazine takes.
-    const float reloadSpinRate = 900f;
+    // How far the weapon dips and tilts during a reload. Replaced the old end-over-end spin
+    // entirely 2026-08-22 - reported as "wayy too weird" no matter how fast it turned, and
+    // looked at other arcade shooters (Redmatch 2 named specifically) for what a reload usually
+    // looks like instead of guessing twice: a dip down and back, not a tumble. A weapon rotating
+    // through a full 360 isn't a gesture anyone recognises as "changing a magazine" - lowering it
+    // and bringing it back up is.
+    const float reloadTiltDegrees = 38f;
+    const float reloadDropDistance = 0.07f;
 
     /// <summary>
-    /// A full end-over-end tumble for the duration of the reload, so the weapon visibly does
-    /// something instead of just sitting there for reloadTime seconds while ammo silently
-    /// refills. Always lands exactly on a whole multiple of 360 by the moment TickReload actually
-    /// swaps the magazine, so the flip and the sound finish together rather than the model
-    /// snapping back mid-spin - the spin count is rounded to the nearest whole lap at
-    /// `reloadSpinRate`, rather than the rate bending to fit exactly one lap regardless of how
-    /// long the reload actually takes.
+    /// Down for the first fifth of the reload, held through the middle, back up for the last
+    /// fifth - eased both ways so it reads as a deliberate motion rather than a mechanical linear
+    /// tilt. Always back at rest exactly when TickReload swaps the magazine, same guarantee the
+    /// spin version had, just via a hold instead of a lap count.
     ///
     /// Skipped for melee - Reload() already refuses to start one (no ammo means Ammo is always
     /// at least magazineSize, the guard that turns Reload() into a no-op), but this still has to
@@ -268,14 +267,26 @@ public class SingleShotGun : Gun
         if (!reloading)
         {
             visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localPosition = reloadRestPosition;
             return;
         }
 
         float elapsed = Info.reloadTime - (reloadDoneAt - Time.time);
         float t = Info.reloadTime > 0.01f ? Mathf.Clamp01(elapsed / Info.reloadTime) : 1f;
 
-        float laps = Mathf.Max(1f, Mathf.Round(Info.reloadTime * reloadSpinRate / 360f));
-        visualRoot.localRotation = Quaternion.Euler(t * laps * 360f, 0f, 0f);
+        const float downFor = 0.2f;
+        const float upFrom = 0.8f;
+
+        float amount;
+        if (t < downFor)
+            amount = EaseOut(t / downFor);
+        else if (t < upFrom)
+            amount = 1f;
+        else
+            amount = 1f - EaseIn((t - upFrom) / (1f - upFrom));
+
+        visualRoot.localRotation = Quaternion.Euler(reloadTiltDegrees * amount, 0f, 0f);
+        visualRoot.localPosition = reloadRestPosition + Vector3.down * (reloadDropDistance * amount);
     }
 
     /// Reload keeps running while stowed, so switching away and back doesn't restart it. The
@@ -681,6 +692,7 @@ public class SingleShotGun : Gun
     static float EaseOut(float k) => 1f - (1f - k) * (1f - k);
 
     Transform visualRoot;
+    Vector3 reloadRestPosition;
 
     /// The rotation a melee weapon rests at. Fixed at build time so a swing always returns to
     /// exactly where it started rather than to wherever it happened to be interrupted.

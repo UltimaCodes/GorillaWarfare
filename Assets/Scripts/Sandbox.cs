@@ -58,6 +58,18 @@ public static class Sandbox
         // Named so it is obvious in a log which kind of room this is. Nobody can see it - there
         // is no server for it to be listed on.
         PhotonNetwork.CreateRoom(RoomName, new Photon.Realtime.RoomOptions { MaxPlayers = 1 });
+
+        // A normal room only loads the map once somebody in the lobby presses Start
+        // (Launcher.StartGame) - and creating your own room makes you its master client, so
+        // RoomManager's own late-joiner LoadLevel (gated on *not* being master) never fires
+        // either. The sandbox has no lobby and nobody to press Start, so without this the room
+        // gets created and nothing ever leaves the menu scene to go with it - which is exactly
+        // what "the dummies have never worked" looks like from the player's side, since there is
+        // no map for them to stand in yet.
+        while (!PhotonNetwork.InRoom)
+            yield return null;
+
+        PhotonNetwork.LoadLevel(RoomManager.gameSceneIndex);
     }
 
     /// <summary>

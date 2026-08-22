@@ -279,6 +279,10 @@ two feeds would either overlap or need a third thing to arbitrate.
 - [x] **Directional damage indicator** — already built and wired (`GameHud.ShowDamageFrom`,
       called from `PlayerController.RPC_TakeDamage`) when this was reviewed 2026-08-22; not new,
       just confirmed rather than rebuilt from a guess that it was missing.
+- [x] **Screenshake now shakes the UI too** — reported directly, since a screen-space overlay
+      canvas doesn't move with the camera at all and was the one thing on screen a hit never
+      touched. `Juice.Amount` exposes the current shake normalised 0-1; `GameHud` reads it to
+      offset the whole canvas with the same Perlin-noise wobble the camera itself uses.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
@@ -379,9 +383,27 @@ Separate from M0 because it needs a person playing it, not a fix.
       down. That's inverted from the old build and you haven't tried it yet, so it may just feel
       wrong.
 - [x] Auto-bhop off. Holding space to keep speed for free was most of the skill gone.
-- [x] **Wall run, vault, ground slam, air brake.** Built 2026-08-22, same day as designed - see
+- [x] **Wall run, ground slam, air brake.** Built 2026-08-22, same day as designed - see
       `ideas.md`'s movement tech section for the mechanics and `bug-log.md`'s sixth pass for the
-      other fixes that landed alongside them. Not yet played by a person.
+      other fixes that landed alongside them. First playtest the same day (`bug-log.md`'s seventh
+      pass) found real problems in all three and a fourth, vault, which didn't survive the
+      playtest at all - see below.
+- [x] **Vault, removed.** Retuned once the same day it was built, then reported as still not
+      working on the very next playtest and cut outright rather than retuned a third time. See
+      `bug-log.md`'s seventh pass and `ideas.md`'s movement tech section for the record of why.
+- [x] **Wall run rebuilt hold-based.** The auto-latch original (speed threshold + moving toward
+      the wall) was reported "really weird" - no player-controlled start or stop. Now: hold the
+      slide/crouch key near a qualifying wall to stick, release to fall immediately, jump for the
+      payoff push-off. Also gained its own continuous scrape audio (was silently reusing the
+      slide's own bank, reported as sounding identical to it) and a proximity/hold check with no
+      speed gate at all.
+- [x] **Ground slam can no longer be spammed.** Reported directly. A 1.4s cooldown starts from
+      landing, not from the press, so it isn't crouch-key-mashable in the air.
+- [x] **The camera no longer clips into map geometry.** Reported as "basically wallhacks" - the
+      inner camera itself had nothing keeping it out of walls when close to one. A spherecast from
+      `cameraHolder` pulls the camera back along its own offset when it would clip, done in world
+      space on the holder rather than the camera's own local transform so it doesn't fight
+      `Juice`'s screenshake, which owns that transform's rest state.
 - [x] **Bhop retuned again.** Reported as gaining way too much speed way too fast - a side effect
       of the same-day airSpeedCap raise for slide-hop redirect making *every* jump gain more from
       strafing, not just a slide-hop one. `bhopKeep` down from 1 to 0.92 so a perfect landing
@@ -430,15 +452,28 @@ Things the checks can't reach, so they need a person:
   heights (checked directly in the scene file after a real bug in that same math), but the
   numbers themselves - tier count, scale, how tall a formation ends up, how far apart they sit -
   are a first pass same as everything else on this list.
-- **wall run, vault, ground slam and air brake.** Had their first real playtest 2026-08-22, which
-  is exactly what this entry existed to wait for - three of the four came back with real
-  problems (ground pound firing on every slide-buffer attempt, wall run's auto-latch being
-  unpredictable to start or stop on purpose, vault never triggering because it only checked while
-  grounded and an actual attempt is never grounded by the time it matters). All three redesigned
-  the same day - see `bug-log.md`'s seventh pass. Still true of what's left: every number in them
-  (speed thresholds, ledge heights, the wall-run timer, the impulses) is a first guess, the same
-  way every other feel number in this project has needed a person before it could be trusted -
-  this pass changed *what* they do, not whether the specific numbers are right yet.
+- **wall run, ground slam and air brake.** Had their first real playtest 2026-08-22, which is
+  exactly what this entry existed to wait for - all three came back with real problems (ground
+  pound firing on every slide-buffer attempt, wall run's auto-latch being unpredictable to start
+  or stop on purpose, ground slam being spammable in the air) and were redesigned or retuned the
+  same day - see `bug-log.md`'s seventh and eighth passes. Vault, the fourth mechanic on this same
+  list, didn't survive its playtest and was removed rather than redesigned again. Still true of
+  what's left: every number in the surviving three (the wall-run timer, the slam cooldown, the
+  impulses) is a first guess, the same way every other feel number in this project has needed a
+  person before it could be trusted - these passes changed *what* they do, not whether the
+  specific numbers are right yet.
+- **the sandbox's training dummies**, specifically. Reported 2026-08-22 as never having worked at
+  all. Two separate bugs, both fixed the same day, only the second of which explains the "never":
+  `RoomManager` placed them from `OnJoinedRoom`, which can fire before the game scene has loaded,
+  so they spawned relative to world origin in a scene about to be replaced - fixed by moving that
+  call to `OnSceneLoaded`. But that fix alone was moot, because `Sandbox.Enter()` never actually
+  loaded the game scene in the first place: a normal room only reaches the map once someone in the
+  lobby presses Start (`Launcher.StartGame`), and creating your own room makes you its master
+  client, which is exactly the case `RoomManager`'s one other `LoadLevel` call deliberately
+  excludes. Sandbox has no lobby and nobody to press Start, so the room existed and nothing ever
+  left the menu scene to go with it. Confirmed by an editor batch-mode test that drove the real
+  `Sandbox.Enter()` path end to end and found the dummies present in the loaded `Game` scene with
+  their hitboxes intact - not just read as plausible from the code.
 
 Previously listed here and corrected 2026-08-22: "anything that needs a second client" — this
 was verified on 3-4 real clients 2026-08-16 (`working-notes.md`), including remote weapon

@@ -157,9 +157,6 @@ public class RoomManager : MonoBehaviourPunCallbacks
         }
 
         TrySpawn();
-
-        if (Sandbox.Active)
-            StartCoroutine(PlaceDummies());
     }
 
     /// <summary>
@@ -205,6 +202,18 @@ public class RoomManager : MonoBehaviourPunCallbacks
             return;
 
         TrySpawn();
+
+        // Moved here from OnJoinedRoom 2026-08-22 - reported as never having worked at all.
+        // Entering the sandbox joins an offline room from the *menu* scene, so OnJoinedRoom fires
+        // before the game scene (and its SpawnManager, which PlaceDummies depends on entirely)
+        // has loaded. The single frame it waited for "the map's own SpawnManager to wake up" was
+        // never going to be enough for an entire scene load - SpawnManager.Instance was null, the
+        // dummies were placed relative to world origin in a scene that was about to be replaced,
+        // and PhotonNetwork.LoadLevel destroyed them along with everything else a moment later.
+        // This runs after the actual game scene is confirmed loaded, the same guard TrySpawn
+        // above already relies on.
+        if (Sandbox.Active)
+            StartCoroutine(PlaceDummies());
     }
 
     public override void OnLeftRoom()
