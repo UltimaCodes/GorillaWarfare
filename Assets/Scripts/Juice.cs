@@ -22,9 +22,18 @@ public class Juice : MonoBehaviour
 {
     // Deliberately not zero. A full freeze reads as a hitch or a dropped frame; a heavy slow
     // reads as impact, because things are still visibly moving.
-    const float stopScale = 0.06f;
+    //
+    // Both retuned 2026-08-22 - reported outright as "doesn't work", and the doc comment above
+    // already promises the ULTRAKILL freeze this wasn't delivering. There was no competing writer
+    // fighting it (checked - Juice is the only thing that ever sets Time.timeScale); the numbers
+    // were just too small to read as a freeze at all. 110ms at 6% speed on a kill is under a
+    // tenth of a second of *real* time - closer to a flicker than a beat. Kills now get roughly
+    // 2.5x the hold and a slightly harder stop; body shots and headshots scale off the same
+    // strength as before and only get proportionally longer, so a stray pellet still barely
+    // stutters.
+    const float stopScale = 0.045f;
 
-    const float maxStopSeconds = 0.11f;
+    const float maxStopSeconds = 0.26f;
 
     // Retuned 2026-08-22 - reported as not noticeable at all. 0.085m of pure camera *position*
     // was the whole effect, and a few centimetres of lateral drift barely reads on screen at a

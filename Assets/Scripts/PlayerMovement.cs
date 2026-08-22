@@ -372,6 +372,13 @@ public class PlayerMovement : MonoBehaviour
     public bool Sliding => sliding;
     public bool Crouching => crouching;
 
+    /// 1 when standing, down to `crouchHeight` while crouched or sliding, eased the same way the
+    /// capsule itself is - so a camera reading this drops into a slide instead of snapping down
+    /// with it. Added 2026-08-22 for exactly that: nothing was reading the capsule's own eased
+    /// height at all, so the camera never moved while sliding despite the collider genuinely
+    /// shrinking underneath it.
+    public float StanceFraction => standingHeight > 0.01f ? controller.height / standingHeight : 1f;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
@@ -558,11 +565,31 @@ public class PlayerMovement : MonoBehaviour
                 // The kick is what makes sliding a decision rather than a brake. Applied to the
                 // direction you are already travelling, not the one you are looking - a slide
                 // goes where you were going.
+                //
+                // Retuned 2026-08-22 - reported as "you can QUICKLY get so much speed", and the
+                // reason was this multiplying whatever velocity you already carried into the
+                // slide rather than a stable reference. Chain 1 out of a normal run is fine
+                // (1.5x of ~8 m/s is the intended kick), but chain 2 was 1.56x of chain 1's
+                // *already boosted* result, chain 3 was 1.62x of that, and so on - each link
+                // compounding on the last one's compounding. Three or four chained slide-hops
+                // reached the safety ceiling in a couple of seconds. Multiplying baseline ground
+                // speed instead of current speed, then adding that as a flat bonus, reproduces
+                // the exact same chain-1 number (current speed happens to equal baseline there)
+                // while every extra link adds a bounded amount instead of re-multiplying a stack.
+                // Reuses `speed`, already computed above as this same velocity's magnitude - nothing
+                // between there and here touches velocity, so recomputing it under a new name would
+                // just be the same number twice.
                 Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
-                flat *= kick;
 
-                velocity.x = flat.x;
-                velocity.z = flat.z;
+                if (speed > 0.01f)
+                {
+                    float baseline = maxGroundSpeed * AdrenalineSpeed;
+                    float boosted = speed + baseline * (kick - 1f);
+                    flat = flat.normalized * boosted;
+
+                    velocity.x = flat.x;
+                    velocity.z = flat.z;
+                }
 
                 // No sound triggered here any more - removed 2026-08-22. This fired a full ~1.8s
                 // one-shot off the same long Slide clips SpeedRush's continuous scrape source
@@ -747,5 +774,38 @@ public class PlayerMovement : MonoBehaviour
     public void ResetVelocity()
     {
         velocity = Vector3.zero;
+    }
+
+    /// <summary>
+    /// Clips velocity against whatever wall the controller just hit.
+    ///
+    /// Added 2026-08-22 - nothing anywhere in this file ever removed speed on a collision.
+    /// `controller.Move()` stops your *position* at a wall, but the `velocity` field driving it
+    /// was never told that happened, so it kept its full pre-collision magnitude regardless -
+    /// reported as "hit a wall at speed, and as long as I keep holding forward and turn slightly
+    /// left or right, all that speed is still there and I just carry on." Unity calls this once
+    /// per collider actually touched during that Move(), so a corner can clip against two walls
+    /// in the same frame.
+    ///
+    /// Only clips near-vertical surfaces - a wall, not a floor or ceiling. Floors are already
+    /// handled by `grounded` and the small downward push in GroundMove; clipping vertical
+    /// velocity against a floor's own normal here would fight that and make landings inconsistent.
+    ///
+    /// Removes only the component of velocity pointing *into* the surface (the classic Quake
+    /// `ClipVelocity`), not the whole vector - a graze along a wall keeps its tangential speed,
+    /// which is correct wall-sliding, not a bug. A square, head-on hit has almost all of its
+    /// velocity pointing into the normal, so it comes out of this near zero, which is the actual
+    /// fix: momentum dies on impact instead of surviving for free the moment you twitch the
+    /// mouse.
+    /// </summary>
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (Mathf.Abs(hit.normal.y) > 0.3f)
+            return;
+
+        float into = Vector3.Dot(velocity, hit.normal);
+
+        if (into < 0f)
+            velocity -= hit.normal * into;
     }
 }

@@ -102,6 +102,12 @@ public class MonkeyRig : MonoBehaviour
 
     public Transform RightHand { get; private set; }
 
+    Color baseTint = Color.white;
+    float flashUntil = -99f;
+    bool wasFlashing;
+
+    const float flashSeconds = 0.09f;
+
     /// <summary>
     /// Paints the body.
     ///
@@ -114,6 +120,50 @@ public class MonkeyRig : MonoBehaviour
     /// would stop reading as a banana.
     /// </summary>
     public void Tint(Color colour)
+    {
+        baseTint = colour;
+
+        // Mid-flash, the flash owns what's actually applied this frame - UpdateFlash will land
+        // back on this new base the moment it finishes. Not mid-flash, apply immediately rather
+        // than waiting a frame for LateUpdate to get to it.
+        if (Time.unscaledTime >= flashUntil)
+            ApplyTint(colour);
+    }
+
+    /// <summary>
+    /// A quick flash to white across the body on taking a hit - the confirmation a shooter gets
+    /// that a shot actually landed on someone rather than a wall, added 2026-08-22. Runs through
+    /// the same MaterialPropertyBlock Tint() already uses, and always decays back to whatever
+    /// this player's own colour is - team colours and the twelve cosmetic picks in PlayerColours
+    /// have to still be the colour underneath the flash, not a hardcoded one it forgets.
+    /// </summary>
+    public void Flash()
+    {
+        flashUntil = Time.unscaledTime + flashSeconds;
+    }
+
+    void UpdateFlash()
+    {
+        bool flashing = Time.unscaledTime < flashUntil;
+
+        if (flashing)
+        {
+            // Squared, so it holds near white for most of its life and leaves quickly - the same
+            // shape every other flash in this game fades on, for the same reason: a linear fade
+            // reads as a dimmer, not an impact.
+            float t = Mathf.Clamp01((flashUntil - Time.unscaledTime) / flashSeconds);
+            ApplyTint(Color.Lerp(baseTint, Color.white, t * t));
+        }
+        else if (wasFlashing)
+        {
+            // Landed exactly once, rather than reapplying the base colour every idle frame.
+            ApplyTint(baseTint);
+        }
+
+        wasFlashing = flashing;
+    }
+
+    void ApplyTint(Color colour)
     {
         if (model == null)
             return;
@@ -276,6 +326,7 @@ public class MonkeyRig : MonoBehaviour
     void LateUpdate()
     {
         Tick(Time.deltaTime);
+        UpdateFlash();
     }
 
     // Time comes in as a parameter so this can be driven outside play mode, where deltaTime is

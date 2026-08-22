@@ -54,6 +54,11 @@ public class SpeedRush : MonoBehaviour
     {
         player = GetComponent<PlayerController>();
         movement = GetComponent<PlayerMovement>();
+
+        // Moved out of the field initializer 2026-08-22 - Random.Range there throws
+        // ("not allowed to be called from a MonoBehaviour constructor or instance field
+        // initializer"), on every single spawn, caught while verifying an unrelated change.
+        wobbleSeed = Random.Range(0f, 100f);
     }
 
     void Start()
@@ -362,7 +367,7 @@ public class SpeedRush : MonoBehaviour
 
     float dustDebt;
     AudioSource scrape;
-    readonly float wobbleSeed = Random.Range(0f, 100f);
+    float wobbleSeed;
 
     void SpawnLines()
     {
