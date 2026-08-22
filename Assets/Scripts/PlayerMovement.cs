@@ -244,8 +244,8 @@ public class PlayerMovement : MonoBehaviour
 
     [Tooltip("Multiplier applied to your speed the moment a slide starts. Retuned 2026-08-21: "
              + "1.18 was so small that slideDrag ate it within a second and a slide covered less "
-             + "ground than just running the same stretch - see docs/open-issues.md for the "
-             + "worked numbers. At 1.5, entering from max run (8.13) kicks to ~12.2.")]
+             + "ground than just running the same stretch. At 1.5, entering from max run (8.13) "
+             + "kicks to ~12.2.")]
     [SerializeField] float slideKick = 1.5f;
 
     [Tooltip("How fast a slide bleeds off, in metres per second per second. Lower slides "

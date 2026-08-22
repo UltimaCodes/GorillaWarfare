@@ -102,7 +102,10 @@ all take `-quit`. **`PlayModeProbe` must not** — it enters play mode and exits
 
 `PlayModeProbe` runs the real game in Photon offline mode and writes screenshots to
 `Logs/probe-shots/`. Reading those images is the only way to judge anything visual; several
-bugs measured fine and looked obviously wrong.
+bugs measured fine and looked obviously wrong. **Drop `-nographics` for a run you actually want
+screenshots from** — with it, every `Capture()` call is silently skipped ("no graphics device")
+while the rest of the probe's checks run fine and report success, so a stale image can sit there
+looking current. Found 2026-08-22, `bug-log.md`'s fourth pass.
 
 **The HUD can't be photographed.** It's a screen space overlay canvas, and overlay canvases
 don't appear in a camera rendered to a texture, which is the only kind of picture the probe can
@@ -159,10 +162,27 @@ assert the method count is unchanged.
 
 - **Photon stays.** P2P was considered properly and rejected; PUN is already peer-hosted.
 - **No clip-based animation.** The rig is driven procedurally by `MonkeyRig`.
-- **Hit registration is client-authoritative.** Fine among friends, trivially cheatable.
+- **Hit registration is client-authoritative.** Fine among friends, trivially cheatable. Kept
+  deliberately for the feel of instant shots - see `roadmap.md`'s "Known limitations" for the
+  2026-08-22 note on a server-side-plausibility-check workaround, once there's a server to run it.
 - **Music is sourced, SFX are sourced.** Four attempts at synthesising them were all rejected;
   measuring "improvement" is not the same as sounding good.
 - **Everyone must run the same build.** RPCs are sent as indices into `RpcList`.
+
+**Steam launch sequencing, decided 2026-08-22.** The game is going up on Steam; the target moved
+from "a month or two" to six months the same day, specifically to leave room for the game to feel
+finished rather than shipped early. What that changes, in order:
+
+- Steamworks integration and the move off PUN 2 happen **after** the Steam launch, not before it -
+  ship on the current Photon-peer-hosted networking first, migrate once it's out.
+- Controller support is real but not near-term - "down the line".
+- First-time onboarding is blocked on a main menu rework Ryaan wants to do himself first, so it
+  isn't being built against the current menu.
+- Store page assets (capsule art, trailer, screenshots) wait until the Steam Direct filing itself,
+  near the end - not sequenced early the way the filing's review lag alone would otherwise argue
+  for, because there's six months of runway now instead of eight weeks.
+- Public/private rooms with a password on private ones are wanted, but filed under the same
+  post-migration bucket as the rest of the netcode work - see `roadmap.md`'s "Known limitations".
 
 ---
 
@@ -251,10 +271,10 @@ Anything else that reads a phase or a deadline out of room properties needs to d
 
 ## Open, and known
 
-**`docs/open-issues.md` is the live list.** Anything reported from play and not yet fixed lives
-there with what is suspected and why. The entries below are older and mostly settled.
-
-
+**`bug-log.md`'s "Open now" section is the live list.** Anything reported from play and not yet
+fixed lives there with what is suspected and why. Used to be its own `open-issues.md`; merged
+2026-08-22 since it spent most of its life saying "nothing open right now" next to a file whose
+whole other job is the same list, closed. The entries below are older and mostly settled.
 
 - ~~Nothing has been played with two people.~~ Played on 3-4 clients and working, 2026-08-16.
 - Match timings are guesses: warmup 8s, deathmatch 5min, gun game 10min, respawn 3s.

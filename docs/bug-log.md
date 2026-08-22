@@ -8,6 +8,23 @@ Skipped the movement code on purpose (`PlayerController.Move/Look/Jump/FixedUpda
 
 ---
 
+## Open now
+
+The live list — reported from play and not yet resolved. Merged 2026-08-22 from a separate
+`open-issues.md`, which existed to make this distinction and mostly just said "nothing open right
+now" for a week at a time; one file with a section at the top does the same job.
+
+- **The two-handed grip pose.** Reported 2026-08-22 as missing entirely. `PlayModeProbe`'s
+  numeric check passes, but the only render available of it is a bad angle for judging a pose by
+  eye - see `roadmap.md`'s "Unverified" for the full account. Needs either a better render angle
+  or a person looking at it in real play.
+
+Nothing else open. Everything that was here before this merge — the slide's five complaints and
+the sandbox loadout bug, both from the pass on 2026-08-21 — is written up in the "Third pass"
+section below, which is where a resolved item belongs once it's resolved.
+
+---
+
 ## Stuff that actually threw
 
 **`Scoreboard.RemoveScoreboardItem`** indexed the dictionary directly, so any player leaving who'd
@@ -343,3 +360,55 @@ tuning is intentionally not done here.
 Coverage log also names where the remaining gaps are nearest to, which is worth reading before
 the next tuning pass: chest and leg carry the most of what's left uncovered at these starting
 numbers.
+
+# Fourth pass — feel fixes and the two-handed pose question, 2026-08-22
+
+## Screenshake wasn't noticeable
+
+Reported 2026-08-22. `Juice.cs`'s shake moved the camera's *position* only, up to 0.085m at a
+kill - a few centimetres of lateral drift, which barely registers on screen at a normal FOV
+because there's nothing nearby to measure it against. Roughly doubled the position (to 0.16m) and
+added a rotational component (up to 3.5° of roll and pitch), which is doing most of the new work -
+a couple of degrees of camera roll reads as being knocked, where the same magnitude of pure
+position reads as nothing. Rotation is applied to `Camera.transform.localRotation` specifically,
+same as the position fix already did for `localPosition` - `Look()` only ever writes
+`CameraHolder`'s rotation, so the camera's own local rotation was free to use and nothing else in
+the project touches it (checked `ViewModelCamera.cs` and `WeaponSway.cs`, which sway the weapon's
+own transform, not the camera's).
+
+## The peel's swing was "too static"
+
+Reported 2026-08-22. `SingleShotGun.StabSwing()` was one rotation on one axis (pitch), linearly
+interpolated from rest to full extension in 60ms - which is exactly what a hinge does, and reads
+as one, because there was nowhere for the motion to come *from*. Added a short windup (a small
+pull-back and twist before the stab), a second rotation axis so it reads as a stab rather than a
+swing on rails, eased time instead of linear so the strike accelerates into contact instead of
+moving at one constant speed throughout, and a small `Juice.Shake` on contact - the peel is the
+one weapon that lands its hit right in front of the camera, at melee range, and had nothing
+marking the moment at all.
+
+## The two-handed grip pose, investigated but not resolved
+
+Reported 2026-08-22 as missing entirely - see "Open now" above for the live status. Worth
+recording what was actually checked, since it's inconclusive rather than clean.
+
+`PlayModeProbe`'s own numeric check (`CheckArmsAreGripping`) passes: the off hand sits reliably
+above the gun hand on a two-handed weapon, below it on a one-handed one. But the only visual
+render available of it is the probe's enemy stand-in shot, and that camera is placed dead-on in
+front of the character, looking straight at it - a pose with both arms reaching *toward* the
+camera foreshortens hard from that specific angle regardless of whether the pose itself is right,
+and the rifle and pistol renders looked nearly identical from it, which isn't conclusive either
+way.
+
+Also worth knowing for next time: `-nographics` silently skips every screenshot `PlayModeProbe`
+tries to take (logged as "skipped, no graphics device") without failing the run. The
+`Logs/probe-shots/` files this pass initially checked were seven days stale as a result - actual
+current renders needed a second run without `-nographics`. This pass's own earlier note above,
+on photographing the peel, claims dropping `-nographics` was a `PeelPhotographer`-only problem
+because "`PlayModeProbe` never hits" it - true for every check *except* the screenshots, which
+this pass found it hits too. The rest of the probe's checks (the numeric ones) do run fine under
+`-nographics`; only the `Capture()` calls need it dropped.
+
+Deliberately not re-guessed a third time from reasoning about the rig alone - this is the same
+system the peel's melee hold was wrong about twice doing exactly that, see the pass above. Needs
+either a better camera angle or a person watching it in real play.
