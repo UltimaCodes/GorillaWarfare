@@ -366,6 +366,13 @@ how many clusters) - not played yet, see Unverified.
 - [x] **Two handed weapon poses.** Both hands solve to their own target, the left further along
       the weapon than the right. `twoHanded` on the GunInfo decides: the Cavendish and the Slip
       Hazard are one handed and put the off hand on the hip, everything longer braces with both.
+      **Confirmed working 2026-08-23**, not just built - reported as "missing entirely" and this
+      entry's own arm-solve description was never actually the problem. The weapon itself was
+      rendering meters off the hand (a scale bug in `AttachWeaponsToHand`) and, separately, an
+      unmodelled wrist bone between the elbow and the weapon's attach point meant even a
+      correctly-solved arm left the gun somewhere else entirely. Both fixed - see `bug-log.md`'s
+      tenth pass. A proper-angle photography tool (`Tools/Gorilla Warfare/Photograph the grip`)
+      now exists for checking this kind of thing without guessing from a bad camera angle again.
 - [x] **Melee swing.** `SingleShotGun.StabSwing()` - a fast jab forward, a slower settle back,
       driven by maths off the weapon's own held pose rather than a clip, unscaled time so
       hitstop doesn't freeze it mid-jab.
@@ -464,14 +471,6 @@ Things the checks can't reach, so they need a person:
   looked at. The starting positions are arithmetic against a 1920x1080 reference, not taste
 - whether match and respawn lengths feel right. Warmup 8s, deathmatch 5min, gun game 10min,
   scoreboard 12s, respawn 3s — all guesses, all one field each in `MatchState`.
-- **the two-handed grip pose**, specifically. `PlayModeProbe`'s numeric check passes (off hand
-  reliably above the gun hand on a two-handed weapon), but the only render available of it — the
-  probe's dead-on front angle — makes any pose foreshorten toward the camera and isn't a fair
-  angle to judge "does this look like holding a rifle" from. Reported 2026-08-22 as missing
-  entirely; genuinely unclear from what's been measured so far whether that's a real pose problem
-  or just a bad test angle. Needs either a better render angle or a person actually looking at it
-  in play — not a third guess from reasoning about the rig, see `bug-log.md`'s note on the peel's
-  melee hold for why that specifically doesn't work on this rig.
 - **team deathmatch specifically.** Landed after the 3-4 client playtest on 2026-08-16 covered
   the rest of M3, so it's shared the same client-authoritative, unreviewed-by-a-server plumbing
   as everything else but hasn't had its own dedicated session.
@@ -573,4 +572,7 @@ Recorded so it doesn't get quietly relitigated.
   deleting `PlayerManager` entirely
 - Movement — Quake/Source acceleration on a `CharacterController`
 - Footsteps firing mid-air
+- Remote players couldn't actually see what weapon you were holding — it rendered metres off the
+  hand (a scale bug) and, separately, an unmodelled wrist bone left even a correctly-solved arm
+  pointing the gun somewhere else entirely. Both fixed 2026-08-23, see `bug-log.md`'s tenth pass.
 - 36 assorted bugs, see `bug-log.md`

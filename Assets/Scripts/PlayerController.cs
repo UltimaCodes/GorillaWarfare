@@ -657,6 +657,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     // Only for remote copies. The owner keeps their weapon on the camera, because that's what
     // makes a first person gun feel attached to the view rather than to a character.
+    //
+    // Fixed 2026-08-23 - reported as never actually working: other players could not see what
+    // weapon you were holding. `Hitbox.Neutralise` cancels the hand bone's 100x import scale for
+    // `itemHolder`'s own *rendered size* (its localScale), which is all it was ever built to do -
+    // but Unity multiplies a child's localPosition by the *parent's* lossyScale when composing
+    // world position, regardless of what the child's own scale is. `weaponHandOffset` is a small,
+    // real-world offset (2cm/6cm) that was never adjusted for that - parented under a 100x bone,
+    // it placed the weapon one to six *metres* off the hand instead of centimetres. Confirmed by
+    // measuring it directly (`Tools/Gorilla Warfare/Photograph the grip`): hand.lossyScale reads
+    // (100, 100, 100) on this rig today, not a leftover from the old one the "same 100x bone
+    // scale" comment above used to refer to.
     void AttachWeaponsToHand()
     {
         if (rig == null || rig.RightHand == null || itemHolder == null)
@@ -664,12 +675,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         itemHolder.SetParent(rig.RightHand, false);
 
-        // Same 100x bone scale that was inflating the hitboxes. Left alone, everyone else saw
-        // you holding a banana the size of a building, positioned metres off your hand because
-        // the offset below was being multiplied by a hundred too.
+        // Cancels the 100x bone scale for itemHolder's own rendered size.
         Hitbox.Neutralise(itemHolder);
 
-        itemHolder.localPosition = weaponHandOffset;
+        // The offset itself has to be pre-divided by that same scale, or the multiply Unity does
+        // when composing itemHolder's world position (by its *parent's* lossyScale, independent
+        // of itemHolder's own just-neutralised scale) blows a 2-6cm nudge back out to metres.
+        Vector3 boneScale = rig.RightHand.lossyScale;
+
+        itemHolder.localPosition = new Vector3(
+            Mathf.Approximately(boneScale.x, 0f) ? weaponHandOffset.x : weaponHandOffset.x / boneScale.x,
+            Mathf.Approximately(boneScale.y, 0f) ? weaponHandOffset.y : weaponHandOffset.y / boneScale.y,
+            Mathf.Approximately(boneScale.z, 0f) ? weaponHandOffset.z : weaponHandOffset.z / boneScale.z);
+
         itemHolder.localRotation = Quaternion.Euler(weaponHandRotation);
     }
 

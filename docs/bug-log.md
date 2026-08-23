@@ -14,14 +14,9 @@ The live list — reported from play and not yet resolved. Merged 2026-08-22 fro
 `open-issues.md`, which existed to make this distinction and mostly just said "nothing open right
 now" for a week at a time; one file with a section at the top does the same job.
 
-- **The two-handed grip pose.** Reported 2026-08-22 as missing entirely. `PlayModeProbe`'s
-  numeric check passes, but the only render available of it is a bad angle for judging a pose by
-  eye - see `roadmap.md`'s "Unverified" for the full account. Needs either a better render angle
-  or a person looking at it in real play.
-
-Nothing else open. Everything that was here before this merge — the slide's five complaints and
-the sandbox loadout bug, both from the pass on 2026-08-21 — is written up in the "Third pass"
-section below, which is where a resolved item belongs once it's resolved.
+Nothing open. The two-handed grip pose (the only thing that was here) turned out not to be a
+pose problem at all - it was resolved 2026-08-23 by finding what was actually wrong, see the
+tenth pass below.
 
 ---
 
@@ -412,6 +407,11 @@ this pass found it hits too. The rest of the probe's checks (the numeric ones) d
 Deliberately not re-guessed a third time from reasoning about the rig alone - this is the same
 system the peel's melee hold was wrong about twice doing exactly that, see the pass above. Needs
 either a better camera angle or a person watching it in real play.
+
+**Resolved 2026-08-23, and it was never a pose problem at all** - see the tenth pass. A proper
+camera angle (`Tools/Gorilla Warfare/Photograph the grip`) showed the weapon rendering roughly two
+metres off the character's actual hand, which is why every angle looked equally wrong: there was
+no pose to judge, the gun simply wasn't where the hand was.
 
 # Fifth pass — the freeze frame, a real momentum bug, and the slide chain, 2026-08-22
 
@@ -843,3 +843,71 @@ as `[ ]` despite it being live; corrected alongside this pass. Same story for th
 callout system (`GameHud.ShowKill`/`MultikillName`, `PlayerController.RewardKill`) - fully built,
 already themed ("OVERRIPE", "BLENDED", "FRUIT SALAD"), found while looking for exactly this
 feature to build and confirmed already shipped instead.
+
+# Tenth pass — remote players couldn't actually see what you were holding, 2026-08-23
+
+Asked directly to properly fix it: "like Counter-Strike, where other players can see what weapon
+you're holding." Picked up mid-investigation of the still-open two-handed grip pose report, which
+turned out to be the same underlying bug wearing a different description.
+
+## The weapon rendered roughly two metres off the hand
+
+Built `Tools/Gorilla Warfare/Photograph the grip` - the same real `SingleShotGun`/
+`AttachWeaponsToHand` path a remote copy actually uses, from an angle that isn't dead-on front -
+to finally get a real look at this instead of judging it from `PlayModeProbe`'s foreshortening
+angle again. First render: the weapon floating in the corner of frame, disconnected from the body
+entirely.
+
+Root cause: `PlayerController.AttachWeaponsToHand` parents the weapon holder onto the hand bone,
+calls `Hitbox.Neutralise` (which sets the holder's own `localScale` to cancel the bone's 100x
+import scale), then sets `itemHolder.localPosition = weaponHandOffset` - a small, real-world-scale
+nudge, `(0.02, 0, 0.06)`. `Neutralise` only ever fixes the weapon's own *rendered size*; it does
+nothing about position, because Unity multiplies a child's `localPosition` by the *parent's*
+`lossyScale` when composing world position, regardless of what the child's own scale has just been
+set to. Measured directly rather than assumed: `hand.lossyScale` reads `(100, 100, 100)` on this
+rig, today, not a leftover comment from an old one. A 2-6cm offset parented under a 100x-scaled
+bone lands one to six *metres* off the hand - which is a bug old enough that a comment already on
+this exact line described the class of it ("positioned metres off your hand because the offset
+was being multiplied by a hundred too") while the actual fix next to it only ever addressed size.
+
+Fixed by pre-dividing the offset by the bone's own `lossyScale` before assigning it, so the
+multiply Unity does on the way back out cancels to the originally-intended few centimetres.
+
+## The weapon still wasn't in the hand - a second, unrelated bug
+
+Fixing the scale issue moved the weapon roughly onto the character's body, but not into the hand:
+it rendered near the hip while the visible fist was clearly gripping near the chest. Measured the
+actual bone chain rather than guess again: `RIGHTHOLD` (the weapon attach bone) is *not* a direct
+child of `RIGHTELBOW` on this rig - there's a `RIGHTWRIST` bone in between that the arm IK's own
+code never accounted for. `MonkeyRig.MeasureArms`'s fallback logic (`rightHandEnd` = RIGHTHOLD if
+its parent is the elbow, otherwise the elbow's first child) silently picked `RIGHTWRIST` instead,
+which is exactly why the *fist* always looked right - the two-bone solve was correctly aiming at
+the wrist the whole time. Nothing, though, ever rotated the wrist itself; `RIGHTHOLD` just rode
+along as a rigid child of it, landing wherever the wrist's own bind-pose offset pointed once the
+arm had rotated through however many degrees the reach needed - a direction that has nothing to
+do with the grip target once the rest pose (arms out to the sides, per this rig's own T-pose) has
+been rotated significantly away from it.
+
+First fix attempt tried correcting this the way the existing code corrects everything else - aim
+the wrist at the target with the same `AimBone` helper the shoulder and elbow already use.
+Measured before shipping it (logging the actual target and wrist position) and found the wrist was
+already sitting exactly on the target - unsurprising, since that's what its own aim/length were
+measured against. There was no leftover direction to aim it *toward*; the whole approach was
+solving a problem that didn't exist at that bone.
+
+The actual fix: `RIGHTHOLD` carries no skin weights - nothing about the visible mesh depends on it
+staying a rigid child of the wrist through this hierarchy, since it exists purely as a weapon
+attachment point. So it's placed directly now, position matched to the wrist (already correct) and
+rotation inherited from the forearm, rather than corrected through a parent-child relationship that
+was producing the wrong answer. Confirmed by rendering both a two-handed weapon (Rifle) and a
+one-handed one (Pistol) from the fixed path - both now sit visibly gripped rather than floating.
+
+Left `Tools/Gorilla Warfare/Photograph the grip` in as a permanent tool, same reasoning as
+`PeelPhotographer`/`HitboxPhotographer` - this is exactly the kind of thing that goes unnoticed
+without a real render, and it's now the second time on this project that a "the pose looks wrong"
+report turned out to actually be a position/scale bug wearing a pose-shaped description.
+
+Not investigated further: the off-hand's own bracing position on a two-handed weapon. Nothing
+attaches to it (no equivalent of RIGHTHOLD on the left side), so it isn't subject to either bug
+found here, and no report has specifically called it out - worth a look next time someone is
+actually staring at a two-handed grip in play.

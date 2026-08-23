@@ -93,6 +93,26 @@ public class MonkeyRig : MonoBehaviour
     Transform leftHand, rightHandEnd;
     bool armsSolvable;
 
+    /// <summary>
+    /// The wrist between the forearm and RIGHTHOLD - discovered 2026-08-23, tracking down "the
+    /// weapon doesn't render where the hand is" (reported as "the two-handed grip pose is
+    /// missing", and separately as needing to actually look like Counter-Strike, where other
+    /// players see what you're carrying).
+    ///
+    /// The two-bone solve below only ever rotates the shoulder and elbow. That was fine as long
+    /// as RIGHTHOLD hung directly off the elbow, which the code's own fallback logic assumed
+    /// (`rightHandEnd` falls back to the elbow's first child when RIGHTHOLD isn't parented
+    /// directly under it) - but this rig has an actual wrist bone in between the two. Measured
+    /// against the elbow, the wrist itself always tracked the target correctly (it's what
+    /// `rightForeAim`/`rightForeLength` are secretly measuring), which is exactly why the fist
+    /// visibly reached the right spot while the weapon - a rigid child of the wrist, at whatever
+    /// offset its own bind-pose transform happened to leave it once the wrist rotated through
+    /// however many degrees the reach needed - did not. See DriveArms for how this gets used:
+    /// RIGHTHOLD carries no skin weights, so it's placed directly rather than corrected through
+    /// the hierarchy that was producing the wrong answer.
+    /// </summary>
+    Transform rightWrist;
+
     Quaternion spineRest, headRest;
     Quaternion leftThighRest, leftShinRest, rightThighRest, rightShinRest;
     Quaternion leftUpperRest, leftForeRest, rightUpperRest, rightForeRest;
@@ -301,6 +321,12 @@ public class MonkeyRig : MonoBehaviour
         leftForeLength = Vector3.Distance(leftForeArm.position, leftHand.position);
         rightUpperLength = Vector3.Distance(rightUpperArm.position, rightForeArm.position);
         rightForeLength = Vector3.Distance(rightForeArm.position, rightHandEnd.position);
+
+        // Only needed - and only possible - when RIGHTHOLD sits an extra joint out from the
+        // elbow. If it's the elbow's direct child, rightHandEnd already *is* RIGHTHOLD and the
+        // two-bone solve alone puts it exactly on target.
+        if (RightHand != null && RightHand.parent != null && RightHand.parent != rightForeArm)
+            rightWrist = RightHand.parent;
     }
 
     static Transform FirstChild(Transform bone)
@@ -408,9 +434,34 @@ public class MonkeyRig : MonoBehaviour
         if (!armsSolvable || spine == null)
             return;
 
+        Vector3 rightTarget = ChestPoint(TwoHandedGrip ? rightGrip : pistolGrip);
+
         SolveArm(rightUpperArm, rightForeArm, rightUpperAim, rightForeAim,
-                 rightUpperLength, rightForeLength,
-                 ChestPoint(TwoHandedGrip ? rightGrip : pistolGrip), 1f);
+                 rightUpperLength, rightForeLength, rightTarget, 1f);
+
+        // The two-bone solve above only carries RIGHTHOLD along as a rigid consequence of the
+        // elbow's rotation - correct on a rig where it hangs directly off the elbow, wrong on
+        // this one, where an unrotated wrist sits between them.
+        if (rightWrist != null)
+        {
+            // Not an AimBone correction, on purpose - the wrist already sits exactly on
+            // rightTarget (that's what rightForeAim/rightForeLength were measured against, see
+            // MeasureArms), so there is no leftover direction to rotate the wrist *toward*.
+            // RIGHTHOLD's problem was never the wrist's aim; it's that RIGHTHOLD hangs off the
+            // wrist at whatever fixed bind-pose offset the rig happened to author, and once the
+            // wrist rotates through however many degrees the reach needed, that offset points
+            // somewhere unrelated to the grip - which is exactly the "weapon rendered near the
+            // hip while the fist was up at the chest" symptom this was chasing.
+            //
+            // RIGHTHOLD carries no skin weights - nothing in the visible mesh depends on it
+            // staying a rigid child of the wrist - so there's nothing to lose by placing it
+            // directly instead of trying to correct it through that hierarchy. Position matches
+            // the wrist exactly (which is already correct) and rotation is inherited from the
+            // forearm, the same bone the weapon's own aim already implicitly followed before any
+            // of this - so a weapon set at identity still points the same way it always has.
+            RightHand.position = rightWrist.position;
+            RightHand.rotation = rightForeArm.rotation;
+        }
 
         if (TwoHandedGrip)
         {
