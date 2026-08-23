@@ -454,9 +454,12 @@ public class PlayerMovement : MonoBehaviour
     /// shrinking underneath it.
     public float StanceFraction => standingHeight > 0.01f ? controller.height / standingHeight : 1f;
 
+    PlayerController owner;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
+        owner = GetComponent<PlayerController>();
 
         standingHeight = controller.height;
         standingCentre = controller.center.y;
@@ -1030,7 +1033,11 @@ public class PlayerMovement : MonoBehaviour
         return moveBurstMaterial;
     }
 
-    static void MovementBurst(Vector3 point, Vector3 direction, Color tint, string spritePrefix,
+    /// Public so PlayerController's ground slam RPC can build the same real particle burst
+    /// everyone else in this file uses, without needing a PlayerMovement instance - remote
+    /// copies never have one (see PlayerController.Start, which destroys it on anyone but the
+    /// owner), but the impact itself has to be visible to everyone, not just the one player.
+    public static void MovementBurst(Vector3 point, Vector3 direction, Color tint, string spritePrefix,
                              int count, float coneAngle, float speedMin, float speedMax,
                              float sizeMin, float sizeMax, float life, float gravityScale)
     {
@@ -1090,7 +1097,7 @@ public class PlayerMovement : MonoBehaviour
         ps.Play();
     }
 
-    static readonly Color DustTint = new Color(0.72f, 0.66f, 0.5f);
+    public static readonly Color DustTint = new Color(0.72f, 0.66f, 0.5f);
 
     void AirBrakeEffects(Vector3 backward)
     {
@@ -1112,7 +1119,9 @@ public class PlayerMovement : MonoBehaviour
 
     void SlamLandingEffects()
     {
-        Juice.Hit(0.55f);
+        // Hitstop/shake/shader-pulse (via Juice.Hit -> ShaderStack.Pulse) stay local only - it's
+        // your own landing, not something a bystander's camera should shake for.
+        Juice.Hit(0.7f);
 
         // Feet, not the capsule's own pivot - CharacterController.bounds already accounts for
         // center/height correctly, which transform.position alone does not. A burst at the
@@ -1121,9 +1130,18 @@ public class PlayerMovement : MonoBehaviour
         // floating at head height instead of reading as a landing impact.
         Vector3 feet = new Vector3(transform.position.x, controller.bounds.min.y, transform.position.z);
 
-        MovementBurst(feet, Vector3.up, DustTint, "circle", 10, 60f, 2f, 5f,
-                     0.05f, 0.12f, 0.25f, 0.8f);
-        GameAudio.PlayShaped(GameAudio.Slam, 0.7f, 0.8f, GameAudio.Explosion, 0.55f);
+        // Reported 2026-08-23 as wanting real "impact effects" - the dust puff alone was
+        // small (10 particles) and, worse, entirely local: PlayerMovement only exists on the
+        // owner's own copy (destroyed on every remote copy in PlayerController.Start), so nobody
+        // standing nearby when someone else ground-pounded ever saw or heard it happen at all.
+        // Routed through a PhotonRPC now, the same way gunfire already is, so every client
+        // (including this one) builds the identical burst - which is also why the dust/debris/
+        // sound calls that used to be right here are gone; RPC_GroundSlamImpact does them once
+        // for everybody instead of this client doing its own copy on top.
+        if (owner != null)
+            owner.ReportGroundSlam(feet);
+        else
+            PlayerController.BuildGroundSlamImpact(feet);
     }
 
     void WallRunStartEffects()

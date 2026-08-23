@@ -768,6 +768,40 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     }
 
     /// <summary>
+    /// A ground pound landed. Same reasoning as ReportShot - PlayerMovement only exists on the
+    /// owner's own copy, so without this the impact was entirely invisible to everyone standing
+    /// nearby when it happened.
+    /// </summary>
+    public void ReportGroundSlam(Vector3 point)
+    {
+        PV.RPC(nameof(RPC_GroundSlamImpact), RpcTarget.All, point);
+    }
+
+    [PunRPC]
+    void RPC_GroundSlamImpact(Vector3 point) => BuildGroundSlamImpact(point);
+
+    /// <summary>
+    /// The actual dust-and-debris burst plus its sound, shared between the networked RPC above
+    /// and PlayerMovement's own local fallback for the rare case it has no owner yet to report
+    /// through. Static, and doesn't touch Juice - hitstop/shake/the shader pulse stay local-only,
+    /// applied directly in PlayerMovement.SlamLandingEffects, not broadcast here.
+    /// </summary>
+    public static void BuildGroundSlamImpact(Vector3 point)
+    {
+        // Bigger and in two layers now - reported as wanting real "impact effects", and the
+        // original single ten-particle dust puff read as a footstep, not a slam. A wide, mostly
+        // flat cone (dust, using PlayerMovement's own shared tint and burst helper) reads as the
+        // cloud kicked up off the ground; a tighter, faster "spark" layer on top reads as actual
+        // debris being thrown rather than just dust settling.
+        PlayerMovement.MovementBurst(point, Vector3.up, PlayerMovement.DustTint, "circle", 22, 75f,
+                                     2.5f, 6.5f, 0.06f, 0.16f, 0.35f, 0.7f);
+        PlayerMovement.MovementBurst(point, Vector3.up, Color.white, "spark", 10, 50f,
+                                     4f, 9f, 0.03f, 0.07f, 0.3f, 1.1f);
+
+        GameAudio.PlayAtShaped(GameAudio.Slam, point, 0.85f, 0.8f, GameAudio.Explosion, 0.55f);
+    }
+
+    /// <summary>
     /// Throws this player. Explosions and grapples both come through here.
     ///
     /// Only ever called on the client that owns the body - movement is simulated locally and a

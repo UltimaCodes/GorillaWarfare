@@ -911,3 +911,48 @@ Not investigated further: the off-hand's own bracing position on a two-handed we
 attaches to it (no equivalent of RIGHTHOLD on the left side), so it isn't subject to either bug
 found here, and no report has specifically called it out - worth a look next time someone is
 actually staring at a two-handed grip in play.
+
+# Eleventh pass — the ground slam's impact was invisible to everyone but the person doing it, 2026-08-23
+
+Asked directly for "ground pounding impact effects." The effect itself already existed (sixth and
+seventh passes: a dust burst at the feet, a thud), so the ask was read as "make it read as an
+actual impact" - and checking what was there turned up something bigger than a tuning problem.
+
+## Nobody standing nearby ever saw or heard it
+
+`PlayerMovement` only exists on the owner's own copy - `PlayerController.Start` destroys it on
+every remote copy, since movement is simulated locally and a `PhotonTransformView` drives
+everyone else's position instead. Every effect method in that file (`SlamLandingEffects`,
+`WallRunStartEffects`, `AirBrakeEffects`, all of it) calls local-only helpers -
+`GameHud`-independent particle bursts and `GameAudio.PlayShaped`, which is explicitly
+non-positional. None of it was ever networked. A player landing a ground slam two metres from
+someone else produced nothing on that other person's screen or speakers at all - not muted, not
+faint, just never sent.
+
+Fixed the same way gunfire already is: `PlayerController.ReportShot`/`RPC_WeaponFired` was the
+existing pattern for "a local-only action needs everyone to see it," so `SlamLandingEffects` now
+calls a new `PlayerController.ReportGroundSlam(point)`, which fires `RPC_GroundSlamImpact` at
+`RpcTarget.All` - every client, including the one who did it, builds the identical burst and
+sound. `Juice.Hit` (hitstop, screenshake, the post-processing pulse from the ninth pass) stays a
+direct, local-only call in `SlamLandingEffects` itself - a bystander's camera has no reason to
+shake for someone else's landing.
+
+`PlayerMovement.MovementBurst` and `DustTint` were made `public static` rather than duplicated,
+so the RPC (which lives on `PlayerController`, and has no `PlayerMovement` to call through on a
+remote copy either) can build the exact same particle system everything else in that file
+already uses.
+
+## Made the burst itself bigger while already in there
+
+The original was one ten-particle dust puff, which read as a footstep even once it was actually
+visible - reported as wanting real "impact effects," not just visibility. Now two layered bursts:
+a wider dust cloud (22 particles, up from 10) plus a faster, tighter "spark" layer reading as
+thrown debris rather than settling dust. `GameAudio.PlayAtShaped` is new too - `PlayShaped`'s
+same missing-bank fallback, but positional (`PlayAt`'s spatialBlend/distance falloff) instead of
+2D, since the whole point this pass was a sound everyone nearby hears coming *from* where it
+happened.
+
+Verified end to end with a temporary offline-room test (`ReportGroundSlam` called directly on a
+spawned player, checked for a thrown exception and confirmed the particle GameObject actually got
+built) rather than trusting the RPC wiring compiled clean and calling it done - removed after
+confirming both.

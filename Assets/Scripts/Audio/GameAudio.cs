@@ -354,6 +354,38 @@ public static class GameAudio
         src.PlayOneShot(clip);
     }
 
+    /// <summary>
+    /// PlayAt with PlayShaped's fallback - positional, for a bank that doesn't have its own
+    /// sourced audio yet. Added for the ground slam's networked impact: PlayShaped's own
+    /// fallback is non-positional, which is right for a purely local effect but wrong for
+    /// something everyone nearby needs to hear coming *from* where it happened, not from
+    /// everywhere at once.
+    /// </summary>
+    public static void PlayAtShaped(string bank, Vector3 position, float volume, float pitch,
+                                    string fallbackBank, float fallbackPitch)
+    {
+        AudioClip clip = Pick(bank);
+        float actualPitch = pitch;
+
+        if (clip == null)
+        {
+            clip = Pick(fallbackBank);
+            actualPitch = fallbackPitch;
+        }
+
+        if (clip == null)
+            return;
+
+        AudioSource src = NextSource();
+        src.transform.position = position;
+        src.spatialBlend = 1f;
+        src.minDistance = 2f;
+        src.maxDistance = 55f;
+        src.volume = volume * GameSettings.SfxVolume;
+        src.pitch = actualPitch;
+        src.PlayOneShot(clip);
+    }
+
     public static void Play2D(string bank, float volume = 1f, float pitchJitter = 0f)
     {
         AudioClip clip = Pick(bank);

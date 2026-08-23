@@ -422,6 +422,13 @@ Separate from M0 because it needs a person playing it, not a fix.
       speed gate at all.
 - [x] **Ground slam can no longer be spammed.** Reported directly. A 1.4s cooldown starts from
       landing, not from the press, so it isn't crouch-key-mashable in the air.
+- [x] **The ground slam's impact is networked now, and bigger.** Asked directly for "impact
+      effects" - what was there (sixth/seventh pass) turned out to be entirely local:
+      `PlayerMovement` only exists on the owner's own copy, so nobody standing nearby when someone
+      else landed a slam ever saw or heard it. Routed through a `PhotonRPC` the same way gunfire
+      already is (`PlayerController.ReportGroundSlam`/`RPC_GroundSlamImpact`), and the burst itself
+      doubled up - a wider dust cloud plus a faster debris layer - while already in there. See
+      `bug-log.md`'s eleventh pass.
 - [x] **The camera no longer clips into map geometry.** Reported as "basically wallhacks" - the
       inner camera itself had nothing keeping it out of walls when close to one. A spherecast from
       `cameraHolder` pulls the camera back along its own offset when it would clip, done in world
@@ -510,6 +517,14 @@ entry sat here for over a week after it stopped being true.
 
 Not tasks, but things that are true and worth knowing before they bite.
 
+- **Every other movement-tech effect is still local-only, not just the ground slam that got
+  fixed.** Found while fixing the ground slam's own version of this (2026-08-23, see
+  `bug-log.md`'s eleventh pass): `PlayerMovement` only exists on the owner's own copy, and wall
+  run's scrape, the air brake's burst, the slide's dust and sound all call the same local-only
+  helpers the slam used to. Nobody standing near someone wall-running or air-braking sees or hears
+  any of it. Only the slam was actually reported and fixed - the same `PhotonRPC` pattern
+  (`ReportGroundSlam`/`RPC_GroundSlamImpact`) would apply to the rest if any of them get reported
+  too.
 - **Hit registration is client-authoritative.** The shooter raycasts locally and tells the
   victim they were hit. Fine among friends, trivially cheatable if this ever goes wider. Kept on
   purpose, not just left - it's a real part of why shots feel instant. Confirmed 2026-08-22:
