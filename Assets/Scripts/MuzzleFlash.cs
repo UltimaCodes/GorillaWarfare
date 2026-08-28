@@ -77,6 +77,31 @@ public class MuzzleFlash : MonoBehaviour
             flash.transform.localPosition = new Vector3(0f, 0f, tipDistance);
     }
 
+    /// <summary>
+    /// Sizes the flash to the weapon carrying it.
+    ///
+    /// Every gun built one of these off the same default fields regardless of what it fired -
+    /// the pistol's tap and the split's blast lit an identically sized burst, which undersold
+    /// the heavy guns rather than oversold the pistol. Weight is the same 0-1 figure the shake
+    /// and the fire punch already scale off (GunInfo.Weight, from pull damage), so a flash now
+    /// agrees with everything else that already gets bigger for a heavier gun.
+    /// </summary>
+    public void Scale(float weight)
+    {
+        weight = Mathf.Clamp01(weight);
+
+        flashSize *= Mathf.Lerp(0.8f, 1.75f, weight);
+        burstCount = Mathf.RoundToInt(burstCount * Mathf.Lerp(0.75f, 1.9f, weight));
+        intensity *= Mathf.Lerp(0.8f, 2.1f, weight);
+        range *= Mathf.Lerp(0.85f, 1.5f, weight);
+
+        // range only ever gets read into the Light once, in Build() - which has already run by
+        // the time a weapon knows its own weight, so the live light needs the same update or it
+        // keeps whatever radius it was built with.
+        if (flash != null)
+            flash.range = range;
+    }
+
     void Awake()
     {
         Build();

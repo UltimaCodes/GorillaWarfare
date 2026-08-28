@@ -121,16 +121,23 @@ public class GameHud : MonoBehaviour
     [SerializeField] RectTransform arrowContainer;
     [SerializeField] Image arrowTemplate;
 
+    // Retuned 2026-08-29 for the Cruelty Squad / ULTRAKILL pass - reported as too soft, reading
+    // as a generic arcade shooter's traffic-light green/yellow/red rather than the harsh,
+    // clashing palette both of those games build their HUDs from. killColour is the one real
+    // hue change: orange to a hot magenta, the accent colour both references reach for on
+    // anything meant to read as violence rather than status (a kill callout, a streak, who you
+    // just beat). Everything else stays the same family, just pushed more saturated and less
+    // pastel - green loses its warmth toward acid, red loses its pink toward blood.
     [Header("Colours")]
-    [SerializeField] Color healthy = new Color(0.55f, 1f, 0.1f);
-    [SerializeField] Color hurt = new Color(1f, 0.85f, 0f);
-    [SerializeField] Color critical = new Color(1f, 0.1f, 0.25f);
-    [SerializeField] Color healed = new Color(0.4f, 1f, 0.5f);
-    [SerializeField] Color headshotColour = new Color(1f, 0.95f, 0.25f);
-    [SerializeField] Color killColour = new Color(1f, 0.35f, 0.05f);
-    [SerializeField] Color joinColour = new Color(0.45f, 1f, 0.5f);
-    [SerializeField] Color leaveColour = new Color(0.65f, 0.65f, 0.7f);
-    [SerializeField] Color dim = new Color(1f, 1f, 1f, 0.55f);
+    [SerializeField] Color healthy = new Color(0.42f, 1f, 0.06f);
+    [SerializeField] Color hurt = new Color(1f, 0.74f, 0f);
+    [SerializeField] Color critical = new Color(1f, 0.04f, 0.16f);
+    [SerializeField] Color healed = new Color(0.32f, 1f, 0.48f);
+    [SerializeField] Color headshotColour = new Color(1f, 0.9f, 0.08f);
+    [SerializeField] Color killColour = new Color(1f, 0.1f, 0.58f);
+    [SerializeField] Color joinColour = new Color(0.38f, 1f, 0.48f);
+    [SerializeField] Color leaveColour = new Color(0.6f, 0.6f, 0.68f);
+    [SerializeField] Color dim = new Color(1f, 1f, 1f, 0.58f);
 
     [Header("Feel")]
     [Tooltip("Canvas units the crosshair opens per degree of the weapon's spread cone.")]

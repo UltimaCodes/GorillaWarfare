@@ -71,6 +71,9 @@ public class SingleShotGun : Gun
         float tip = BuildVisual();
         muzzle = gameObject.AddComponent<MuzzleFlash>();
         muzzle.SetTipDistance(tip);
+
+        if (Info != null)
+            muzzle.Scale(Info.Weight);
     }
 
     // Swaps the old AK/M1911 meshes for a banana. Done at runtime, keyed off the weapon's own

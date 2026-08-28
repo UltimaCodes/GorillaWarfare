@@ -113,7 +113,17 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
       Wants weight and low end. The two in there now are trimmed .22 recordings, which is a
-      small calibre and sounds like it. Needs bigger source material.
+      small calibre and sounds like it. Needs bigger source material. Reported 2026-08-29 as not
+      punchy enough, the split and big mike specifically - **partly addressed** the same day
+      without new recordings: firing volume is now scaled by `GunInfo.Weight` (the same 0-1
+      figure the shake and recoil kick already use) instead of every gun playing its layered
+      shot at the same flat `ShotVolume`, so the split and big mike (Weight 0.86-0.98) come out
+      noticeably louder than a pistol tap (Weight 0.3) rather than identically loud. Muzzle flash
+      got the same treatment - `MuzzleFlash.Scale(weight)` sizes the burst, the light and its
+      range per weapon, where every gun previously built an identically sized flash regardless of
+      what it fired. The recordings themselves are still thin .22s; a mix-level fix can make the
+      big guns louder and flashier than the small ones, it can't make the sample itself sound
+      like a shotgun. That still needs bigger source material.
 - [x] **Pistol is the default weapon** (currently index 0 is whatever the prefab ordered)
 - [x] **Rifle is automatic** - fires while held, at a fixed rate
 - [x] **Maths-based recoil, not animation.** Each shot pushes the view up along a defined
@@ -254,7 +264,12 @@ The big aesthetic one. See the philosophy section above.
       and font is scene data rather than a constant in an `OnGUI` call
 - [x] Mode selector as real objects, for the same reason
 - [x] Four fonts imported with TextMeshPro assets built (`FontAssetBuilder`). The HUD defaults
-      to Helvetica Punk — the only one of the four a number is legible in at a glance
+      to Helvetica Punk — the only one of the four a number is legible in at a glance. Revisited
+      2026-08-29 when the HUD was reported as not matching the CS/ULTRAKILL direction and asked
+      to find a better one - rendered specimen crops of all four rather than picking from memory,
+      and Helvetica Punk is still the right call: it's the one genuinely industrial/stencil face
+      in the set, the other three (blackletter, western slab, horror display) were never really
+      in contention for a HUD read at a glance mid-fight. The mismatch wasn't the font.
 - [x] Hitmarkers (headshots read differently)
 - [x] Health as ten blocks and an oversized number, flat saturated colour, stepping rather than
       sliding. The old screen space bar is out of the prefab
@@ -290,6 +305,20 @@ two feeds would either overlap or need a third thing to arbitrate.
       drove the canvas's own RectTransform directly and did nothing at all - Unity ignores an
       overlay canvas's own transform when placing it. Fixed 2026-08-23 by shaking a child
       RectTransform instead, which has no such exemption - see `bug-log.md`'s ninth pass.
+- [x] **CS/ULTRAKILL HUD pass** — reported 2026-08-29 as not matching the design philosophy above
+      (it was never actually checked against it since M5 first shipped, just built functional and
+      left). The gameplay HUD only — menus are Ryaan's own. `GameHud`'s palette pushed off the
+      soft traffic-light green/yellow/red toward the harsher, less pastel one the philosophy
+      section already asked for; `killColour` specifically goes from orange to a hot magenta, the
+      one hue both reference games reach for on anything about hurting someone rather than your
+      own status. Health and ammo - the two always-on readouts - now sit on a solid black plate
+      instead of floating over the game, framed by four short corner ticks (green for health,
+      magenta for ammo) rather than a full box, which is the one move a colour or font change
+      alone can't make: both references corner their numbers rather than just printing them. A
+      faint scanline overlay (alpha 0.05 every second row, point filtered rather than blurred -
+      same "quantise, don't soften" call the skybox pixelation already made) sits over the whole
+      canvas. Verified by an actual screenshot, not eyeballed math - see `bug-log.md`'s sixteenth
+      pass for the ammo-frame bug that render caught.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur

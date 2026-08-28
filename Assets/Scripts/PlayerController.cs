@@ -837,12 +837,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (gun == null)
             return;
 
-        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", origin, GameAudio.ShotVolume);
+        // Heavier launchers get louder, same reasoning as RPC_WeaponFired below.
+        float weightVolume = GameAudio.ShotVolume * Mathf.Lerp(0.9f, 1.55f, gun.Weight);
+
+        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", origin, weightVolume);
 
         if (gun.Weight >= gun.layeredAbove)
         {
             GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", origin,
-                                    GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
+                                    weightVolume * 0.7f, 0.6f, 0.035f);
         }
 
         // The launch comes from firing, not from the blast landing.
@@ -866,20 +869,29 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     [PunRPC]
     void RPC_WeaponFired(string weaponName, Vector3 endPoint, Vector3 endNormal, bool hit)
     {
+        GunInfo fired = Resources.Load<GunInfo>($"Guns/{weaponName}");
+
+        // Heavier guns get louder, not just a second layer under them. The split and the sniper
+        // were already maxing out the layering below and still came out of the base speaker at
+        // the same volume as a pistol tap - which is exactly why the two biggest guns in the
+        // game didn't read as the two biggest guns in the game. Scaled off the same Weight
+        // figure the shake, the fire punch and now the muzzle flash already use, so a "heavy"
+        // gun means the same thing everywhere. Light guns barely move (0.9-1.0x); the split and
+        // big mike, sitting at 0.86-0.98 Weight, land close to the top of the range.
+        float weightVolume = GameAudio.ShotVolume * Mathf.Lerp(0.9f, 1.55f, fired != null ? fired.Weight : 0f);
+
         // The bang happens whether or not you connected. It used to be inside the hit path, so
         // missing was completely silent.
-        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, GameAudio.ShotVolume);
+        GameAudio.PlayAt($"{GameAudio.Shoot}/{weaponName}", transform.position, weightVolume);
 
         // A second layer, pitched down and a hair late, on anything heavy. It is what separates
         // a shotgun from a loud click: the crack says it fired, the body says how big it was.
         // Light weapons skip it - a rifle at ten rounds a second does not want two samples per
         // shot fighting each other.
-        GunInfo fired = Resources.Load<GunInfo>($"Guns/{weaponName}");
-
         if (fired != null && fired.Weight >= fired.layeredAbove)
         {
             GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", transform.position,
-                                    GameAudio.ShotVolume * 0.7f, 0.6f, 0.035f);
+                                    weightVolume * 0.7f, 0.6f, 0.035f);
 
             // A third layer on the heaviest weapons, lower and later still. Two layers gave the
             // shotgun a body; three give it a room to be in, which is the part that was missing -
@@ -887,7 +899,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             if (fired.Weight > 0.8f)
             {
                 GameAudio.PlayAtDelayed($"{GameAudio.Shoot}/{weaponName}", transform.position,
-                                        GameAudio.ShotVolume * 0.55f, 0.38f, 0.095f);
+                                        weightVolume * 0.55f, 0.38f, 0.095f);
             }
         }
 

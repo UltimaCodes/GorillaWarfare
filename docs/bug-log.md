@@ -1200,3 +1200,110 @@ matching the ninth pass's expectation). Two stale entries remain in the list fro
 session (`ClickRpc`, `DestroyRpc` - PUN demo leftovers, already noted as harmless in the second
 pass: an unmatched list entry costs nothing, only a *missing* one would). Left alone rather than
 hand-edited - not worth the risk to a Photon-internal asset for a purely cosmetic two-line cleanup.
+
+# Sixteenth pass — guns made louder and punchier, the HUD reworked to actually match the design philosophy, 2026-08-29
+
+## Guns not punchy enough, the split and big mike specifically
+
+Direct playtesting feedback. Traced what "punchy" actually has code behind it already:
+`Juice.Shake` and `PlayerController.AddFirePunch` both already scale off `GunInfo.Weight` (pull
+damage over 110, clamped), so a heavier gun already kicks the camera and the view FOV harder on
+fire. Two things didn't get the same treatment and were flat across every weapon regardless of
+what fired:
+
+**Volume.** `RPC_WeaponFired` and `RPC_ProjectileFired` both played every shot's base layer and
+its weight-gated second/third layers at the same flat `GameAudio.ShotVolume`, no matter which gun
+fired. The split and big mike (`Weight` 0.98 and 0.86 - both already crossing `layeredAbove` and
+the 0.8 third-layer threshold, i.e. already playing all three audio layers) still came out of the
+speaker at the identical volume as a pistol tap (`Weight` 0.3). Fixed by scaling `ShotVolume` by
+`Mathf.Lerp(0.9f, 1.55f, weight)` before any of the three layers play, in both RPCs - light guns
+move a few percent, the two heaviest guns in the game land near the top of the range.
+
+**Muzzle flash.** `MuzzleFlash` built every one of its fields (`flashSize`, `burstCount`,
+`intensity`, `range`) from the same serialized defaults regardless of the weapon carrying it -
+confirmed by reading `SingleShotGun.Awake`, which called `AddComponent<MuzzleFlash>()` and never
+touched a single field on it afterward. The pistol's tap and the shotgun's blast lit an
+identically sized burst. Added `MuzzleFlash.Scale(weight)`, called right after the flash is
+built, using the same weight-lerp shape as the volume fix. `range` needed an explicit
+`flash.range = range` inside `Scale` - it's only ever read into the `Light` once, in `Build()`,
+which has already run by the time a weapon knows its own weight.
+
+What this doesn't fix: `roadmap.md`'s M2 already flags the source recordings themselves as thin
+`.22` clips that read as a click rather than a bang. A mix-level fix (louder, bigger flash) makes
+the big guns bigger *relative to* the small ones - it can't make the sample itself sound heavier.
+That's unchanged and still needs real source material.
+
+Verified with the existing `WeaponCheck` suite (all pass, including the shape/audio-path
+assertions unaffected by the scaling) rather than by ear, since neither change is something a
+batch-mode run can judge for loudness - the numbers are the fix, and they're derived from the
+same `Weight` figure the rest of the game's feel already trusts.
+
+## The HUD, reworked against the project's own stated direction
+
+Direct request, with a specific complaint: the gameplay HUD didn't read as ULTRAKILL/Cruelty
+Squad, and to find a font that does. Scope explicitly excluded the main menu, lobby and settings
+screens - Ryaan's own, per M5's existing notes.
+
+**The font wasn't actually the problem.** `HudBuilder.FindFont()` already picks Helvetica Punk
+out of the project's four fonts, and its own doc comment already explains why (the only one a
+number is legible in at a glance). Rather than trust that reasoning secondhand, rendered a
+specimen crop of all four at HUD-relevant sizes (`ImageFont`/`PIL`, not Unity - cheaper than a
+play mode round trip for a pure font-shape question). Confirms it: Helvetica Punk is a genuinely
+industrial/stencil face, distressed at the edges, and it's the only one of the four in contention
+- Chomsky is blackletter (and already spoken for, menu-side), The Wildeast is a western slab, and
+Bring Me A Helicopter is a horror display face nobody could read mid-fight. The mismatch was
+never the typeface.
+
+**What actually needed changing was the HUD's own visual language**, checked directly against
+`roadmap.md`'s design philosophy section (loud/clashing, not tasteful; type as a weapon;
+everything punchy) rather than redesigned from taste alone:
+
+- `GameHud`'s colour palette pushed off a soft traffic-light green/yellow/red toward something
+  less pastel. `killColour` is the one real hue change, orange to hot magenta - the accent both
+  reference games reach for on anything about hurting someone else rather than your own status.
+  It touches the kill callout, the streak, feed lines you were part of, and the ladder's filled
+  pips, so the shift reads consistently rather than in one spot.
+- Health and ammo - the two readouts that are always on screen - now sit on a solid black plate
+  (0.78 alpha, not the soft 0.55 the health bar's track alone used to carry) instead of floating
+  directly over the game world.
+- A viewfinder frame - four short right-angle ticks per corner, not a full outline - clamps round
+  each plate: acid green for health, magenta for ammo. This is the one move a colour or font
+  change alone can't make; both reference HUDs corner their numbers rather than just printing
+  them. New `HudBuilder.CornerFrame`/`CornerTick` helpers, generic over which anchor a panel uses
+  so the same call frames a bottom-left cluster and a bottom-right one without either mirroring
+  coordinates by hand.
+- A faint scanline overlay - one dark row in every two, alpha 0.05, point filtered rather than
+  blurred - sits over the whole canvas as the last sibling. Built the same way
+  `GameHud.BuildScopeMask` already builds its texture: real alternating pixels, not a shader,
+  because a soft scanline reads as compression noise and a hard one reads as a screen. Confirmed
+  visible on a zoomed crop of open sky, at an alpha deliberately low enough that it's easy to miss
+  at normal viewing size and easy to see once you look for it.
+
+**The ammo frame was wrong on the first render, and the bug is exactly the kind this project's
+UI maths keeps producing.** `Image(anchor, anchor, pivot, position, size, ...)` for a
+`BottomRight`-pivoted element places `position` at the rect's own *right* edge and grows the box
+*leftward* by `size` - the mirror image of health's `BottomLeft` maths (`position` at the *left*
+edge, grows rightward), not the same formula with the sign left unflipped. First pass used the
+`BottomLeft` formula for both panels. It compiled, `SceneCheck` passed (it checks wiring, not
+geometry), and the result was a black plate and a magenta frame sitting a full panel-width to the
+left of the actual "30"/"5" text - visually disconnected from the numbers they were meant to
+frame. Caught by an actual screenshot, not by re-reading the maths harder: this project's memory
+already carries a standing rule that a pose or a visual claim gets rendered before it's called
+fixed, for exactly this reason (see the tenth pass's grip bug, the fourteenth pass's explosion
+size, and now this).
+
+Building that screenshot needed its own new tool. `PlayModeProbe` already documents why a
+straightforward camera render can't do it: the HUD is a Screen Space - Overlay canvas, which
+`Camera.Render` never draws, and `ScreenCapture` - the API that *can* see it - needs a real
+end-of-frame that batch mode never delivers, hanging the process instead of producing a file.
+New `Assets/Editor/HudPhotographer.cs` (kept as a permanent tool, same call as
+`TwoHandedPhotographer`) runs the same offline-room boot `PlayModeProbe` uses to get a real local
+player without a network, seeds the HUD with representative sample state (a hit, a kill callout,
+two feed lines, both damage-number variants, a damage bearing), and calls `ScreenCapture` after a
+real `WaitForEndOfFrame` - which only works because the whole run is launched *without*
+`-batchmode`, a real if invisible Editor window rather than a headless one. Fixed the ammo frame's
+bounds from what that first screenshot actually showed, rebuilt, rendered again, and confirmed the
+plate and both frames now sit exactly under "140" and "12"/"6" respectively.
+
+Full `PlayModeProbe` and `SceneCheck` both still pass - neither the weight-scaled audio/flash
+change nor the HUD rework touched anything either suite actually asserts on.

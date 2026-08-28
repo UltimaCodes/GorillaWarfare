@@ -125,10 +125,18 @@ public static class HudBuilder
         GameObject health = Panel(rootObject.transform, "Health", BottomLeft, BottomLeft, BottomLeft,
                                   new Vector2(48f, 48f), Vector2.zero, null);
 
+        // A hard black slab under the number and the bar, not the soft 0.55-alpha panel the
+        // track alone used to sit on. Cruelty Squad and ULTRAKILL both read their numbers off a
+        // solid plate rather than floating them over whatever the camera happens to be pointed
+        // at - legibility as a style choice, not just a contrast fix.
+        Image(health.transform, "Backer", BottomLeft, BottomLeft, BottomLeft,
+              new Vector2(-16f, -46f), new Vector2(360f, 192f), new Color(0f, 0f, 0f, 0.78f));
+
         TMP_Text healthNumber = Text(health.transform, "Number", font, 76f,
                                      TextAlignmentOptions.BottomLeft, BottomLeft,
                                      new Vector2(0f, 44f), new Vector2(300f, 90f));
         healthNumber.text = "140";
+        healthNumber.characterSpacing = 3f;
 
         // The track is the full bar including the overshield stretch; the fill and the shield
         // are sized against it at runtime, so widening this one rect rescales the whole thing.
@@ -154,6 +162,14 @@ public static class HudBuilder
                              new Vector2(310f, 44f), new Vector2(200f, 50f));
         heal.text = "+35";
 
+        // A viewfinder frame round the number and the bar - four short right-angle ticks rather
+        // than a full outline, so it reads as instrumentation clamped round the readout instead
+        // of boxing it in. This is the one move a colour or font change alone can't make: both
+        // reference HUDs corner their numbers rather than just printing them. Matches the
+        // backer's own bounds exactly, so the plate and the frame read as one object.
+        CornerFrame(health.transform, BottomLeft, new Vector2(-16f, -46f), new Vector2(344f, 146f),
+                   22f, 3f, new Color(0.5f, 1f, 0.1f, 0.9f));
+
         // ---------------------------------------------------------------- ladder, above health
         GameObject ladder = Panel(rootObject.transform, "Ladder", BottomLeft, BottomLeft, BottomLeft,
                                   new Vector2(48f, 190f), Vector2.zero, null);
@@ -176,6 +192,19 @@ public static class HudBuilder
         GameObject ammo = Panel(rootObject.transform, "Ammo", BottomRight, BottomRight, BottomRight,
                                 new Vector2(-48f, 48f), Vector2.zero, null);
 
+        // Same hard plate as the health cluster, mirrored. Sized to the round count and the
+        // spare tally, not to the weapon name's own generous box - the name is a label floating
+        // above the frame the same way the streak floats below health's.
+        //
+        // A BottomRight pivot places anchoredPosition at the rect's own right edge and grows the
+        // box *leftward* from there (size subtracted, not added) - the mirror image of health's
+        // BottomLeft maths, not the same formula with a sign left unflipped. Got this wrong on
+        // the first pass (grew it rightward, same as health) and only caught it because a render
+        // showed the plate sitting a full panel-width away from "30"/"5" - exactly the kind of
+        // wrong-until-rendered bug this project's whole HUD math has form for.
+        Image(ammo.transform, "Backer", BottomRight, BottomRight, BottomRight,
+              new Vector2(20f, -14f), new Vector2(280f, 168f), new Color(0f, 0f, 0f, 0.78f));
+
         TMP_Text weaponName = Text(ammo.transform, "Name", font, 30f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
                                    new Vector2(0f, 150f), new Vector2(560f, 36f));
@@ -187,6 +216,7 @@ public static class HudBuilder
                                    TextAlignmentOptions.BottomRight, BottomRight,
                                    new Vector2(-70f, 0f), new Vector2(400f, 140f));
         ammoNumber.text = "30";
+        ammoNumber.characterSpacing = 3f;
 
         // Spares tucked under its right shoulder, bare - "5", not "x5".
         TMP_Text spare = Text(ammo.transform, "Spare", font, 42f,
@@ -194,6 +224,13 @@ public static class HudBuilder
                               new Vector2(0f, 14f), new Vector2(120f, 56f));
         spare.text = "5";
         spare.color = new Color(1f, 1f, 1f, 0.55f);
+
+        // Magenta rather than health's green - the same accent kills and streaks use. Two tones
+        // rather than four or five is what keeps a HUD like this readable instead of just loud:
+        // green is you, magenta is anything about hurting someone else, and ammo is squarely the
+        // second one. Bounds match the backer above exactly, same as health's frame matches its.
+        CornerFrame(ammo.transform, BottomRight, new Vector2(-260f, -14f), new Vector2(20f, 154f),
+                   22f, 3f, new Color(1f, 0.12f, 0.58f, 0.9f));
 
         // ---------------------------------------------------------------- clock, top centre
         GameObject top = Panel(rootObject.transform, "Match", TopCenter, TopCenter, TopCenter,
@@ -226,7 +263,7 @@ public static class HudBuilder
                               TextAlignmentOptions.Center, Center,
                               new Vector2(0f, 230f), new Vector2(1600f, 150f));
         title.text = "DOUBLE";
-        title.color = new Color(1f, 0.35f, 0.05f);
+        title.color = new Color(1f, 0.1f, 0.58f);
 
         TMP_Text subtitle = Text(centre.transform, "Subtitle", font, 42f,
                                  TextAlignmentOptions.Center, Center,
@@ -358,6 +395,18 @@ public static class HudBuilder
         Wire(so, "damageTemplate", damageRow);
         Wire(so, "arrowContainer", (RectTransform)bearings.transform);
         Wire(so, "arrowTemplate", arrow);
+
+        // ---------------------------------------------------------------- scanlines
+        // Last child, so it draws over literally everything else the HUD does. A faint dark row
+        // every second pixel, built the same way BuildScopeMask is - point filtered rather than
+        // blurred, the same "quantise, don't soften" call the skybox pixelation already made -
+        // so it reads as a screen the readout is being displayed on rather than a haze over it.
+        // Not wired to GameHud: nothing about it changes at runtime, so it needs no field.
+        Image scanlines = Image(rootObject.transform, "Scanlines", Vector2.zero, Vector2.one,
+                                Center, Vector2.zero, Vector2.zero, Color.white);
+        scanlines.raycastTarget = false;
+        scanlines.sprite = Sprite.Create(BuildScanlineTexture(1080),
+                                         new UnityEngine.Rect(0f, 0f, 4f, 1080f), new Vector2(0.5f, 0.5f));
 
         so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -639,6 +688,67 @@ public static class HudBuilder
     static Image Tick(Transform parent, string name, Vector2 size, Vector2 position)
     {
         return Image(parent, name, Center, Center, Center, position, size, Color.white);
+    }
+
+    /// <summary>
+    /// A viewfinder frame round a cluster of readouts - four short right-angle ticks at the
+    /// corners of a box rather than a full outline, so it reads as instrumentation clamped round
+    /// the numbers instead of boxing them in.
+    ///
+    /// min/max are in the same local anchored-position space the caller's own children already
+    /// use, so the same call works for a bottom-left cluster (health) and a bottom-right one
+    /// (ammo) without either side having to mirror coordinates by hand - `anchor` is whatever
+    /// anchor/pivot the caller's other children were built with.
+    /// </summary>
+    static void CornerFrame(Transform parent, Vector2 anchor, Vector2 min, Vector2 max,
+                            float arm, float thickness, Color colour)
+    {
+        CornerTick(parent, anchor, new Vector2(min.x, min.y), arm, thickness, colour, 1, 1);
+        CornerTick(parent, anchor, new Vector2(max.x, min.y), arm, thickness, colour, -1, 1);
+        CornerTick(parent, anchor, new Vector2(min.x, max.y), arm, thickness, colour, 1, -1);
+        CornerTick(parent, anchor, new Vector2(max.x, max.y), arm, thickness, colour, -1, -1);
+    }
+
+    /// One corner of a CornerFrame: two short bars meeting at `corner`, each extending inward
+    /// along one axis by `sign` so all four corners lean into the box rather than out of it.
+    static void CornerTick(Transform parent, Vector2 anchor, Vector2 corner, float arm,
+                           float thickness, Color colour, int signX, int signY)
+    {
+        Image(parent, "~frameH", anchor, anchor, Center,
+             corner + new Vector2(signX * arm * 0.5f, 0f), new Vector2(arm, thickness), colour);
+
+        Image(parent, "~frameV", anchor, anchor, Center,
+             corner + new Vector2(0f, signY * arm * 0.5f), new Vector2(thickness, arm), colour);
+    }
+
+    /// <summary>
+    /// A faint horizontal line on every second row, for the scanline overlay.
+    ///
+    /// Point filtered and built from real alternating pixels rather than a shader, the same
+    /// "quantise, don't blur" approach GameHud.BuildScopeMask and the skybox pixelation already
+    /// use - a soft scanline reads as compression noise, a hard one reads as a screen.
+    /// </summary>
+    static Texture2D BuildScanlineTexture(int height)
+    {
+        Texture2D texture = new Texture2D(4, height, TextureFormat.RGBA32, false) { name = "~scanlines" };
+        Color[] pixels = new Color[4 * height];
+
+        for (int y = 0; y < height; y++)
+        {
+            // Every second row a hair darker rather than solid black - a scanline is the gap
+            // between phosphor rows, not a grid printed over the picture.
+            Color c = new Color(0f, 0f, 0f, (y & 1) == 0 ? 0.05f : 0f);
+
+            for (int x = 0; x < 4; x++)
+                pixels[y * 4 + x] = c;
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply();
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+
+        return texture;
     }
 
     /// A stack that lays its own children out top down. The feed and the standings both grow
