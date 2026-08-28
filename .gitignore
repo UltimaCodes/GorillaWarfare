@@ -54,3 +54,10 @@ crashlytics-build.properties
 
 # Screenshots the play mode probe writes out
 Logs/probe-shots/
+
+# ---- Python (tools/) ----
+# __pycache__/extract_shot.cpython-313.pyc ended up committed by accident - it's a compiled
+# bytecode cache, regenerated on every run, and version-specific to whatever interpreter last
+# touched it.
+__pycache__/
+*.pyc

@@ -1025,3 +1025,78 @@ frame it's created doesn't register for a raycast until transforms are explicitl
 a test-rig issue since real map geometry is never moved at runtime. Passed once that was added:
 fires once near a wall, refuses a second attempt in the same airtime, and still refuses after the
 airtime flag is reset (simulating a landing) because the cooldown is a separate clock.
+
+# Thirteenth pass — the sky actually pixelated, and a cleanup sweep, 2026-08-23
+
+## The skybox wasn't pixelated at all
+
+Reported directly against the reference again: the previous pass built the right shapes (gradient,
+streaked clouds, glowing sun) but rendered them smooth and continuous, missing the reference's
+actual retro pixel-art texture entirely. Fixed in `JungleSky.shader` two ways, stacked: the view
+direction itself is snapped to a coarse grid before any gradient/cloud/sun maths runs, so whole
+patches of sky come out bit-identical instead of shading continuously (adjacent screen pixels that
+land in the same cell are now literally the same colour), and the final colour is posterized to a
+small number of steps per channel afterward - the blocky shapes alone still read as blurry/low-res
+without also cutting the colour precision to match. Verified against both the isolated
+`SkyboxPhotographer` render and the real in-game camera with the full `ShaderStack` post-processing
+stack on top, not just the bare shader.
+
+## The clouds streaked vertically instead of horizontally
+
+Reported immediately after, from the same render. The streak effect scales one axis of the
+sample position up before reading the noise, which makes the noise vary *faster* along that axis -
+correct instinct, wrong axis: `dir * float3(_CloudStretch, 1, 1)` sped up the *horizontal* (X)
+component, which narrows features running left-right and, as a direct consequence, elongates them
+top-to-bottom instead - clouds streaking down the sky rather than across it. Scaling Y instead of
+X (`dir * float3(1, _CloudStretch, 1)`) speeds up the vertical axis, narrowing bands vertically and
+stretching them horizontally, which is what actually reads as wind-blown cloud cover sweeping
+across the dome. Re-rendered both the isolated shader and the real camera to confirm rather than
+reasoning about the axis a second time from the maths alone.
+
+## A cleanup sweep
+
+Asked directly: "delete stuff that isn't needed anymore, optimize the project." Dispatched an
+Explore agent for the broad "find every dead script/tool/asset" pass (same pattern as the earlier
+dead-code passes this project has already been through) while doing a parallel, narrower sweep by
+hand for things that pattern doesn't catch - empty folders, accidentally-committed build artifacts,
+and assets that are *referenced* but functionally dead rather than orphaned outright.
+
+**From the agent, confirmed and applied:**
+- `PlayerMovement.cs`'s `walkSpeed` field (and its now-empty `[Header("Walk")]`) - declared,
+  never read anywhere, the exact shape of bug the old `wallRunMinSpeed` field was caught as
+  earlier this project.
+- `Assets/Resources/Models/Monkey/` - an empty folder, leftover from whenever the model naming
+  convention moved to "Gorilla" (the class is still called `MonkeyRig`, but nothing has loaded
+  from `Models/Monkey` in a long time - the real model path is `Models/Gorilla/gorilla`).
+- Everything else the agent checked (all 55 Scripts, all 35 Editor tools, both audio banks and
+  `PlayerController.cs`/`GameAudio.cs` on a full close-read) came back clean - the wall-run/vault
+  removal earlier today left nothing orphaned behind it.
+
+**Found separately, by hand:**
+- `tools/__pycache__/extract_shot.cpython-313.pyc` was committed to git by accident - a compiled
+  Python bytecode cache, regenerated on every run and specific to whatever interpreter last
+  touched it. Untracked it and added `__pycache__/`/`*.pyc` to `.gitignore` so it can't happen
+  again.
+- Two more empty, unreferenced folders: `Assets/Resources/Prefabs/` and `Assets/Items/Guns/`
+  (the latter took `Assets/Items/` itself down to empty too once removed) - both just a stray
+  `.meta` and nothing else, no asset ever lived in either.
+- **`Assets/PostProcessing/PostProcessing Profile.asset`** - not orphaned in the usual sense
+  (`Game.unity` and `PlayerController.prefab` both still reference it by GUID), but functionally
+  dead: `ShaderStack.cs`'s own doc comment already documents this exact asset as the 2024
+  profile that's "never rendered" and gets actively suppressed on every scene load
+  (`SuppressAuthoredVolumes`) now that `ShaderStack` builds its own profile from the player's
+  settings at runtime instead. Wrote a temporary editor tool (`StripDeadPostProcessVolume.cs`,
+  same shape as the existing `StripRoomManagerView.cs`) to remove the `PostProcessVolume`
+  component from both the scene and the prefab properly through Unity's own APIs rather than
+  hand-editing the YAML, then deleted the now-unreferenced asset and the tool itself. Re-ran the
+  full check suite plus a real screenshot afterward to confirm post-processing still looks
+  identical - it does, since `ShaderStack` was never actually reading this profile to begin with.
+- Corrected two stale doc references while in there: `roadmap.md` pointed at
+  `tools/banana_generator.py` (superseded by `tools/banana_variants.py`, per that script's own
+  doc comment) and `tools/sound_generator.py` (deleted after its one-time run; the generated
+  clips it's still describing live in `Assets/Resources/Audio`, not the script itself).
+
+Left alone on purpose: `Assets/Editor/HitboxProfileSeed.cs` - its target asset already exists so
+the tool is a no-op if run again, but it's cheap insurance against that asset ever being deleted
+by hand, not clutter. Matches the precedent already set by keeping the other one-time "Builder"
+tools around as re-runnable safety nets.

@@ -226,8 +226,13 @@ Shader "Skybox/JungleSky"
 
                     // The streak: squash the sample hard along one axis before reading it, so a
                     // round noise blob comes out elongated - this is what makes it read as wind-
-                    // blown cirrus rather than round cauliflower cloud.
-                    float3 stretched = dir * float3(_CloudStretch, 1.0, 1.0);
+                    // blown cirrus rather than round cauliflower cloud. Stretching the Y
+                    // component - not X - is what makes the *streaks* run horizontally: scaling
+                    // an axis up makes the noise vary faster along it (narrower bands in that
+                    // axis), which reads as elongation in the *other* axes. Had this backwards
+                    // originally (scaled X), which streaked the clouds vertically instead of
+                    // across the sky - reported directly and confirmed by eye, not re-guessed.
+                    float3 stretched = dir * float3(1.0, _CloudStretch, 1.0);
                     float3 samplePos = stretched * _CloudScale + drift;
 
                     // Domain warp: bend the sample position with a coarser, independent noise

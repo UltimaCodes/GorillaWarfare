@@ -101,7 +101,9 @@ its weapon.
 
 Banana-shaped guns. Plural — the point is variety, not one gun.
 
-- [x] Banana models, generated in Blender (tools/banana_generator.py)
+- [x] Banana models, generated in Blender (`tools/banana_variants.py` - supersedes the original
+      `banana_generator.py`, deleted once superseded; the new script derives all five weapons
+      from one real modelled banana instead of building them from scratch)
 - [x] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
 - [x] Five weapons: pistol, shotgun, rifle, sniper, peel. Roles are asserted in WeaponCheck -
       no two may overlap, and anything that can one-pull a full health player has to pay for it
@@ -222,7 +224,9 @@ landing after that date.
 - [x] Music: menu and combat, crossfaded, hosted on RoomManager so it survives the scene change
 - [x] Volume mix pass - every level lives in GameAudio rather than at each call site
 
-The feedback sounds are synthesised (`tools/sound_generator.py`) rather than sourced. The pack
+The feedback sounds are synthesised (were `tools/sound_generator.py`; run once, its output
+committed, and removed afterward - the generated clips are what's actually in
+`Assets/Resources/Audio`, not the script) rather than sourced. The pack
 sounds standing in were wrong in specific ways and finding replacements means trawling for
 something that happens to fit; these were written to fit, and they're CC0 by construction and
 tunable by editing a number.

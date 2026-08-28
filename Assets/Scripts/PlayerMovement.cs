@@ -43,9 +43,6 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float friction = 6f;
     [SerializeField] float stopSpeed = 2.54f;
 
-    [Header("Walk")]
-    [SerializeField] float walkSpeed = 3.4f;
-
     [Header("Air")]
     [SerializeField] float airAccel = 130f;
 
