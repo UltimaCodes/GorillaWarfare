@@ -429,24 +429,37 @@ public class Projectile : MonoBehaviour
             // Core: white hot, and already wider than the blast when it appears. An explosion
             // that starts small and grows reads as a firework; one that arrives at full size and
             // collapses reads as something detonating.
-            FlashSprite.Spawn(core, at, radius * 1.6f, radius * 2.6f, 0.11f,
-                              new Color(1f, 0.98f, 0.85f, 1f));
+            //
+            // Every multiplier below raised again 2026-08-23 - reported as too small to notice,
+            // and rendering it for real (not just reasoning about the radius maths) showed why:
+            // the whole thing reads huge for one frame as the white core flares, then collapses
+            // almost immediately into a faint colour wash with no clear shape while it's still
+            // fading - there was no readable "this is a fireball" middle phase, only a flash and
+            // an afterglow. Bigger across the board, and the fireballs specifically hold their
+            // size for longer before shrinking (their own duration raised) so there's actually
+            // time to see one.
+            // Colour pushed past 1.0 on all three of these - this is additive, so a sprite this
+            // large spreads whatever brightness it has over a much bigger area, and a value
+            // capped at 1 reads as dim/washed-out once stretched that far. Overbright values are
+            // the actual fix for that, not more size on top of size that was already diluting.
+            FlashSprite.Spawn(core, at, radius * 2.2f, radius * 3.4f, 0.14f,
+                              new Color(1.4f, 1.3f, 1.1f, 1f));
 
             // Fireball: the shape you actually read as the explosion. Drawn well past the
             // damage radius on purpose - the killing volume is 7.5 metres and a fireball that
             // only just covers it looks like a firecracker at that scale.
-            FlashSprite.Spawn(fire, at, radius * 1.4f, radius * 3.6f, 0.42f,
-                              new Color(1f, 0.62f, 0.18f, 1f));
+            FlashSprite.Spawn(fire, at, radius * 2.4f, radius * 5.4f, 0.6f,
+                              new Color(1.5f, 0.85f, 0.22f, 1f));
 
             // A second fireball, offset and slower, so the shape is lumpy rather than a disc.
             FlashSprite.Spawn(fire, at + Random.onUnitSphere * radius * 0.35f,
-                              radius * 1.1f, radius * 2.8f, 0.55f,
-                              new Color(1f, 0.42f, 0.08f, 0.9f));
+                              radius * 1.8f, radius * 4.4f, 0.75f,
+                              new Color(1.4f, 0.55f, 0.1f, 0.9f));
 
             // Smoke, drifting up and outliving the rest. Placed slightly high so it reads as
             // rising out of the blast rather than sitting in it.
             FlashSprite.Spawn(smoke, at + Vector3.up * radius * 0.35f,
-                              radius * 1.4f, radius * 4.2f, 1.3f,
+                              radius * 2.2f, radius * 6.5f, 1.5f,
                               new Color(0.35f, 0.32f, 0.30f, 0.8f));
 
             // Sparks thrown outward. Random directions rather than a ring, because a ring reads
@@ -456,8 +469,8 @@ public class Projectile : MonoBehaviour
                 Vector3 away = Random.onUnitSphere;
                 away.y = Mathf.Abs(away.y) * 0.6f + 0.15f;
 
-                FlashSprite.Spawn(spark, at + away * radius * 0.45f,
-                                  radius * 0.22f, radius * 0.05f, 0.28f,
+                FlashSprite.Spawn(spark, at + away * radius * 0.5f,
+                                  radius * 0.35f, radius * 0.08f, 0.32f,
                                   new Color(1f, 0.85f, 0.4f, 1f));
             }
         }

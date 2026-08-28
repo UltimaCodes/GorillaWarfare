@@ -788,10 +788,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // flat cone (dust, using PlayerMovement's own shared tint and burst helper) reads as the
         // cloud kicked up off the ground; a tighter, faster "spark" layer on top reads as actual
         // debris being thrown rather than just dust settling.
-        PlayerMovement.MovementBurst(point, Vector3.up, PlayerMovement.DustTint, "circle", 22, 75f,
-                                     2.5f, 6.5f, 0.06f, 0.16f, 0.35f, 0.7f);
-        PlayerMovement.MovementBurst(point, Vector3.up, Color.white, "spark", 10, 50f,
-                                     4f, 9f, 0.03f, 0.07f, 0.3f, 1.1f);
+        //
+        // Sizes raised hard again 2026-08-23 - rendered the previous numbers at a real combat
+        // distance (4m, dead centre in frame) rather than judging them close-up, and the dust
+        // puff was flatly invisible: at 0.06-0.16m across it's smaller than the gorilla's own
+        // foot, let alone something a nearby player is meant to notice. Roughly 6-8x bigger now,
+        // with a longer life to match so the larger particles have time to actually spread before
+        // fading rather than popping and vanishing in a quarter second.
+        PlayerMovement.MovementBurst(point, Vector3.up, PlayerMovement.DustTint, "circle", 26, 80f,
+                                     3f, 7.5f, 0.5f, 1.2f, 0.55f, 0.6f);
+        PlayerMovement.MovementBurst(point, Vector3.up, Color.white, "spark", 14, 55f,
+                                     5f, 11f, 0.25f, 0.55f, 0.45f, 1f);
 
         GameAudio.PlayAtShaped(GameAudio.Slam, point, 0.85f, 0.8f, GameAudio.Explosion, 0.55f);
     }

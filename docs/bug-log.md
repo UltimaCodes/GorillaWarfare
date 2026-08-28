@@ -1100,3 +1100,47 @@ Left alone on purpose: `Assets/Editor/HitboxProfileSeed.cs` - its target asset a
 the tool is a no-op if run again, but it's cheap insurance against that asset ever being deleted
 by hand, not clutter. Matches the precedent already set by keeping the other one-time "Builder"
 tools around as re-runnable safety nets.
+
+# Fourteenth pass — the ground slam dust and the pineapple's explosion, both too small to notice, 2026-08-23
+
+Reported directly: both read as small and hard to see. Worth recording what rendering them
+actually showed, because the two turned out to need different fixes even though the report
+grouped them together.
+
+## Ground slam dust - genuinely, simply too small
+
+Built a temporary tool that fires the real networked impact path (`PlayerController.
+BuildGroundSlamImpact`, the same call every client makes) at a realistic combat distance (4m,
+not standing on top of it) and screenshots the result. The dust puff was completely invisible -
+not faint, not hard to spot, actually absent from the frame. At 0.06-0.16m across it is smaller
+than the gorilla model's own foot; there was nothing wrong with the reasoning, the numbers were
+just never checked against anything human-scale. Raised both layers roughly 6-8x (dust to
+0.5-1.2m, spark to 0.25-0.55m) and gave them a longer life so particles that size have room to
+actually spread before fading. Re-rendered the same way: now a clearly visible bright burst at
+the same distance.
+
+## The pineapple's explosion - already huge, but unreadable
+
+The same test on the explosion told a different story. `Effects()`'s own multipliers, applied to
+a 7.5m blast radius, were already producing an 11-31m fireball - genuinely massive in world
+units, confirmed by rendering it point-blank (the white core flash filled most of the frame).
+The actual problem only showed up a few frames later: by the time the core fades and the fireball
+sprite should be the readable shape, the whole thing had collapsed into a soft, shapeless colour
+wash with no discernible fireball silhouette - a flash, then an afterglow, nothing in between that
+read as "an explosion happened here." Simply making it bigger again would have made this worse,
+not better: `FlashSprite` blends additively, so spreading a fixed amount of colour over a larger
+area lowers the brightness at every point on it, which is exactly the diluted, washed-out quality
+that was the actual complaint.
+
+Two changes, not one: raised the size multipliers further anyway (they were reported as too
+small, and a bigger fireball is still more convincing once it's readable), and pushed the
+fireball/core colours past 1.0 on every channel - values like `(1.5, 0.85, 0.22)` rather than
+`(1, 0.62, 0.18)`. Overbright colour is what lets an additive sprite stay punchy once it's spread
+over a large area; capping at 1 is what was reading as dim no matter how big the sprite got.
+Re-rendered afterward and could actually see a distinct fireball shape against the world at 0.2s
+in, rather than an undifferentiated tint - the middle phase the previous render was missing
+entirely.
+
+Both verified with real renders at each step rather than trusted from the radius maths alone -
+the pineapple specifically would have been fixed wrong (bigger, again) if the second render
+hadn't shown the actual problem was colour intensity, not size.

@@ -444,7 +444,10 @@ Separate from M0 because it needs a person playing it, not a fix.
       `PlayerMovement` only exists on the owner's own copy, so nobody standing nearby when someone
       else landed a slam ever saw or heard it. Routed through a `PhotonRPC` the same way gunfire
       already is (`PlayerController.ReportGroundSlam`/`RPC_GroundSlamImpact`), and the burst itself
-      doubled up - a wider dust cloud plus a faster debris layer - while already in there. See
+      doubled up - a wider dust cloud plus a faster debris layer - while already in there.
+      **Sized up again 2026-08-23** - rendered at combat distance rather than close up and the
+      original particles were smaller than the gorilla's own foot, genuinely invisible rather than
+      just modest. Roughly 6-8x bigger now. See
       `bug-log.md`'s eleventh pass.
 - [x] **The camera no longer clips into map geometry.** Reported as "basically wallhacks" - the
       inner camera itself had nothing keeping it out of walls when close to one. A spherecast from
