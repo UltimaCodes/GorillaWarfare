@@ -429,6 +429,18 @@ public class PlayerMovement : MonoBehaviour
     /// nothing is going on.
     public int SlideChain => Time.time < chainExpires || Exhausted ? chain : 0;
 
+    /// <summary>
+    /// How much of the current chain window is left, 0 to 1 - for the HUD's own meter under the
+    /// rank text, which wants a number to drain rather than just a name to swap. 1 the instant
+    /// you land a slide, falling to 0 by `chainExpires`; the same window `SlideChain` itself
+    /// already reads to decide whether the chain is still alive, just exposed as a fraction
+    /// instead of a boolean. Zero whenever there's no live chain to show a countdown for.
+    /// </summary>
+    public float ChainWindowFraction =>
+        SlideChain > 0 && !Exhausted
+            ? Mathf.Clamp01((chainExpires - Time.time) / chainWindow)
+            : 0f;
+
     bool sliding;
     bool crouching;
     float standingHeight;

@@ -125,60 +125,40 @@ public static class HudBuilder
         GameObject health = Panel(rootObject.transform, "Health", BottomLeft, BottomLeft, BottomLeft,
                                   new Vector2(48f, 48f), Vector2.zero, null);
 
+        // The bananameter - literally that, not a tinted rectangle. Direct correction after the
+        // first attempt: "what you did is not what I meant by bananameter." A pixel-art banana
+        // (`BananaSprite`, drawn procedurally the same way every other texture on this HUD
+        // already is - no sourced or hand-painted asset) in three stacked layers: an always-
+        // visible dim husk showing the full shape, a pale trail that lags behind on damage and
+        // catches up (the "inertia" asked for), and the live reading on top, tinted through the
+        // same ripeness palette the weapon's own magazine already uses.
+        //
+        // Leans INTO the corner rather than away from it - reported that the old rectangular
+        // bar's lean pointed the wrong way. Negative rather than the positive angle that bar
+        // used, and there's no separate border frame to carry as a rigid body any more: the
+        // outline is baked into the sprite itself, so the container holding the three layers can
+        // rotate directly.
+        const float barLean = -8f;
+        Vector2 meterSize = new Vector2(300f, 88f);
+
+        RectTransform meter = Panel(health.transform, "BananaMeter", BottomLeft, BottomLeft, BottomLeft,
+                                    Vector2.zero, meterSize, null).GetComponent<RectTransform>();
+        meter.localRotation = Quaternion.Euler(0f, 0f, barLean);
+
+        BananaLayer(meter, "Husk", new Color(0.22f, 0.15f, 0.08f, 0.85f), false);
+        Image trail = BananaLayer(meter, "Trail", new Color(1f, 0.96f, 0.75f, 0.55f), true);
+        Image fill = BananaLayer(meter, "Fill", new Color(0.6f, 0.92f, 0.14f, 1f), true);
+
+        Image shield = Image(meter, "Shield", BottomLeft, BottomLeft, BottomLeft,
+                             new Vector2(meterSize.x, 0f), new Vector2(0f, meterSize.y),
+                             new Color(0.35f, 0.8f, 1f));
+        shield.gameObject.SetActive(false);
+
         TMP_Text healthNumber = Text(health.transform, "Number", font, 76f,
                                      TextAlignmentOptions.BottomLeft, BottomLeft,
-                                     new Vector2(0f, 44f), new Vector2(300f, 90f));
+                                     new Vector2(0f, meterSize.y + 14f), new Vector2(300f, 90f));
         healthNumber.text = "140";
         healthNumber.characterSpacing = 3f;
-
-        // A solid black frame round the whole bar, and the bar leans rather than sitting flat -
-        // reported twice over: the bar read as completely flat with zero depth even with the
-        // shine and shadow bands (below) added, and separately that the whole HUD wanted
-        // ULTRAKILL's own diagonal language instead of flat horizontal boxes.
-        //
-        // The frame is the rotation's actual rigid body. `Track` (and everything under it -
-        // `Fill`, `Shine`, `Shadow`, `Shield`) is a *child* of the frame now rather than a
-        // sibling, specifically so one `localRotation` on the frame carries the whole cluster as
-        // one unit - rotating siblings individually would spin each around its own pivot and the
-        // parts would drift apart from each other instead of leaning together.
-        const float trackBorder = 4f;
-        const float barLean = 6f;
-
-        RectTransform barFrame = Image(health.transform, "BarFrame", BottomLeft, BottomLeft, BottomLeft,
-                                       new Vector2(-trackBorder, -trackBorder),
-                                       new Vector2(460f + trackBorder * 2f, 24f + trackBorder * 2f),
-                                       Color.black).rectTransform;
-        barFrame.localRotation = Quaternion.Euler(0f, 0f, barLean);
-
-        // The track is the full bar including the overshield stretch; the fill and the shield
-        // are sized against it at runtime, so widening this one rect rescales the whole thing.
-        // Inset by the border width now that it sits inside the frame rather than measured from
-        // Health's own origin.
-        RectTransform track = Image(barFrame, "Track", BottomLeft, BottomLeft, BottomLeft,
-                                    new Vector2(trackBorder, trackBorder), new Vector2(460f, 24f),
-                                    new Color(0f, 0f, 0f, 0.55f)).rectTransform;
-
-        Image fill = Image(track, "Fill", BottomLeft, BottomLeft, BottomLeft,
-                           new Vector2(0f, 0f), new Vector2(322f, 24f), new Color(0.6f, 0.92f, 0.14f));
-
-        // A lighter strip along the top half, stretched to always cover exactly that much of
-        // `fill` regardless of how GameHud resizes it at runtime (stretch anchors read the
-        // parent's *current* rect, not the size it was built at) - what actually reads as
-        // volume rather than a flat swatch, the same top-lit-pill shape most game health bars
-        // use. Not raycast-blocking, not wired anywhere - purely decorative, sits on the fill
-        // it was born on and moves with it for free.
-        Image(fill.transform, "Shine", new Vector2(0f, 0.5f), Vector2.one, Center,
-              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.34f));
-
-        // The other half of the same move - a darker strip along the bottom, so the bar reads
-        // as a lit, rounded surface rather than a light patch on an otherwise flat swatch. Two
-        // bands is the minimum that reads as volume; one alone just looks like a stripe.
-        Image(fill.transform, "Shadow", Vector2.zero, new Vector2(1f, 0.5f), Center,
-              Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.22f));
-
-        Image shield = Image(track, "Shield", BottomLeft, BottomLeft, BottomLeft,
-                             new Vector2(322f, 0f), new Vector2(0f, 24f), new Color(0.35f, 0.8f, 1f));
-        shield.gameObject.SetActive(false);
 
         TMP_Text streak = Text(health.transform, "Streak", font, 22f,
                                TextAlignmentOptions.BottomLeft, BottomLeft,
@@ -188,7 +168,7 @@ public static class HudBuilder
 
         TMP_Text heal = Text(health.transform, "Heal", font, 34f,
                              TextAlignmentOptions.BottomLeft, BottomLeft,
-                             new Vector2(310f, 44f), new Vector2(200f, 50f));
+                             new Vector2(310f, meterSize.y + 14f), new Vector2(200f, 50f));
         heal.text = "+35";
 
         // ---------------------------------------------------------------- ladder, above health
@@ -213,57 +193,34 @@ public static class HudBuilder
         GameObject ammo = Panel(rootObject.transform, "Ammo", BottomRight, BottomRight, BottomRight,
                                 new Vector2(-48f, 48f), Vector2.zero, null);
 
-        // The magazine, drawn the same way health's own bar is now - frame, inset track, fill,
-        // shine, shadow, and the same lean. A BottomRight pivot places anchoredPosition at the
-        // rect's own *right* edge and grows the box *leftward*, the mirror image of health's
-        // BottomLeft maths (position at the left edge, grows right) - not the same numbers with
-        // a sign left unflipped, which is exactly the bug the ammo corner-frame had in the
-        // sixteenth pass. Worked through explicitly here rather than copied by eye: for a border
-        // grown outward by `trackBorder` on all sides, the BottomRight corner moves outward in
-        // +x (away from the box, since the box already extends the other way) and -y (down, same
-        // as BottomLeft), so the frame's own position is (trackBorder, -trackBorder). The inset
-        // track inside it mirrors the same move: -trackBorder in x (in from the right edge),
-        // +trackBorder in y (same as health, the y math never depended on which side of the
-        // screen this is on).
-        const float ammoTrackWidth = 260f;
+        // The magazine bar (mirroring health's, added the seventeenth pass) is gone - reported
+        // directly as looking wrong, and a bare number reads faster mid-fight than a bar you'd
+        // have to glance twice at anyway on a 5-30 round magazine. Positions below are back to
+        // the pre-bar layout.
+        //
+        // A bit more presence than a flat 0.75 alpha - reported as wanting more depth and
+        // visibility on the weapon name specifically. `nameOutline` is thicker than the HUD's
+        // shared default (see `Text`'s own `outlineWidth` parameter), which is what actually
+        // reads as "more depth" here - alpha alone was already close to opaque.
+        const float nameOutline = 0.5f;
 
-        RectTransform ammoFrame = Image(ammo.transform, "BarFrame", BottomRight, BottomRight, BottomRight,
-                                        new Vector2(trackBorder, -trackBorder),
-                                        new Vector2(ammoTrackWidth + trackBorder * 2f, 24f + trackBorder * 2f),
-                                        Color.black).rectTransform;
-        ammoFrame.localRotation = Quaternion.Euler(0f, 0f, barLean);
-
-        RectTransform ammoTrack = Image(ammoFrame, "Track", BottomRight, BottomRight, BottomRight,
-                                        new Vector2(-trackBorder, trackBorder), new Vector2(ammoTrackWidth, 24f),
-                                        new Color(0f, 0f, 0f, 0.55f)).rectTransform;
-
-        Image ammoFill = Image(ammoTrack, "Fill", BottomRight, BottomRight, BottomRight,
-                               Vector2.zero, new Vector2(182f, 24f), new Color(0.6f, 0.92f, 0.14f));
-
-        Image(ammoFill.transform, "Shine", new Vector2(0f, 0.5f), Vector2.one, Center,
-              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.34f));
-        Image(ammoFill.transform, "Shadow", Vector2.zero, new Vector2(1f, 0.5f), Center,
-              Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.22f));
-
-        // Shifted up 44 from the original layout - exactly the gap the bar plus its own spacing
-        // needs, and the same 20 point gap health already keeps between its own track and number.
         TMP_Text weaponName = Text(ammo.transform, "Name", font, 30f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
-                                   new Vector2(0f, 194f), new Vector2(560f, 36f));
+                                   new Vector2(0f, 150f), new Vector2(560f, 36f), nameOutline);
         weaponName.text = "RIFLE";
-        weaponName.color = new Color(1f, 1f, 1f, 0.75f);
+        weaponName.color = Color.white;
 
         // The round count is the number you actually read mid-fight, so it gets the size.
         TMP_Text ammoNumber = Text(ammo.transform, "Rounds", font, 120f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
-                                   new Vector2(-70f, 44f), new Vector2(400f, 140f));
+                                   new Vector2(-70f, 0f), new Vector2(400f, 140f));
         ammoNumber.text = "30";
         ammoNumber.characterSpacing = 3f;
 
         // Spares tucked under its right shoulder, bare - "5", not "x5".
         TMP_Text spare = Text(ammo.transform, "Spare", font, 42f,
                               TextAlignmentOptions.BottomRight, BottomRight,
-                              new Vector2(0f, 58f), new Vector2(120f, 56f));
+                              new Vector2(0f, 14f), new Vector2(120f, 56f));
         spare.text = "5";
         spare.color = new Color(1f, 1f, 1f, 0.55f);
 
@@ -368,8 +325,9 @@ public static class HudBuilder
         // ---------------------------------------------------------------- wiring
         SerializedObject so = new SerializedObject(hud);
 
-        Wire(so, "healthTrack", track);
+        Wire(so, "healthTrack", meter);
         Wire(so, "healthFill", fill);
+        Wire(so, "healthTrail", trail);
         Wire(so, "healthShield", shield);
         Wire(so, "healthNumber", healthNumber);
         Wire(so, "streakText", streak);
@@ -378,8 +336,6 @@ public static class HudBuilder
         Wire(so, "weaponName", weaponName);
         Wire(so, "ammoNumber", ammoNumber);
         Wire(so, "spareNumber", spare);
-        Wire(so, "ammoTrack", ammoTrack);
-        Wire(so, "ammoFill", ammoFill);
 
         Wire(so, "crosshairUp", up.rectTransform);
         Wire(so, "crosshairDown", down.rectTransform);
@@ -413,6 +369,31 @@ public static class HudBuilder
         slideRank.text = "SLIDE";
         slideRank.gameObject.SetActive(false);
         Wire(so, "slideCombo", slideRank);
+
+        // The rank text alone was just a word changing, four times - asked directly for an
+        // ULTRAKILL/DMC style meter under it instead, the same idea as the style bar under
+        // "CHAOTIC" or a stale-combo readout: a number draining, not only a name. Reads the
+        // live chain window (`PlayerMovement.ChainWindowFraction`) rather than counting hits -
+        // full the instant you land a slide, empty by the time the chain would expire, so the
+        // bar itself is the "hurry up and slide again" cue the rank name alone never gave.
+        // A child of `slideRank`'s own GameObject, not a sibling - that box has real width and
+        // height (620x80), unlike `Centre`, so anchoring a child to its corner actually means
+        // something, and it shows/hides for free with the text's own SetActive.
+        GameObject slideMeterTrack = Panel(slideRank.transform, "MeterTrack",
+                                           new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f),
+                                           new Vector2(0f, -6f), new Vector2(300f, 12f),
+                                           new Color(0f, 0f, 0f, 0.55f));
+
+        Image slideMeterFill = Image(slideMeterTrack.transform, "Fill", Vector2.zero, Vector2.one, Center,
+                                     Vector2.zero, Vector2.zero, new Color(1f, 0.15f, 0.6f, 0.95f));
+        // Fully qualified: this class's own `Image(...)` helper shadows the `UnityEngine.UI.Image`
+        // type name, so `Image.Type`/`Image.FillMethod` resolve to the method group instead of the
+        // type without the namespace spelled out.
+        slideMeterFill.type = UnityEngine.UI.Image.Type.Filled;
+        slideMeterFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+        slideMeterFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Right;
+        slideMeterFill.fillAmount = 1f;
+        Wire(so, "slideMeterFill", slideMeterFill);
         Wire(so, "resultsBackdrop", results);
 
         // Full screen, behind the rest of the HUD. Red and pulsing when you are nearly dead.
@@ -729,6 +710,131 @@ public static class HudBuilder
         return Image(parent, name, Center, Center, Center, position, size, Color.white);
     }
 
+    static Sprite bananaSprite;
+
+    /// <summary>
+    /// A pixel-art banana, drawn by the same maths every procedural texture in this HUD already
+    /// uses rather than a sourced or hand-painted asset - direct request, "find a pixel art
+    /// banana that fits our vibe," and this project's own vibe already has a house style for
+    /// exactly that (`GameHud.BuildScopeMask`, the skybox's pixelation): quantised shapes, drawn
+    /// with real maths, not a texture pulled from somewhere else.
+    ///
+    /// A single silhouette, shaded in greyscale rather than baked-in colour, so tinting it with
+    /// an `Image.color` (the ripeness palette) recolours the whole banana while keeping its own
+    /// light-to-dark curve - the same reason the bar's old Shine/Shadow overlays were separate
+    /// images, just baked into the sprite this time because `Image.Type.Filled` clips the image
+    /// it's on, not children sitting on top of it, so an overlay child would spill past wherever
+    /// the fill happens to cut off.
+    /// </summary>
+    static Sprite BananaSprite()
+    {
+        if (bananaSprite != null)
+            return bananaSprite;
+
+        // Chunkier than a first pass at 64x14/maxThickness 9 - that came out 7:1 length to
+        // thickness, closer to a blade than a banana at a glance. This is closer to 4:1.
+        const int width = 52;
+        const int height = 18;
+        const float amplitude = 3f;       // how much the spine arcs, in texels
+        const float maxThickness = 13f;   // the banana's fattest point, in texels
+
+        bool[,] on = new bool[width, height];
+
+        float CenterY(float t) => height * 0.5f + amplitude * Mathf.Sin(Mathf.PI * t);
+        float HalfThickness(float t) => 0.5f * maxThickness * Mathf.Sin(Mathf.PI * t);
+
+        for (int x = 0; x < width; x++)
+        {
+            float t = (x + 0.5f) / width;
+            float centre = CenterY(t);
+            float half = HalfThickness(t);
+
+            for (int y = 0; y < height; y++)
+                on[x, y] = Mathf.Abs(y + 0.5f - centre) <= half;
+        }
+
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false) { name = "~banana" };
+        Color[] pixels = new Color[width * height];
+
+        for (int x = 0; x < width; x++)
+        {
+            float t = (x + 0.5f) / width;
+            float centre = CenterY(t);
+            float half = HalfThickness(t);
+
+            for (int y = 0; y < height; y++)
+            {
+                int i = y * width + x;
+
+                if (!on[x, y])
+                {
+                    pixels[i] = Color.clear;
+                    continue;
+                }
+
+                // An outline pixel touches the clear field or the texture's own edge within one
+                // texel - the same "quantise, don't blur" cartoon edge everything else on this
+                // HUD already draws with, here baked into the sprite instead of a separate pass.
+                bool edge = false;
+                for (int ox = -1; ox <= 1 && !edge; ox++)
+                {
+                    for (int oy = -1; oy <= 1 && !edge; oy++)
+                    {
+                        int nx = x + ox, ny = y + oy;
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height || !on[nx, ny])
+                            edge = true;
+                    }
+                }
+
+                if (edge)
+                {
+                    pixels[i] = new Color(0.06f, 0.07f, 0.08f, 1f);
+                    continue;
+                }
+
+                // Lit from the top, the same top-bright/bottom-dark read the old Shine/Shadow
+                // bands gave the rectangular bar - 0 at the slice's bottom edge, 1 at its top.
+                float local = half > 0.01f ? Mathf.Clamp01((y + 0.5f - (centre - half)) / (half * 2f)) : 0.5f;
+                float shade = Mathf.Lerp(0.62f, 1.15f, local);
+                pixels[i] = new Color(shade, shade, shade, 1f);
+            }
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply();
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+
+        bananaSprite = Sprite.Create(texture, new UnityEngine.Rect(0f, 0f, width, height),
+                                     new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+        bananaSprite.name = "~bananaSprite";
+
+        return bananaSprite;
+    }
+
+    /// <summary>
+    /// One layer of the banana meter - the husk, the trail or the fill are all this, stretched to
+    /// fill whatever container they're built into so the three stack exactly on top of each
+    /// other. `filled` off gives the always-visible husk; on gives a horizontally clipped layer
+    /// for the trail and the live reading.
+    /// </summary>
+    static Image BananaLayer(Transform parent, string name, Color colour, bool filled)
+    {
+        Image image = Image(parent, name, Vector2.zero, Vector2.one, Center,
+                            Vector2.zero, Vector2.zero, colour);
+        image.sprite = BananaSprite();
+        image.type = filled ? UnityEngine.UI.Image.Type.Filled : UnityEngine.UI.Image.Type.Simple;
+
+        if (filled)
+        {
+            image.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+            image.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left;
+            image.fillAmount = 1f;
+        }
+
+        return image;
+    }
+
     /// A stack that lays its own children out top down. The feed and the standings both grow
     /// and shrink by rows, and a layout group means neither has to compute row heights from a
     /// font size that the editor is free to change.
@@ -759,7 +865,7 @@ public static class HudBuilder
 
     static TMP_Text Text(Transform parent, string name, TMP_FontAsset font, float size,
                          TextAlignmentOptions alignment, Vector2 anchor,
-                         Vector2 position, Vector2 dimensions)
+                         Vector2 position, Vector2 dimensions, float outlineWidth = OutlineWidth)
     {
         GameObject go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
@@ -779,10 +885,11 @@ public static class HudBuilder
         // to the rest of the game is what read as "generic" no matter which font sat behind it.
         // Each label gets its own material instance (`fontMaterial` does this on first access),
         // which costs a draw call each rather than batching - fine here, the HUD is a couple of
-        // dozen labels, not thousands.
+        // dozen labels, not thousands. `outlineWidth` is overridable per label - the weapon name
+        // wants more presence than the shared default gives it.
         Material material = text.fontMaterial;
         material.SetColor(ShaderUtilities.ID_OutlineColor, OutlineColour);
-        material.SetFloat(ShaderUtilities.ID_OutlineWidth, OutlineWidth);
+        material.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
         text.fontMaterial = material;
 
         RectTransform rect = (RectTransform)go.transform;

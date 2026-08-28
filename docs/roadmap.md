@@ -353,6 +353,22 @@ two feeds would either overlap or need a third thing to arbitrate.
            setting had silently done nothing since it was built - sitting 70pt left of true centre
            collided with the kill/ladder title the moment Jersey 10's wider glyphs reached that
            far. Reparented onto the root canvas, where the anchor means what it says.
+      5. Reviewed again same day - four more direct corrections, `bug-log.md`'s nineteenth pass:
+         - The ammo bar (added in step 3, mirroring health's) reported as looking "very weird" -
+           removed outright, back to a bare number. Not every readout wants a bar under it.
+         - The health bar is a **literal pixel-art banana** now, not a tinted rectangle -
+           "what you did is not what I meant by bananameter." Drawn procedurally
+           (`HudBuilder.BananaSprite`) the same way every other texture on this HUD already is,
+           in three stacked layers using the one sprite: an always-visible dim husk, a pale trail
+           that lags behind a drop and catches up (the inertia asked for), and the live reading
+           on top. Leans into the corner now, the opposite direction the old rectangular bar's
+           lean read as pointing.
+         - `slideCombo` ("BANANAS!!!") got the ULTRAKILL/DMC-style meter asked for - a fill bar
+           reading `PlayerMovement.ChainWindowFraction` (new, added for this), full the instant a
+           slide lands and draining toward empty by the time the chain would expire, so the bar
+           itself is the "hurry up" cue the rank name alone never gave.
+         - The weapon name's outline widened from the HUD's shared default - reported as wanting
+           more depth and visibility; `Text()` now takes an optional per-label outline override.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur

@@ -1474,3 +1474,106 @@ depends on it being zero-sized.
 Full `PlayModeProbe` and `SceneCheck` both still pass after the restructure - neither exercises
 bar rotation or colour directly, but both confirm the reparenting didn't break any of the HUD's
 actual wiring.
+
+# Nineteenth pass — a real pixel-art banana, an ULTRAKILL-style rank meter, four corrections in one go, 2026-08-29
+
+Same-day continuation again. Four separate, specific corrections to the eighteenth pass, all
+landed together.
+
+## The ammo bar is gone
+
+"Remove the ammo number bar that looks very weird." The magazine bar added in the seventeenth
+pass, mirroring health's own, is deleted outright - `BarFrame`/`Track`/`Fill`/`Shine`/`Shadow`
+and the `ammoTrack`/`ammoFill` fields all removed from both `HudBuilder` and `GameHud`. Ammo goes
+back to a bare number, `weaponName`/`ammoNumber`/`spareNumber` back at their pre-bar positions.
+Not every readout on a HUD needs a bar under it, and this one apparently didn't.
+
+## The health bar is an actual banana now
+
+Direct correction, in almost these words: "what you did is not what I meant by bananameter."
+Recolouring a rectangle with ripeness colours (the seventeenth pass) was not it - the ask was
+for the shape itself, "find a pixel art banana that fits our vibe."
+
+Rather than source or hand-paint one, `HudBuilder.BananaSprite()` draws it procedurally - the
+same house style every other texture on this HUD already uses (`GameHud.BuildScopeMask`, the
+skybox's own pixelation): real maths, quantised, not an asset pulled from anywhere. A 52x18 texel
+silhouette (tuned up from an initial 64x14 pass that rendered as a thin blade rather than a
+banana - 7:1 length to thickness read as a sliver, 52x18/maxThickness 13 is closer to 4:1 and
+unmistakably a banana once rendered), curved by a single sine arc along its spine, tapered to
+points at both ends by a matching sine on thickness, with a 1-texel black outline baked in
+wherever a filled texel touches an empty or off-texture neighbour, and a top-lit/bottom-dark
+greyscale shade baked in per-column so tinting the sprite with `Image.color` recolours the whole
+banana while keeping its own light curve.
+
+Three layers of the one sprite stack on top of each other in a `BananaMeter` container:
+- `Husk` - `Image.Type.Simple`, always the full shape, dim brown-green, the "empty tube" backing
+  every bar needs so a low reading still shows the whole banana's outline.
+- `Trail` - `Image.Type.Filled`, a pale near-white ghost. This is the inertia asked for directly:
+  eases toward the real fraction on a drop (`Mathf.MoveTowards` at a fixed rate in
+  `GameHud.UpdateHealth`) rather than snapping with it, so a big hit reads as a bite taken out of
+  the banana that visibly closes up rather than the bar just being smaller a frame later. Snaps
+  immediately on a heal - nothing about recovering health wants a lag.
+- `Fill` - `Image.Type.Filled`, the live reading, tinted through the same `healthy`/`hurt`/
+  `critical` ripeness ramp the sixteenth pass already set up. This is the one part of the
+  seventeenth pass's health work that survives unchanged - the colours were never the complaint,
+  only the shape they were painted onto.
+
+`Image.Type.Filled` clips the rendered quad, not the sprite's own pixels, so a transparent-
+background sprite like this one clips cleanly with no extra masking work - and critically, it
+clips the *Image it's set on*, not that Image's children, which is exactly why the old
+rectangular bar's separate Shine/Shadow overlay children couldn't carry over here: an overlay
+child sitting on top of a `Filled` parent isn't clipped by the parent's own `fillAmount` and
+would spill past wherever the fill happens to cut off. Baking the shading into the texture itself
+sidesteps that entirely.
+
+**The lean flipped direction.** "Having the bar rotated inwards instead of outwards" - the
+seventeenth pass's rectangular bar rotated its far end up and away from the screen corner it sat
+in; this one rotates the opposite way, tucking toward the corner instead of lifting away from it. `barLean` went from +6 to -8 degrees. There's no separate border frame to carry as a
+rigid rotating body any more either - the outline lives in the sprite now, so the `BananaMeter`
+container holding the three layers rotates directly.
+
+## The slide rank got its meter
+
+"Make the BANANAS!!! thingy work like the ULTRAKILL or DMC style meter." Those readouts (the
+style bar under ULTRAKILL's "CHAOTIC," the stale-combo multiplier in the DMC reference) all pair
+a name with a bar underneath it - the rank text alone, four words swapping in and out, was never
+that.
+
+Needed a new number from `PlayerMovement` to drive it: `ChainWindowFraction`, added alongside the
+existing `SlideChain`/`Exhausted`/`ExhaustedFor` - `Mathf.Clamp01((chainExpires - Time.time) /
+chainWindow)` while a chain is live, zero otherwise. `chainExpires` and `chainWindow` were already
+private fields driving `SlideChain`'s own boolean logic; this just exposes the same window as a
+fraction instead of a yes/no. The new `MeterTrack`/`Fill` bar is a *child of `slideRank`'s own
+GameObject* rather than a sibling - unlike `Centre`, that box has real width and height (620x80),
+so a corner anchor on a child of it actually means something (see the eighteenth pass for what
+happens when it doesn't), and it shows/hides for free with the text's own `SetActive` rather than
+needing a second reference threaded through just to keep two things in sync.
+
+Full while a slide just landed, draining to empty by the time the chain would expire, snapped to
+zero outright while `Exhausted` (nothing left to count down, only that it's spent) - the rank name
+says how deep the chain is, the bar now says how long there is left to go deeper.
+
+## The weapon name got more presence
+
+"Make the gun name text a bit more depth and visible." `HudBuilder.Text()` takes an optional
+`outlineWidth` parameter now, defaulting to the HUD's shared 0.38, with the weapon name specifically
+built at 0.5 - alpha was already close to opaque (0.75, now a flat 1), so the outline was the
+actual lever for "more depth."
+
+## A compiler error worth noting
+
+Both new pieces (the banana layers, the slide meter's fill) hit `CS0119: 'HudBuilder.Image(...)'
+is a method, which is not valid in the given context` on their first pass - this class has its own
+`static Image Image(...)` helper, and a class's own method names shadow types of the same simple
+name for static-member access (`Image.Type.Filled`, `Image.FillMethod.Horizontal`) even though a
+local variable declaration (`Image image = Image(...)`) resolves fine, since declaration and
+invocation contexts disambiguate differently than static-member access does. Fixed by fully
+qualifying `UnityEngine.UI.Image.Type`/`FillMethod`/`OriginHorizontal` at every call site that
+needed them, rather than renaming the long-established local helper.
+
+All four fixes verified by real `HudPhotographer` screenshots (both the default Deathmatch state
+and `GW_HUD_MODE=GunGame`, to actually see the new slide meter) before being called done, not
+eyeballed against the code. `WeaponCheck`, `SceneCheck` and the full `PlayModeProbe` suite all
+still pass - `PlayModeProbe` in particular exercises `PlayerMovement` directly, so the new
+`ChainWindowFraction` property compiling and returning sane numbers is more than just a hopeful
+read of the source.

@@ -31,6 +31,7 @@ public class GameHud : MonoBehaviour
     [Header("Health")]
     [SerializeField] RectTransform healthTrack;
     [SerializeField] Image healthFill;
+    [SerializeField] Image healthTrail;
     [SerializeField] Image healthShield;
     [SerializeField] TMP_Text healthNumber;
     [SerializeField] TMP_Text streakText;
@@ -40,8 +41,6 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text weaponName;
     [SerializeField] TMP_Text ammoNumber;
     [SerializeField] TMP_Text spareNumber;
-    [SerializeField] RectTransform ammoTrack;
-    [SerializeField] Image ammoFill;
 
     [Header("Crosshair")]
     [SerializeField] RectTransform crosshairUp;
@@ -67,6 +66,10 @@ public class GameHud : MonoBehaviour
     /// The slide chain, rank and all. Filled in at runtime if the scene has not got one.
     [SerializeField] TMP_Text slideCombo;
 
+    /// The meter under the rank name - an ULTRAKILL/DMC style bar rather than just a word
+    /// changing four times.
+    [SerializeField] Image slideMeterFill;
+
     // Drives the punch on a rank-up. Not serialised - purely runtime state for UpdateSlideCombo.
     int lastSlideRank;
     float slidePunchUntil = -99f;
@@ -76,6 +79,12 @@ public class GameHud : MonoBehaviour
     // numbers that change constantly enough to want it: health dropping and ammo counting down.
     int lastHealthPoints = -1;
     float healthPunchUntil = -99f;
+
+    // The bananameter's inertia - eases down to catch up with a drop rather than snapping with
+    // the live reading, so a big hit reads as a bite taken out of the banana instead of the
+    // whole bar just being a smaller rectangle a frame later. Starts at 1 so a fresh spawn at
+    // full health doesn't show a trail catching up from zero.
+    float healthTrailFraction = 1f;
     int lastAmmoCount = -1;
     float ammoPunchUntil = -99f;
 
@@ -691,12 +700,20 @@ public class GameHud : MonoBehaviour
         // out past the end of the track instead of sharing it, which is what a bonus should look
         // like: the bar is full, and then there is more of it.
         float width = healthTrack != null ? healthTrack.rect.width : 0f;
+        float fillFraction = Mathf.Min(points, max) / max;
+
+        // Inertia - eases down toward a drop rather than snapping with it, and snaps straight
+        // up on a heal (nothing about healing wants a lag). Direct request: "the bar decreasing
+        // being inertia based."
+        if (fillFraction < healthTrailFraction)
+            healthTrailFraction = Mathf.MoveTowards(healthTrailFraction, fillFraction,
+                                                     Time.unscaledDeltaTime * 0.55f);
+        else
+            healthTrailFraction = fillFraction;
 
         if (healthFill != null)
         {
-            healthFill.rectTransform.sizeDelta =
-                new Vector2(Mathf.Min(points, max) / max * width,
-                            healthFill.rectTransform.sizeDelta.y);
+            healthFill.fillAmount = fillFraction;
 
             // A beat of white through the fill itself on every change, on top of the whole
             // panel's own punch - reported as "completely static" even with the punch already
@@ -706,6 +723,12 @@ public class GameHud : MonoBehaviour
             float flashT = Mathf.Clamp01((healthPunchUntil - Time.unscaledTime) / 0.22f);
             healthFill.color = Color.Lerp(colour, Color.white, flashT * 0.65f);
         }
+
+        // The pale ghost between the husk and the live fill - only ever visible for the sliver
+        // it's lagging behind by, which is the whole point: it's showing exactly how much was
+        // just lost, not standing in for the bar itself.
+        if (healthTrail != null)
+            healthTrail.fillAmount = healthTrailFraction;
 
         if (healthShield != null)
         {
@@ -738,7 +761,6 @@ public class GameHud : MonoBehaviour
         Show(weaponName, info != null);
         Show(ammoNumber, countsRounds);
         Show(spareNumber, countsRounds);
-        Show(ammoTrack, countsRounds);
 
         if (info != null && weaponName != null)
             weaponName.text = WeaponLoadout.DisplayName(gun.name).ToUpper();
@@ -775,26 +797,6 @@ public class GameHud : MonoBehaviour
 
         if (ammoGroup != null)
             ammoGroup.localScale = Vector3.one * PunchScale(ammoPunchUntil);
-
-        // The magazine, drawn the same way health's is - a bar mirrors the number instead of
-        // the ammo readout being the one number on the HUD with nothing backing it up. Sized
-        // against the *magazine*, not the ammo count on its own, so a five round sniper mag half
-        // spent looks half spent rather than reading as "almost empty" next to a thirty round
-        // rifle at the same absolute count.
-        if (ammoTrack != null && ammoFill != null && info.magazineSize > 0)
-        {
-            float ammoWidth = ammoTrack.rect.width;
-            float ammoFraction = Mathf.Clamp01(gun.Ammo / (float)info.magazineSize);
-
-            ammoFill.rectTransform.sizeDelta =
-                new Vector2(ammoFraction * ammoWidth, ammoFill.rectTransform.sizeDelta.y);
-
-            // Flashes toward the kill accent rather than white - a non-ripening weapon's
-            // resting colour is white, and lerping white toward white on every shot would be
-            // invisible exactly when the bar changes most often.
-            float ammoFlashT = Mathf.Clamp01((ammoPunchUntil - Time.unscaledTime) / 0.22f);
-            ammoFill.color = Color.Lerp(ammoColour, killColour, ammoFlashT * 0.6f);
-        }
     }
 
     void UpdateCrosshair()
@@ -1389,6 +1391,12 @@ public class GameHud : MonoBehaviour
             slideCombo.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
             slideCombo.rectTransform.localScale = Vector3.one;
             lastSlideRank = 0;
+
+            // Drained, not draining - there's nothing left to show counting down, only that
+            // it's spent.
+            if (slideMeterFill != null)
+                slideMeterFill.fillAmount = 0f;
+
             return;
         }
 
@@ -1401,6 +1409,12 @@ public class GameHud : MonoBehaviour
             lastSlideRank = 0;
             return;
         }
+
+        // The ULTRAKILL/DMC-style meter under the rank name - full the instant a slide lands,
+        // draining toward empty by the time the chain would expire. The rank name says how deep
+        // you are; the bar says how long you've got left to go deeper.
+        if (slideMeterFill != null)
+            slideMeterFill.fillAmount = mover.ChainWindowFraction;
 
         // Retuned 2026-08-21: reported as too small and not satisfying enough, on top of the
         // separate movement fix that made the chain worth pursuing at all. Shorter words hit
