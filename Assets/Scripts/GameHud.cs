@@ -715,13 +715,25 @@ public class GameHud : MonoBehaviour
         {
             healthFill.fillAmount = fillFraction;
 
+            // A dedicated tint rather than reusing `colour` - the sprite is a real, naturally
+            // yellow banana now, not a neutral grey shape, and multiplying it by the same
+            // green/gold/orange the number uses would just muddy it (yellow times green reads
+            // as khaki, not "healthy"). White leaves it looking like an actual banana at good
+            // health; only the danger end pulls it toward red, which reads as a warning
+            // regardless of what colour was sitting under it a moment ago.
+            Color bananaTint = fraction > 0.6f ? Color.white
+                              : fraction > 0.3f ? new Color(1f, 0.8f, 0.55f)
+                              : new Color(1f, 0.4f, 0.35f);
+            if (healFlash > 0f)
+                bananaTint = Color.Lerp(bananaTint, Color.white, healFlash);
+
             // A beat of white through the fill itself on every change, on top of the whole
             // panel's own punch - reported as "completely static" even with the punch already
             // moving the number and the bar together, because neither ever touched the bar's
             // own colour. This is what actually reads as the bar reacting to the hit rather
             // than just being shoved sideways with it.
             float flashT = Mathf.Clamp01((healthPunchUntil - Time.unscaledTime) / 0.22f);
-            healthFill.color = Color.Lerp(colour, Color.white, flashT * 0.65f);
+            healthFill.color = Color.Lerp(bananaTint, Color.white, flashT * 0.65f);
         }
 
         // The pale ghost between the husk and the live fill - only ever visible for the sliver

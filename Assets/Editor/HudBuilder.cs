@@ -44,6 +44,7 @@ public static class HudBuilder
         }
 
         TMP_FontAsset font = FindFont();
+        TMP_FontAsset rankFont = FindRankFont();
 
         // ---------------------------------------------------------------- canvas
         GameObject rootObject = new GameObject(RootName,
@@ -147,7 +148,7 @@ public static class HudBuilder
 
         BananaLayer(meter, "Husk", new Color(0.22f, 0.15f, 0.08f, 0.85f), false);
         Image trail = BananaLayer(meter, "Trail", new Color(1f, 0.96f, 0.75f, 0.55f), true);
-        Image fill = BananaLayer(meter, "Fill", new Color(0.6f, 0.92f, 0.14f, 1f), true);
+        Image fill = BananaLayer(meter, "Fill", Color.white, true);
 
         Image shield = Image(meter, "Shield", BottomLeft, BottomLeft, BottomLeft,
                              new Vector2(meterSize.x, 0f), new Vector2(0f, meterSize.y),
@@ -251,9 +252,9 @@ public static class HudBuilder
 
         // Big. This is the winner's name at the end of a match and the multikill callout during
         // one, and at 84 it read as a caption rather than as the game shouting at you.
-        TMP_Text title = Text(centre.transform, "Title", font, 130f,
+        TMP_Text title = Text(centre.transform, "Title", rankFont, 120f,
                               TextAlignmentOptions.Center, Center,
-                              new Vector2(0f, 230f), new Vector2(1600f, 150f));
+                              new Vector2(0f, 230f), new Vector2(1600f, 150f), 0.5f);
         title.text = "DOUBLE";
         title.color = new Color(1f, 0.1f, 0.58f);
 
@@ -363,9 +364,9 @@ public static class HudBuilder
         // as a bug until Jersey 10's wider glyphs on the kill/ladder title actually reached far
         // enough left to overlap it. Parented on the root canvas instead, where the anchor means
         // what it says.
-        TMP_Text slideRank = Text(rootObject.transform, "SlideCombo", font, 54f,
+        TMP_Text slideRank = Text(rootObject.transform, "SlideCombo", rankFont, 50f,
                                   TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                  new Vector2(-60f, -170f), new Vector2(620f, 80f));
+                                  new Vector2(-60f, -170f), new Vector2(620f, 80f), 0.5f);
         slideRank.text = "SLIDE";
         slideRank.gameObject.SetActive(false);
         Wire(so, "slideCombo", slideRank);
@@ -379,6 +380,14 @@ public static class HudBuilder
         // A child of `slideRank`'s own GameObject, not a sibling - that box has real width and
         // height (620x80), unlike `Centre`, so anchoring a child to its corner actually means
         // something, and it shows/hides for free with the text's own SetActive.
+        // A black frame round it - reported directly that this bar was bare and flat, same
+        // complaint the health bar had before it got one. Background-behind-foreground border,
+        // same technique as everywhere else on this HUD that wants one.
+        const float meterBorder = 3f;
+        Panel(slideRank.transform, "MeterBorder", new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f),
+              new Vector2(meterBorder, -6f + meterBorder), new Vector2(300f + meterBorder * 2f, 12f + meterBorder * 2f),
+              Color.black);
+
         GameObject slideMeterTrack = Panel(slideRank.transform, "MeterTrack",
                                            new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f),
                                            new Vector2(0f, -6f), new Vector2(300f, 12f),
@@ -710,104 +719,29 @@ public static class HudBuilder
         return Image(parent, name, Center, Center, Center, position, size, Color.white);
     }
 
+    const string BananaTexturePath = "Assets/Textures/UI/BananaHealth.png";
     static Sprite bananaSprite;
 
     /// <summary>
-    /// A pixel-art banana, drawn by the same maths every procedural texture in this HUD already
-    /// uses rather than a sourced or hand-painted asset - direct request, "find a pixel art
-    /// banana that fits our vibe," and this project's own vibe already has a house style for
-    /// exactly that (`GameHud.BuildScopeMask`, the skybox's pixelation): quantised shapes, drawn
-    /// with real maths, not a texture pulled from somewhere else.
-    ///
-    /// A single silhouette, shaded in greyscale rather than baked-in colour, so tinting it with
-    /// an `Image.color` (the ripeness palette) recolours the whole banana while keeping its own
-    /// light-to-dark curve - the same reason the bar's old Shine/Shadow overlays were separate
-    /// images, just baked into the sprite this time because `Image.Type.Filled` clips the image
-    /// it's on, not children sitting on top of it, so an overlay child would spill past wherever
-    /// the fill happens to cut off.
+    /// A real pixel-art banana - "find a pixel art banana that fits our vibe" meant an actual
+    /// sourced sprite, not a procedurally drawn stand-in; a first pass generating one from sine
+    /// curves was reported back directly as not what was meant, on top of a broader note not to
+    /// keep reaching for a generated shape when a real asset does the job better. One frame
+    /// (frame 9 of 20) cropped from "Spinning Banana" by lawrence_laz on OpenGameArt.org, CC0 -
+    /// see `Assets/Textures/UI/BananaHealth-CREDIT.txt`. Import settings (Sprite, point filtered,
+    /// uncompressed) are applied once by `Tools/Gorilla Warfare/Configure banana sprite import`,
+    /// not here - this just loads whatever's already sitting in the AssetDatabase.
     /// </summary>
     static Sprite BananaSprite()
     {
         if (bananaSprite != null)
             return bananaSprite;
 
-        // Chunkier than a first pass at 64x14/maxThickness 9 - that came out 7:1 length to
-        // thickness, closer to a blade than a banana at a glance. This is closer to 4:1.
-        const int width = 52;
-        const int height = 18;
-        const float amplitude = 3f;       // how much the spine arcs, in texels
-        const float maxThickness = 13f;   // the banana's fattest point, in texels
+        bananaSprite = AssetDatabase.LoadAssetAtPath<Sprite>(BananaTexturePath);
 
-        bool[,] on = new bool[width, height];
-
-        float CenterY(float t) => height * 0.5f + amplitude * Mathf.Sin(Mathf.PI * t);
-        float HalfThickness(float t) => 0.5f * maxThickness * Mathf.Sin(Mathf.PI * t);
-
-        for (int x = 0; x < width; x++)
-        {
-            float t = (x + 0.5f) / width;
-            float centre = CenterY(t);
-            float half = HalfThickness(t);
-
-            for (int y = 0; y < height; y++)
-                on[x, y] = Mathf.Abs(y + 0.5f - centre) <= half;
-        }
-
-        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false) { name = "~banana" };
-        Color[] pixels = new Color[width * height];
-
-        for (int x = 0; x < width; x++)
-        {
-            float t = (x + 0.5f) / width;
-            float centre = CenterY(t);
-            float half = HalfThickness(t);
-
-            for (int y = 0; y < height; y++)
-            {
-                int i = y * width + x;
-
-                if (!on[x, y])
-                {
-                    pixels[i] = Color.clear;
-                    continue;
-                }
-
-                // An outline pixel touches the clear field or the texture's own edge within one
-                // texel - the same "quantise, don't blur" cartoon edge everything else on this
-                // HUD already draws with, here baked into the sprite instead of a separate pass.
-                bool edge = false;
-                for (int ox = -1; ox <= 1 && !edge; ox++)
-                {
-                    for (int oy = -1; oy <= 1 && !edge; oy++)
-                    {
-                        int nx = x + ox, ny = y + oy;
-                        if (nx < 0 || nx >= width || ny < 0 || ny >= height || !on[nx, ny])
-                            edge = true;
-                    }
-                }
-
-                if (edge)
-                {
-                    pixels[i] = new Color(0.06f, 0.07f, 0.08f, 1f);
-                    continue;
-                }
-
-                // Lit from the top, the same top-bright/bottom-dark read the old Shine/Shadow
-                // bands gave the rectangular bar - 0 at the slice's bottom edge, 1 at its top.
-                float local = half > 0.01f ? Mathf.Clamp01((y + 0.5f - (centre - half)) / (half * 2f)) : 0.5f;
-                float shade = Mathf.Lerp(0.62f, 1.15f, local);
-                pixels[i] = new Color(shade, shade, shade, 1f);
-            }
-        }
-
-        texture.SetPixels(pixels);
-        texture.Apply();
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-
-        bananaSprite = Sprite.Create(texture, new UnityEngine.Rect(0f, 0f, width, height),
-                                     new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
-        bananaSprite.name = "~bananaSprite";
+        if (bananaSprite == null)
+            Debug.LogError($"[hud] no banana sprite at {BananaTexturePath} - run "
+                           + "Tools/Gorilla Warfare/Configure banana sprite import first");
 
         return bananaSprite;
     }
@@ -859,9 +793,9 @@ public static class HudBuilder
     // screen instead of borrowing a convention from another game's UI.
     static readonly Color OutlineColour = new Color(0.07f, 0.08f, 0.1f);
 
-    // Raised from 0.2 - reported as reading "raw" against the map's own grass and wood, which a
-    // thin line doesn't fix. This is a proper cartoon sticker border now, not a hairline.
-    const float OutlineWidth = 0.38f;
+    // Raised from 0.2, then again from 0.38 - reported both times as still reading "raw" and
+    // "blending in with everything else." This is a proper cartoon sticker border, not a line.
+    const float OutlineWidth = 0.55f;
 
     static TMP_Text Text(Transform parent, string name, TMP_FontAsset font, float size,
                          TextAlignmentOptions alignment, Vector2 anchor,
@@ -887,9 +821,22 @@ public static class HudBuilder
         // which costs a draw call each rather than batching - fine here, the HUD is a couple of
         // dozen labels, not thousands. `outlineWidth` is overridable per label - the weapon name
         // wants more presence than the shared default gives it.
+        //
+        // A soft underlay on top of the outline, not instead of it - reported directly that text
+        // was still "blending in with everything else" even with a hard border. The outline
+        // keeps letterforms readable at their edges against any single colour; the underlay is a
+        // dark, slightly offset blur *behind the whole glyph*, which is what actually separates
+        // text from a busy, high-contrast background (foliage, another player, the sky) rather
+        // than just tracing round it.
         Material material = text.fontMaterial;
         material.SetColor(ShaderUtilities.ID_OutlineColor, OutlineColour);
         material.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
+        material.EnableKeyword(ShaderUtilities.Keyword_Underlay);
+        material.SetColor(ShaderUtilities.ID_UnderlayColor, new Color(0f, 0f, 0f, 0.85f));
+        material.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0f);
+        material.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, -0.35f);
+        material.SetFloat(ShaderUtilities.ID_UnderlayDilate, 0.25f);
+        material.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0.4f);
         text.fontMaterial = material;
 
         RectTransform rect = (RectTransform)go.transform;
@@ -907,13 +854,26 @@ public static class HudBuilder
     /// tactical shooter's stencil). Menus stay on Helvetica Punk/Chomsky for now - this only
     /// changes what the in-match HUD itself builds with.
     /// </summary>
-    static TMP_FontAsset FindFont()
+    static TMP_FontAsset FindFont() => FindFontNamed("Jersey10");
+
+    /// <summary>
+    /// The hype face - kill callouts and the slide rank, not the readouts. Reported directly:
+    /// the rank meter needed its own font and style to actually stick out, the same way DMC's
+    /// own style-rank lettering reads as a completely different object to the rest of its HUD
+    /// rather than the same numerals in a different colour. Anton (Google Fonts, OFL) rather
+    /// than Jersey10 - a poster-weight impact face, about as far from a pixel-grid readout font
+    /// as this project's fonts get, so the two moments that want to shout (a kill, a rank-up)
+    /// read as a different kind of text on screen, not just bigger.
+    /// </summary>
+    static TMP_FontAsset FindRankFont() => FindFontNamed("Anton");
+
+    static TMP_FontAsset FindFontNamed(string name)
     {
         foreach (string guid in AssetDatabase.FindAssets("t:TMP_FontAsset", new[] { "Assets/Fonts" }))
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
 
-            if (path.Contains("Jersey10"))
+            if (path.Contains(name))
                 return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
         }
 

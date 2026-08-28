@@ -1577,3 +1577,76 @@ eyeballed against the code. `WeaponCheck`, `SceneCheck` and the full `PlayModePr
 still pass - `PlayModeProbe` in particular exercises `PlayerMovement` directly, so the new
 `ChainWindowFraction` property compiling and returning sane numbers is more than just a hopeful
 read of the source.
+
+# Twentieth pass — a sourced banana, a font that actually sticks out, and text that stops blending in, 2026-08-29
+
+Same-day continuation. Direct, sharp correction to the nineteenth pass's procedural banana:
+"WHY ARE YOU SO RELUCTANT ON USING EXTERNAL ASSETS THAT FIT BETTER... YOUR JOB IS TO CODE NOT TO
+BE THE ART DIRECTOR." Fair - the procedural sine-curve banana was a worse banana than a real one
+a real artist drew, and reaching for "draw it with maths" as the default instead of actually going
+and finding a sourced asset first is exactly the reluctance called out.
+
+## A real banana, sourced this time
+
+Searched properly rather than guessing at a URL: `opengameart.org`'s **Spinning Banana** by
+lawrence_laz, CC0, a 20-frame rotation sheet (`spinning_banana.png`, 500x25, 25x25 per frame) -
+direct static file, no itch.io-style JS-gated download flow to fight this time. Downloaded,
+inspected all 20 frames for bounding box, picked frame 9 (a clean side-on crescent, already close
+to the pose a horizontal bar wants) and trimmed it to its opaque bounds (19x17). Credited in
+`Assets/Textures/UI/BananaHealth-CREDIT.txt` even though CC0 needs no attribution, matching this
+project's existing convention of a `LICENSE.txt` beside every sourced font.
+
+`Assets/Editor/BananaAssetSetup.cs` (new, permanent, idempotent like this project's other
+one-shot asset tools) sets the actual import settings a fresh PNG doesn't get by default - Sprite
+type, point filtering (no blur when a 19px-wide image gets stretched to HUD scale), uncompressed
+(keeps the flat colour edges crisp rather than block-compressed into mush). `HudBuilder.BananaSprite`
+now just loads it (`AssetDatabase.LoadAssetAtPath`) - the entire sine-curve generator, its edge-
+detection outline pass and its baked greyscale shading are deleted outright, not kept as a fallback.
+
+**The tint scheme needed to change along with it.** The procedural sprite was drawn in greyscale
+specifically so multiplying it by the ripeness palette (green/yellow/brown) would recolour it
+cleanly. A real banana sprite is already yellow - multiplying yellow by green reads as khaki, not
+"healthy." `GameHud.UpdateHealth` now computes a dedicated tint for the sprite layer, separate
+from the number's own `healthy`/`hurt`/`critical` fields (which are untouched and still drive the
+text): white at good health (shows the banana's own true colour, which looks right rather than
+tinted), warming toward amber then red as health drops - white multiplied by anything is that
+colour unchanged, so this is the one mapping that actually works against a real, already-coloured
+sprite rather than a neutral grey shape built to be recoloured.
+
+## The rank meter gets its own face
+
+"THE ULTRAKILL STYLE METER IS SO BAD... OBVIOUSLY YOU'D HAVE TO CHANGE THE FONT AND STYLE OF IT
+FOR IT TO STICK OUT." Fair again - it was built in Jersey10, the same face as every numeric
+readout on the HUD, which is exactly why a supposedly special "hype" moment read as just more of
+the same text. Sourced **Anton** (Google Fonts, OFL, same reliable GitHub-mirror curl this
+session already used for Jersey 10) - a poster-weight impact face, about as far from a pixel-grid
+readout font as this project now has. `HudBuilder.FindRankFont()` sits alongside the existing
+`FindFont()`, both now routed through one `FindFontNamed(string)` helper rather than two near-
+identical copies of the same search loop. Used for the slide rank ("BANANAS!!!") and the centre
+kill callout ("DOUBLE," "GET READY") - the two moments on the HUD that are supposed to shout,
+now visibly a different kind of text from the numbers around them rather than the same font in a
+different colour.
+
+The meter bar itself also got the same treatment health's already had: a black frame round it
+(background-behind-foreground border, the same technique used everywhere else on this HUD that
+wants one), since a bare flat-coloured rectangle was part of what read as "bad" alongside the font.
+
+## Text was still blending in
+
+"USE BORDERS OR SOMETHING ON THE TEXT ON THE SCREEN THIS SHIT GENUINELY BLENDS IN WITH EVERYTHING
+ELSE" - direct, and true even with every label already carrying a hard SDF outline
+(`OutlineWidth`, raised twice already this session, 0.2 to 0.38 to now 0.55). An outline alone
+traces a letterform's own edge; it does nothing to separate the glyph as a whole from a busy,
+similarly-toned background behind it; a bright number against a bright wall can still lose the
+fight even with a dark ring round every stroke. Added a soft dark underlay
+(`ShaderUtilities.Keyword_Underlay` plus its `ID_Underlay*` properties - confirmed the exact
+property names against the installed TMP package source rather than guessing, since a wrong
+property name silently does nothing) to every label alongside the outline, not instead of it: a
+blurred dark shape sitting behind the whole glyph, offset slightly down, which is what actually
+reads as "this text is sitting in front of the world" rather than "this text is drawn on the
+world."
+
+Verified with real `HudPhotographer` screenshots (`GW_HUD_MODE=GunGame`, to see the rank meter and
+the banana together in one frame) - the banana's actual pixel art, the underlay's visible shadow
+behind "140," and the meter's new border all confirmed by looking at the render, not by reading
+the code back. `SceneCheck` and the full `PlayModeProbe` suite both still pass.

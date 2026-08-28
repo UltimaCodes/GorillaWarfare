@@ -369,6 +369,16 @@ two feeds would either overlap or need a third thing to arbitrate.
            itself is the "hurry up" cue the rank name alone never gave.
          - The weapon name's outline widened from the HUD's shared default - reported as wanting
            more depth and visibility; `Text()` now takes an optional per-label outline override.
+      6. The banana meter's own shape was reported back directly, same day: a procedurally-drawn
+         silhouette (step 5) was "not what I meant," and pointedly not the way to be sourcing art
+         going forward. Replaced with a real sprite - one frame of "Spinning Banana" by
+         lawrence_laz (OpenGameArt.org, CC0), trimmed and imported at
+         `Assets/Textures/UI/BananaHealth.png`. The rank meter's font changed too - "so bad...
+         you'd have to change the font for it to stick out" - **Anton** (Google Fonts, OFL) now
+         drives the slide rank and the kill callout specifically, a poster-weight face distinct
+         from Jersey 10's readouts. Every label's outline widened again (0.38 to 0.55) and picked
+         up a soft dark underlay on top of it - "genuinely blends in with everything else" was
+         still true of a hard outline alone against a bright, busy background.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur

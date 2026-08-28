@@ -1,0 +1,6 @@
+Source: "Spinning Banana" by lawrence_laz, OpenGameArt.org
+https://opengameart.org/content/spinning-banana
+
+License: CC0 1.0 Universal (public domain dedication) - no attribution required.
+This file is one frame (frame 9 of 20), cropped to its opaque bounds, taken from the
+original spinning_banana.png rotation sheet.
