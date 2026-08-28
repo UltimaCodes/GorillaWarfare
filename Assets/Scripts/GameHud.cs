@@ -40,6 +40,8 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text weaponName;
     [SerializeField] TMP_Text ammoNumber;
     [SerializeField] TMP_Text spareNumber;
+    [SerializeField] RectTransform ammoTrack;
+    [SerializeField] Image ammoFill;
 
     [Header("Crosshair")]
     [SerializeField] RectTransform crosshairUp;
@@ -76,6 +78,15 @@ public class GameHud : MonoBehaviour
     float healthPunchUntil = -99f;
     int lastAmmoCount = -1;
     float ammoPunchUntil = -99f;
+
+    // Drives the punch-in on the big centre callout - reported as the one piece of text on the
+    // whole HUD with no reaction to it at all, arriving and leaving at a flat scale of 1 while
+    // everything else (the hitmarker, damage numbers, the ammo/health groups, the slide rank)
+    // already arrives big and settles. Set alongside killFlash rather than replacing it - the
+    // flash still owns how long the callout stays up, this only owns the first third of a
+    // second of it.
+    float titlePunchUntil = -99f;
+    const float titlePunchDuration = 0.35f;
 
     /// <summary>
     /// The shared shape behind every punch on this HUD: fast in, decaying out, on top of a base
@@ -128,10 +139,20 @@ public class GameHud : MonoBehaviour
     // anything meant to read as violence rather than status (a kill callout, a streak, who you
     // just beat). Everything else stays the same family, just pushed more saturated and less
     // pastel - green loses its warmth toward acid, red loses its pink toward blood.
+    //
+    // Retuned again the same day - playtesters said the reworked HUD had lost the personality
+    // the old one had, and the direct ask was to make the health bar "a bananameter" rather than
+    // a generic three-colour ramp. `healthy`/`hurt`/`critical` now walk the same green-to-brown
+    // ripening a magazine already does in the player's own hands (`GunInfo.RipenessFor` - see
+    // `SingleShotGun.ApplyRipeness`, which tints the banana itself the same way as it empties),
+    // brightened a touch past the weapon's own values since a HUD element needs to carry more
+    // presence than a small prop in the world. `critical` stays a genuine warning colour rather
+    // than true overripe brown/black - a rotting banana that's gone the same colour as the grass
+    // behind it would be a bar you can't read at exactly the moment you most need to.
     [Header("Colours")]
-    [SerializeField] Color healthy = new Color(0.42f, 1f, 0.06f);
-    [SerializeField] Color hurt = new Color(1f, 0.74f, 0f);
-    [SerializeField] Color critical = new Color(1f, 0.04f, 0.16f);
+    [SerializeField] Color healthy = new Color(0.6f, 0.92f, 0.14f);
+    [SerializeField] Color hurt = new Color(1f, 0.82f, 0.1f);
+    [SerializeField] Color critical = new Color(0.85f, 0.4f, 0.08f);
     [SerializeField] Color healed = new Color(0.32f, 1f, 0.48f);
     [SerializeField] Color headshotColour = new Color(1f, 0.9f, 0.08f);
     [SerializeField] Color killColour = new Color(1f, 0.1f, 0.58f);
@@ -377,6 +398,7 @@ public class GameHud : MonoBehaviour
     public void ShowKill(int multikill, int streak)
     {
         killFlash = 1f;
+        titlePunchUntil = Time.unscaledTime + titlePunchDuration;
 
         if (centreTitle != null)
             centreTitle.text = MultikillName(multikill);
@@ -400,6 +422,7 @@ public class GameHud : MonoBehaviour
     public void ShowRungUp(int rung, string weapon)
     {
         killFlash = 1f;
+        titlePunchUntil = Time.unscaledTime + titlePunchDuration;
 
         if (centreTitle != null)
             centreTitle.text = $"RUNG {rung + 1}";
@@ -674,7 +697,14 @@ public class GameHud : MonoBehaviour
             healthFill.rectTransform.sizeDelta =
                 new Vector2(Mathf.Min(points, max) / max * width,
                             healthFill.rectTransform.sizeDelta.y);
-            healthFill.color = colour;
+
+            // A beat of white through the fill itself on every change, on top of the whole
+            // panel's own punch - reported as "completely static" even with the punch already
+            // moving the number and the bar together, because neither ever touched the bar's
+            // own colour. This is what actually reads as the bar reacting to the hit rather
+            // than just being shoved sideways with it.
+            float flashT = Mathf.Clamp01((healthPunchUntil - Time.unscaledTime) / 0.22f);
+            healthFill.color = Color.Lerp(colour, Color.white, flashT * 0.65f);
         }
 
         if (healthShield != null)
@@ -708,6 +738,7 @@ public class GameHud : MonoBehaviour
         Show(weaponName, info != null);
         Show(ammoNumber, countsRounds);
         Show(spareNumber, countsRounds);
+        Show(ammoTrack, countsRounds);
 
         if (info != null && weaponName != null)
             weaponName.text = WeaponLoadout.DisplayName(gun.name).ToUpper();
@@ -715,8 +746,16 @@ public class GameHud : MonoBehaviour
         if (!countsRounds)
             return;
 
+        // The ammo readout ripens the same way the banana in your hands already does -
+        // `RipenessFor` is the exact function `SingleShotGun.ApplyRipeness` tints the weapon
+        // model with, so the number, the bar and the gun all brown together as the magazine
+        // empties instead of the HUD inventing its own unrelated colour rule. Weapons that don't
+        // ripen (`info.ripens` false - the pineapple, which has a real texture rather than a
+        // tintable banana skin) fall back to plain white, same as the model itself does.
+        Color ammoColour = gun.Reloading ? hurt : info.ripens ? info.RipenessFor(gun.Ammo) : Color.white;
+
         ammoNumber.text = gun.Reloading ? "--" : gun.Ammo.ToString();
-        ammoNumber.color = gun.Reloading ? hurt : gun.Ammo == 0 ? critical : Color.white;
+        ammoNumber.color = ammoColour;
 
         // Bare number, no "x". Next to something that size an x reads as multiplication, and
         // there's nothing else it could be counting.
@@ -736,6 +775,26 @@ public class GameHud : MonoBehaviour
 
         if (ammoGroup != null)
             ammoGroup.localScale = Vector3.one * PunchScale(ammoPunchUntil);
+
+        // The magazine, drawn the same way health's is - a bar mirrors the number instead of
+        // the ammo readout being the one number on the HUD with nothing backing it up. Sized
+        // against the *magazine*, not the ammo count on its own, so a five round sniper mag half
+        // spent looks half spent rather than reading as "almost empty" next to a thirty round
+        // rifle at the same absolute count.
+        if (ammoTrack != null && ammoFill != null && info.magazineSize > 0)
+        {
+            float ammoWidth = ammoTrack.rect.width;
+            float ammoFraction = Mathf.Clamp01(gun.Ammo / (float)info.magazineSize);
+
+            ammoFill.rectTransform.sizeDelta =
+                new Vector2(ammoFraction * ammoWidth, ammoFill.rectTransform.sizeDelta.y);
+
+            // Flashes toward the kill accent rather than white - a non-ripening weapon's
+            // resting colour is white, and lerping white toward white on every shot would be
+            // invisible exactly when the bar changes most often.
+            float ammoFlashT = Mathf.Clamp01((ammoPunchUntil - Time.unscaledTime) / 0.22f);
+            ammoFill.color = Color.Lerp(ammoColour, killColour, ammoFlashT * 0.6f);
+        }
     }
 
     void UpdateCrosshair()
@@ -1097,7 +1156,19 @@ public class GameHud : MonoBehaviour
                              && !string.IsNullOrEmpty(centreSubtitle.text));
 
         if (showing)
-            centreTitle.color = new Color(killColour.r, killColour.g, killColour.b, killFlash);
+        {
+            // Arrives big and settles, same shape as the hitmarker and the damage numbers -
+            // this was the one thing on the HUD that just appeared at a flat scale of 1.
+            float punchT = Mathf.Clamp01((titlePunchUntil - Time.unscaledTime) / titlePunchDuration);
+            centreTitle.rectTransform.localScale = Vector3.one * (1f + punchT * punchT * 0.6f);
+
+            // A beat of white at the very start of the punch, settling to the real colour - the
+            // same "arrives hot, cools into place" read the hitmarker's own pop already uses.
+            Color colour = Color.Lerp(new Color(killColour.r, killColour.g, killColour.b, killFlash),
+                                      Color.white, punchT * 0.55f);
+            colour.a = killFlash;
+            centreTitle.color = colour;
+        }
     }
 
     void SetCentre(string title, Color colour, string subtitle)

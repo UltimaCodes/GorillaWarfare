@@ -1387,3 +1387,90 @@ Verified with a real offline-match screenshot after every change, using `HudPhot
 this pass took three extra rounds. `SceneCheck` and the full `PlayModeProbe` suite both still
 pass; neither exercises the visual treatment directly, but both confirm nothing about the HUD's
 actual wiring or runtime behaviour broke underneath it.
+
+# Eighteenth pass — a bananameter, a lean, and a real layout bug found by rendering it, 2026-08-29
+
+Same-day continuation of the seventeenth pass. That pass's real-Unity rebuild was shown to actual
+playtesters (not just Ryaan), who said the HUD had personality before and reads as generic slop
+now - a fair hit. Removing the tactical-shooter plates and brackets fixed what was wrong, but
+nothing in that pass added anything back that was specific to *this* game, and a hard outline on
+a common Google Font is exactly the kind of "safe" treatment that ends up looking like every other
+cartoon-outlined indie shooter.
+
+## The bananameter
+
+Direct instruction: "make your UI related to the game itself, make the healthbar a bananameter."
+The game already has exactly the right visual language sitting unused for this -
+`GunInfo.RipenessFor(ammo)`, the function that tints a held banana green-to-yellow-to-brown as its
+magazine empties (`SingleShotGun.ApplyRipeness`). `GameHud`'s `healthy`/`hurt`/`critical` fields
+now walk that same ramp instead of the arcade-shooter green/amber/red they'd had since M5:
+`healthy` (0.6, 0.92, 0.14) an unripe green, `hurt` (1, 0.82, 0.1) ripe yellow, `critical`
+(0.85, 0.4, 0.08) a warm burnt orange rather than true overripe brown - a rotting-banana brown
+would sit too close to the grass and the wood fence to read as a warning at exactly the moment it
+most needs to. The existing three-step fraction logic (`>0.6`/`>0.3`/else) didn't need to change,
+only what colours it reaches for.
+
+Ammo got the real version of the same idea, not a copy: `UpdateAmmo`'s colour used to be its own
+invented rule (`Reloading ? hurt : Ammo == 0 ? critical : white`), unrelated to anything else in
+the game. It's now `info.ripens ? info.RipenessFor(gun.Ammo) : Color.white` - the *exact* function
+the weapon model itself calls. The number, the new ammo bar and the banana in your hands all brown
+together as the magazine empties, because they're reading the same one function rather than three
+separate colour rules that happened to sound similar. Weapons that don't ripen (the pineapple - a
+real texture, not a tintable skin, same reason `ApplyRipeness` itself skips it) fall back to plain
+white, matching the model.
+
+## The lean
+
+Direct instruction, pointing at ULTRAKILL specifically: its HUD elements sit on a diagonal, not
+flat horizontal boxes. Every bar (health, ammo) now carries a 6 degree `localRotation`.
+
+The restructuring this needed is the more interesting part. The frame and the track used to be
+*siblings* - both direct children of the Health/Ammo panel, only lining up because their
+positions happened to agree. Rotating siblings independently rotates each around its *own* pivot;
+with the border's pivot offset from the track's by the border width, the two would have swung
+apart from each other instead of leaning together. Fixed by making `Track` (and by extension
+`Fill`, `Shine`, `Shadow`, `Shield`, all nested under it already) a *child* of the frame instead of
+a sibling - one `localRotation` on the frame now carries the entire cluster as a single rigid
+body. `Track`'s own position moved from `Vector2.zero` to `(trackBorder, trackBorder)`, an inset
+from the frame's origin rather than from Health's - the same shape of fix the ammo frame needed in
+the sixteenth pass, just one level deeper in the hierarchy this time.
+
+## The big callout finally punches in
+
+Also asked for directly - "the text could get some more effects for some oomph (the big text)."
+`centreTitle` (the kill callout, "GET READY," a gun-game rung-up) turned out to be the one piece
+of text on the entire HUD that had no reaction to appearing at all - every other dynamic element
+(the hitmarker, damage numbers, the health/ammo groups, the slide rank) already arrives big and
+settles; this one just snapped straight to scale 1 and sat there while `killFlash` faded its
+alpha. Added a matching `titlePunchUntil` timer (set alongside `killFlash` in both `ShowKill` and
+`ShowRungUp`) driving the same "arrives big, settles" scale curve everything else already uses,
+plus a beat of white blended into the colour at the start of the punch - the same "arrives hot,
+cools into place" read the hitmarker's own pop already has.
+
+## A real layout bug, found only by rendering a state nobody had checked
+
+The instruction to "find good positions for the different kinds of text" led to extending
+`HudPhotographer` with a `GW_HUD_MODE=GunGame` mode (forcing the ladder visible and, via
+reflection on `PlayerMovement`'s private `chain`/`chainExpires` fields, a live slide chain) rather
+than only ever screenshotting the default Deathmatch warmup state every previous render this
+session had used. First render of that state showed `BANANAS!!!` (the slide rank) sitting
+directly on top of "CLIMB THE LADDER" and the weapon subtitle - not a spacing issue, an actual
+positioning bug that had been there since before this whole HUD rework started and was simply
+never rendered in a state that would show it.
+
+Root cause: `slideCombo` has always been built as a child of the `Centre` panel, and `Centre` is
+built with `Vector2.zero` size - it only ever needed to anchor its centred children (the title,
+the subtitle, the hit combo) at its own origin, which a zero-size RectTransform does just fine.
+But a zero-*width* parent breaks anchor fractions for anything that isn't centred: `slideCombo`'s
+own `anchorMin`/`anchorMax` of `(1, 0.5)` - "hug the right edge" - has nothing to interpolate
+across, so it collapses to the exact same point a centred anchor would. The text was never
+actually anchored to any edge; it only ever sat 70 points left of dead centre, which happened to
+clear the shorter multikill callouts ("DOUBLE", "TRIPLE") this whole session's testing had used
+but not "CLIMB THE LADDER" at 130pt in Jersey 10's wider glyphs. Fixed by moving `slideRank` (and
+its `Repair()`/`Retune()` counterparts) onto the root canvas directly, where a real anchor means
+what it says, rather than trying to widen `Centre` and risk moving every other child that already
+depends on it being zero-sized.
+
+Full `PlayModeProbe` and `SceneCheck` both still pass after the restructure - neither exercises
+bar rotation or colour directly, but both confirm the reparenting didn't break any of the HUD's
+actual wiring.

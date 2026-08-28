@@ -69,8 +69,13 @@ public static class HudPhotographer
 
             yield return new WaitUntil(() => PhotonNetwork.InRoom);
 
+            // GW_HUD_MODE=GunGame checks the ladder specifically - it only ever shows in that
+            // mode, so the default Deathmatch run never exercises it at all.
+            string modeEnv = System.Environment.GetEnvironmentVariable("GW_HUD_MODE");
+            MatchMode mode = modeEnv == "GunGame" ? MatchMode.GunGame : MatchMode.Deathmatch;
+
             PhotonNetwork.CurrentRoom.SetCustomProperties(
-                new Hashtable { { MatchState.ModeKey, (int)MatchMode.Deathmatch } });
+                new Hashtable { { MatchState.ModeKey, (int)mode } });
 
             PhotonNetwork.LoadLevel(1);
             yield return new WaitUntil(() =>
@@ -115,6 +120,21 @@ public static class HudPhotographer
             {
                 kind = MatchState.FeedKind.Join, actor = "Newcomer", at = Time.unscaledTime,
             });
+
+            // Forces a live slide chain so the rank text shows up too - SlideChain/Exhausted are
+            // both derived read-only properties (Time.time against a couple of private fields),
+            // so this is the only way to make one true without actually sliding the rig.
+            if (mode == MatchMode.GunGame)
+            {
+                PlayerMovement movement = player.GetComponent<PlayerMovement>();
+
+                if (movement != null)
+                {
+                    var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                    typeof(PlayerMovement).GetField("chain", flags)?.SetValue(movement, 4);
+                    typeof(PlayerMovement).GetField("chainExpires", flags)?.SetValue(movement, Time.time + 5f);
+                }
+            }
 
             yield return null;
             yield return new WaitForEndOfFrame();

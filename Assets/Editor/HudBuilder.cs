@@ -131,24 +131,35 @@ public static class HudBuilder
         healthNumber.text = "140";
         healthNumber.characterSpacing = 3f;
 
-        // A solid black frame round the whole bar - reported as reading completely flat, and a
-        // colour block with no edge is exactly that, wherever it happens to sit over the map.
-        // A plain background-behind-foreground border rather than a UI Outline component: the
-        // built-in Outline only offsets a copy in one direction (right for the crosshair ticks
-        // it was built for), which reads as a drop shadow, not a frame round all four sides.
+        // A solid black frame round the whole bar, and the bar leans rather than sitting flat -
+        // reported twice over: the bar read as completely flat with zero depth even with the
+        // shine and shadow bands (below) added, and separately that the whole HUD wanted
+        // ULTRAKILL's own diagonal language instead of flat horizontal boxes.
+        //
+        // The frame is the rotation's actual rigid body. `Track` (and everything under it -
+        // `Fill`, `Shine`, `Shadow`, `Shield`) is a *child* of the frame now rather than a
+        // sibling, specifically so one `localRotation` on the frame carries the whole cluster as
+        // one unit - rotating siblings individually would spin each around its own pivot and the
+        // parts would drift apart from each other instead of leaning together.
         const float trackBorder = 4f;
-        Image(health.transform, "TrackBorder", BottomLeft, BottomLeft, BottomLeft,
-              new Vector2(-trackBorder, -trackBorder),
-              new Vector2(460f + trackBorder * 2f, 24f + trackBorder * 2f), Color.black);
+        const float barLean = 6f;
+
+        RectTransform barFrame = Image(health.transform, "BarFrame", BottomLeft, BottomLeft, BottomLeft,
+                                       new Vector2(-trackBorder, -trackBorder),
+                                       new Vector2(460f + trackBorder * 2f, 24f + trackBorder * 2f),
+                                       Color.black).rectTransform;
+        barFrame.localRotation = Quaternion.Euler(0f, 0f, barLean);
 
         // The track is the full bar including the overshield stretch; the fill and the shield
         // are sized against it at runtime, so widening this one rect rescales the whole thing.
-        RectTransform track = Image(health.transform, "Track", BottomLeft, BottomLeft, BottomLeft,
-                                    Vector2.zero, new Vector2(460f, 24f),
+        // Inset by the border width now that it sits inside the frame rather than measured from
+        // Health's own origin.
+        RectTransform track = Image(barFrame, "Track", BottomLeft, BottomLeft, BottomLeft,
+                                    new Vector2(trackBorder, trackBorder), new Vector2(460f, 24f),
                                     new Color(0f, 0f, 0f, 0.55f)).rectTransform;
 
         Image fill = Image(track, "Fill", BottomLeft, BottomLeft, BottomLeft,
-                           new Vector2(0f, 0f), new Vector2(322f, 24f), new Color(0.55f, 1f, 0.1f));
+                           new Vector2(0f, 0f), new Vector2(322f, 24f), new Color(0.6f, 0.92f, 0.14f));
 
         // A lighter strip along the top half, stretched to always cover exactly that much of
         // `fill` regardless of how GameHud resizes it at runtime (stretch anchors read the
@@ -157,7 +168,13 @@ public static class HudBuilder
         // use. Not raycast-blocking, not wired anywhere - purely decorative, sits on the fill
         // it was born on and moves with it for free.
         Image(fill.transform, "Shine", new Vector2(0f, 0.5f), Vector2.one, Center,
-              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.3f));
+              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.34f));
+
+        // The other half of the same move - a darker strip along the bottom, so the bar reads
+        // as a lit, rounded surface rather than a light patch on an otherwise flat swatch. Two
+        // bands is the minimum that reads as volume; one alone just looks like a stripe.
+        Image(fill.transform, "Shadow", Vector2.zero, new Vector2(1f, 0.5f), Center,
+              Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.22f));
 
         Image shield = Image(track, "Shield", BottomLeft, BottomLeft, BottomLeft,
                              new Vector2(322f, 0f), new Vector2(0f, 24f), new Color(0.35f, 0.8f, 1f));
@@ -196,23 +213,57 @@ public static class HudBuilder
         GameObject ammo = Panel(rootObject.transform, "Ammo", BottomRight, BottomRight, BottomRight,
                                 new Vector2(-48f, 48f), Vector2.zero, null);
 
+        // The magazine, drawn the same way health's own bar is now - frame, inset track, fill,
+        // shine, shadow, and the same lean. A BottomRight pivot places anchoredPosition at the
+        // rect's own *right* edge and grows the box *leftward*, the mirror image of health's
+        // BottomLeft maths (position at the left edge, grows right) - not the same numbers with
+        // a sign left unflipped, which is exactly the bug the ammo corner-frame had in the
+        // sixteenth pass. Worked through explicitly here rather than copied by eye: for a border
+        // grown outward by `trackBorder` on all sides, the BottomRight corner moves outward in
+        // +x (away from the box, since the box already extends the other way) and -y (down, same
+        // as BottomLeft), so the frame's own position is (trackBorder, -trackBorder). The inset
+        // track inside it mirrors the same move: -trackBorder in x (in from the right edge),
+        // +trackBorder in y (same as health, the y math never depended on which side of the
+        // screen this is on).
+        const float ammoTrackWidth = 260f;
+
+        RectTransform ammoFrame = Image(ammo.transform, "BarFrame", BottomRight, BottomRight, BottomRight,
+                                        new Vector2(trackBorder, -trackBorder),
+                                        new Vector2(ammoTrackWidth + trackBorder * 2f, 24f + trackBorder * 2f),
+                                        Color.black).rectTransform;
+        ammoFrame.localRotation = Quaternion.Euler(0f, 0f, barLean);
+
+        RectTransform ammoTrack = Image(ammoFrame, "Track", BottomRight, BottomRight, BottomRight,
+                                        new Vector2(-trackBorder, trackBorder), new Vector2(ammoTrackWidth, 24f),
+                                        new Color(0f, 0f, 0f, 0.55f)).rectTransform;
+
+        Image ammoFill = Image(ammoTrack, "Fill", BottomRight, BottomRight, BottomRight,
+                               Vector2.zero, new Vector2(182f, 24f), new Color(0.6f, 0.92f, 0.14f));
+
+        Image(ammoFill.transform, "Shine", new Vector2(0f, 0.5f), Vector2.one, Center,
+              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.34f));
+        Image(ammoFill.transform, "Shadow", Vector2.zero, new Vector2(1f, 0.5f), Center,
+              Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.22f));
+
+        // Shifted up 44 from the original layout - exactly the gap the bar plus its own spacing
+        // needs, and the same 20 point gap health already keeps between its own track and number.
         TMP_Text weaponName = Text(ammo.transform, "Name", font, 30f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
-                                   new Vector2(0f, 150f), new Vector2(560f, 36f));
+                                   new Vector2(0f, 194f), new Vector2(560f, 36f));
         weaponName.text = "RIFLE";
         weaponName.color = new Color(1f, 1f, 1f, 0.75f);
 
         // The round count is the number you actually read mid-fight, so it gets the size.
         TMP_Text ammoNumber = Text(ammo.transform, "Rounds", font, 120f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
-                                   new Vector2(-70f, 0f), new Vector2(400f, 140f));
+                                   new Vector2(-70f, 44f), new Vector2(400f, 140f));
         ammoNumber.text = "30";
         ammoNumber.characterSpacing = 3f;
 
         // Spares tucked under its right shoulder, bare - "5", not "x5".
         TMP_Text spare = Text(ammo.transform, "Spare", font, 42f,
                               TextAlignmentOptions.BottomRight, BottomRight,
-                              new Vector2(0f, 14f), new Vector2(120f, 56f));
+                              new Vector2(0f, 58f), new Vector2(120f, 56f));
         spare.text = "5";
         spare.color = new Color(1f, 1f, 1f, 0.55f);
 
@@ -327,6 +378,8 @@ public static class HudBuilder
         Wire(so, "weaponName", weaponName);
         Wire(so, "ammoNumber", ammoNumber);
         Wire(so, "spareNumber", spare);
+        Wire(so, "ammoTrack", ammoTrack);
+        Wire(so, "ammoFill", ammoFill);
 
         Wire(so, "crosshairUp", up.rectTransform);
         Wire(so, "crosshairDown", down.rectTransform);
@@ -346,10 +399,17 @@ public static class HudBuilder
         Wire(so, "centreSubtitle", subtitle);
         Wire(so, "comboText", combo);
 
-        // The slide chain, under the hit combo on the same side. Ranked rather than counted.
-        TMP_Text slideRank = Text(centre.transform, "SlideCombo", font, 54f,
+        // The slide chain, roughly level with the hit combo but hugging the right edge of the
+        // screen rather than the centre. Deliberately NOT a child of `centre` - that panel is
+        // built with zero size (it only ever needed to anchor centred children at its own
+        // origin), so a "right" anchor on a child of a zero-*width* parent collapses to the same
+        // point a centred one would and this sat only 70 points left of true centre - invisible
+        // as a bug until Jersey 10's wider glyphs on the kill/ladder title actually reached far
+        // enough left to overlap it. Parented on the root canvas instead, where the anchor means
+        // what it says.
+        TMP_Text slideRank = Text(rootObject.transform, "SlideCombo", font, 54f,
                                   TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                  new Vector2(-70f, 120f), new Vector2(620f, 80f));
+                                  new Vector2(-60f, -170f), new Vector2(620f, 80f));
         slideRank.text = "SLIDE";
         slideRank.gameObject.SetActive(false);
         Wire(so, "slideCombo", slideRank);
@@ -518,7 +578,10 @@ public static class HudBuilder
             Debug.Log("[hud] added the adrenaline edge");
         }
 
-        // The slide rank, which arrived with the chain.
+        // The slide rank, which arrived with the chain. Parented on the root canvas rather than
+        // alongside `comboText` - that sibling's own parent (`Centre`) is built with zero size,
+        // so a "right" anchor on a child of it collapses to the same point a centred one would.
+        // See the matching fix in `Run()`.
         SerializedProperty comboSlot = so.FindProperty("slideCombo");
 
         if (comboSlot != null && comboSlot.objectReferenceValue == null)
@@ -526,11 +589,11 @@ public static class HudBuilder
             SerializedProperty hitSlot = so.FindProperty("comboText");
             TMP_Text sibling = hitSlot != null ? hitSlot.objectReferenceValue as TMP_Text : null;
 
-            if (sibling != null && sibling.transform.parent != null)
+            if (sibling != null)
             {
-                TMP_Text made = Text(sibling.transform.parent, "SlideCombo", sibling.font, 80f,
+                TMP_Text made = Text(hud.transform, "SlideCombo", sibling.font, 80f,
                                      TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                     new Vector2(-70f, 120f), new Vector2(680f, 100f));
+                                     new Vector2(-60f, -170f), new Vector2(680f, 100f));
                 made.text = "SLIDE";
                 made.gameObject.SetActive(false);
 
@@ -553,7 +616,11 @@ public static class HudBuilder
         // told to you as text - and the wider box is so BANANAS!!! at the new size doesn't wrap.
         // Alignment passed explicitly: Retune defaults to Center, and this one was built Right
         // to hug the edge of its group rather than sit centred in its box like the other three.
-        added += Retune(so, "slideCombo", 80f, new Vector2(-70f, 120f), new Vector2(680f, 100f),
+        // Position moved 2026-08-29 along with a reparent onto the root canvas - see Repair's own
+        // note above; an older scene's slideCombo is still a child of the zero-width Centre panel
+        // and Retune only moves the RectTransform, so this alone won't fix that scene's parent,
+        // only its position once it has (or gets) the right one.
+        added += Retune(so, "slideCombo", 80f, new Vector2(-60f, -170f), new Vector2(680f, 100f),
                         TextAlignmentOptions.Right);
 
         if (added == 0)

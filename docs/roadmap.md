@@ -333,6 +333,26 @@ two feeds would either overlap or need a third thing to arbitrate.
       (`Assets/Editor/HudPhotographer.cs`, kept as a permanent tool), not eyeballed math or a
       browser preview - see the sixteenth pass for the ammo-frame sign error and the flat-bar
       complaint that only showed up once rendered for real.
+      4. Sent to real playtesters, who came back with "personality to it before, generic slop
+         now" - a fair hit on step 3, which had spent the whole pass subtracting (no plates, no
+         glow, no brackets) without adding anything specific to *this* game back. Fixed same day,
+         `bug-log.md`'s seventeenth pass:
+         - Health and ammo bars now walk `GunInfo.RipenessFor`'s own green-to-brown palette - the
+           health bar as a literal "bananameter," the ammo bar tinted by the *actual* magazine's
+           ripeness rather than an invented ammo colour rule, so the HUD and the banana in your
+           hands brown together.
+         - Every bar leans six degrees rather than sitting flat-horizontal, reported directly
+           against ULTRAKILL's own diagonal HUD language. `Track` (and everything under it) is
+           now a child of the border frame specifically so the whole cluster rotates as one rigid
+           piece rather than each element spinning round its own pivot.
+         - The big centre callout (a kill, a rung-up, "GET READY") now punches in and settles
+           rather than appearing at a flat scale of 1 - the one piece of text on the whole HUD
+           that had never gotten the "arrives big" treatment everything else already had.
+         - Caught by the same GunGame-mode render that checked the ladder: `slideCombo`
+           ("BANANAS!!!") was a child of a *zero-width* Centre panel, so its own "anchor right"
+           setting had silently done nothing since it was built - sitting 70pt left of true centre
+           collided with the kill/ladder title the moment Jersey 10's wider glyphs reached that
+           far. Reparented onto the root canvas, where the anchor means what it says.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
