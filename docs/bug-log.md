@@ -956,3 +956,72 @@ Verified end to end with a temporary offline-room test (`ReportGroundSlam` calle
 spawned player, checked for a thrown exception and confirmed the particle GameObject actually got
 built) rather than trusting the RPC wiring compiled clean and calling it done - removed after
 confirming both.
+
+# Twelfth pass — a new sky, wall running cut for good, and a simpler ledge hop, 2026-08-23
+
+## The skybox, rebuilt against a reference
+
+Asked directly to match a reference screenshot - a soft, photographic blue sky with wispy
+streaked clouds and a glowing sun, nothing like the flat-banded jungle-canopy look the shader had.
+Rewrote `Assets/Shaders/JungleSky.shader` entirely: a smooth three-stop gradient (horizon to mid
+sky to zenith, continuous rather than the old hard bands) and a cloud layer built from hand-rolled
+value noise - four octaves of FBM, the sample domain squashed hard along one axis before reading
+it (round noise blobs read as cauliflower; squashed ones read as wind-blown streaks), plus a
+second coarser noise field bent into the sample position first (domain warp) for the slightly
+turbulent quality a single noise octave never quite gets. Dropped the old shader's "god rays"
+entirely - the reference has none, just the sun itself with a soft halo.
+
+Kept the shader's registered name (`Skybox/JungleSky`) and file name so nothing that already
+pointed at either (`SkyboxPhotographer.cs`, the `JungleSky.mat` asset) needed to change, even
+though the theme is no longer jungle-canopy - a rename would have meant chasing down every
+reference for a purely cosmetic win.
+
+**First render was wrong in a way that had nothing to do with the new shader.** The sky came out
+half solid yellow, the old `_HazeHeight`/`_HorizonColor`/`_ZenithColor`/`_SunSize` values baked
+into `JungleSky.mat` were still there, and several of those property *names* are reused by the
+new shader too (`_HorizonColor`, `_ZenithColor`, `_SunSize`, `_SunDirection`) - Unity carries a
+material's saved overrides forward across a shader swap for any property name that still exists,
+so the old jungle-canopy yellow/green values were silently overriding the new shader's own
+defaults rather than the material falling through to them. Cleared every saved property in
+`JungleSky.mat` rather than track down which specific names collided.
+
+Sun halo was next - the first pass rendered as a wash covering most of the frame, an overexposed-
+photo look rather than a glowing disc. Retuned by rendering, not guessing again: halo tightened
+(`_SunHaloSize` 10 to 26) and both the halo and the ambient sun-side sky brightening turned down
+(`_SunHaloIntensity` 0.6 to 0.32, `_SunScatter` 0.35 to 0.16). Confirmed against the real
+in-game camera afterward, not just the isolated `SkyboxPhotographer` rig - `PlayModeProbe`'s own
+screenshots show the map's fence line against the new sky, post-processing and all.
+
+## Wall running removed entirely, vault confirmed already gone
+
+Direct request. Wall running (`UpdateWallRun`, `EndWallRun`, its scrape-audio loop, its dust
+effects, the camera roll `PlayerController.Look()` added for it) all deleted outright, along
+with the `WallRun` audio bank it was the only reader of. Vault was already gone - cut two passes
+ago after its own "make vaulting possible by doubling jumping" retry still didn't work - confirmed
+by grepping the whole `Scripts` folder for either name and finding nothing left to remove.
+
+## The ledge hop, deliberately simpler than what it replaces
+
+"Add double jumping when you're at a ledge but make sure you can't spam it" - read as a second
+jump, gated on genuinely being near a wall, not a scripted mantle. The vault this replaces (twice,
+now) tried to calculate an actual landing point from three raycasts and carry the player to it;
+neither attempt survived contact with an actual playtest. This is one raycast, forward from
+roughly chest height, and an ordinary jump impulse if it hits a near-vertical surface - the
+player's own momentum does the actual climbing, the same way a normal jump already does. The
+failure mode of over-triggering (hopping when there wasn't much of a ledge there) costs far less
+than the old system's failure mode of never triggering at all.
+
+Can't-spam is two separate limits, not one: `ledgeHopUsedThisAirtime` (reset on landing) stops one
+jump from chaining several hops, and a 1.2s cooldown starting from the hop itself (not the
+landing after it) stops a low ledge being landed on almost immediately from letting a fresh hop
+chain right back off it.
+
+Verified with a temporary test rather than trusted on read-through - built a real wall in a real
+offline room and called `TryLedgeHop` via reflection, since it's a private method with no reason
+to be anything else. First attempt reported a miss even standing directly against the wall;
+turned out to be `Physics.SyncTransforms()` again (see `bug-log.md`'s earlier note on
+`MapExpansion`'s own detail-scatter pass finding the same thing) - a collider positioned the same
+frame it's created doesn't register for a raycast until transforms are explicitly synced, purely
+a test-rig issue since real map geometry is never moved at runtime. Passed once that was added:
+fires once near a wall, refuses a second attempt in the same airtime, and still refuses after the
+airtime flag is reset (simulating a landing) because the cooldown is a separate clock.

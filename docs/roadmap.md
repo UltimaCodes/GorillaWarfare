@@ -352,6 +352,12 @@ how many clusters) - not played yet, see Unverified.
       whatever surface they land on. Blood is red, sticks to the body, and goes when it does
 - [ ] Replace the remaining placeholder textures (the menu still uses them)
 - [ ] Environment art matching the philosophy
+- [x] **The skybox, rebuilt against a reference.** The old shader was a stylised jungle-canopy
+      look (flat colour bands, god rays) - replaced entirely 2026-08-23, direct request against a
+      screenshot: a smooth photographic gradient plus streaked, noise-based clouds and a glowing
+      sun, no texture or cubemap involved, same procedural-shader approach the old one used. See
+      `bug-log.md`'s twelfth pass, including why the first render came out half solid yellow (a
+      stale material override, not the new shader itself).
 - [x] **Post-processing: the palette-mangling that sells the Cruelty Squad look.** Corrected
       2026-08-23 - this was already fully built (`ShaderStack.cs`: ambient occlusion, bloom,
       colour grading, vignette, an `Overripe` preset with chromatic aberration and coloured grain
@@ -414,12 +420,19 @@ Separate from M0 because it needs a person playing it, not a fix.
 - [x] **Vault, removed.** Retuned once the same day it was built, then reported as still not
       working on the very next playtest and cut outright rather than retuned a third time. See
       `bug-log.md`'s seventh pass and `ideas.md`'s movement tech section for the record of why.
-- [x] **Wall run rebuilt hold-based.** The auto-latch original (speed threshold + moving toward
-      the wall) was reported "really weird" - no player-controlled start or stop. Now: hold the
-      slide/crouch key near a qualifying wall to stick, release to fall immediately, jump for the
-      payoff push-off. Also gained its own continuous scrape audio (was silently reusing the
-      slide's own bank, reported as sounding identical to it) and a proximity/hold check with no
-      speed gate at all.
+- [x] **Wall run rebuilt hold-based, then removed entirely.** The auto-latch original (speed
+      threshold + moving toward the wall) was reported "really weird" - no player-controlled start
+      or stop - and rebuilt hold-based: hold the slide/crouch key near a qualifying wall to stick,
+      release to fall immediately, jump for the payoff push-off, plus its own continuous scrape
+      audio. Cut outright 2026-08-23, direct request, in favour of the much simpler ledge hop
+      below - see `bug-log.md`'s twelfth pass.
+- [x] **The ledge hop.** Replaces both wall running and vault. "Add double jumping when you're at
+      a ledge but make sure you can't spam it" - a single forward raycast gates an ordinary second
+      jump, rather than either wall running's sustained latch-and-stick state or vault's scripted
+      landing-point calculation (which never survived a playtest, twice). Can't-spam is two
+      separate limits: once per airtime, plus a 1.2s cooldown starting from the hop itself so a
+      low ledge landed on almost immediately can't chain a fresh one right back off it. See
+      `bug-log.md`'s twelfth pass.
 - [x] **Ground slam can no longer be spammed.** Reported directly. A 1.4s cooldown starts from
       landing, not from the press, so it isn't crouch-key-mashable in the air.
 - [x] **The ground slam's impact is networked now, and bigger.** Asked directly for "impact

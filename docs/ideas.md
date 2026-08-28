@@ -180,17 +180,28 @@ geometry isn't itself box-shaped. Non-convex static mesh colliders raycast norma
 `convex = true` requirement only bites a collider that also carries a non-kinematic `Rigidbody`,
 which none of this project's level geometry does.
 
-**Wall run.** Hold the slide/crouch key near a wall while airborne, and you stick to it for as
-long as it's held, gravity mostly off, gaining a little height - let go and you fall immediately.
-Retuned 2026-08-22 from an auto-latch (moving toward a wall fast enough, no button) after its
-first playtest came back as "really weird" - unpredictable to start or stop on purpose. A jump
-while attached is still the payoff, pushing away from the wall as well as up.
+**Wall run — removed 2026-08-23.** Held the slide/crouch key near a wall while airborne to stick
+to it, gravity mostly off, gaining a little height - let go and you fall immediately. Retuned once
+already (2026-08-22, from an auto-latch reported as "really weird" - unpredictable to start or
+stop on purpose) before being cut outright the next day, direct request, in favour of the ledge
+hop below. Nothing else in the movement stack depended on it.
 
 **Vault — removed 2026-08-22.** Retuned once already the same day (a second jump press while
 airborne, near a ledge, after the original grounded-and-fast trigger was reported as simply not
 working), then cut outright on its very next playtest with a direct "doesn't work, just remove
 it." Two attempts at the trigger condition in one day and neither read as vaulting to the person
 playing it; not worth a third guess. Nothing else in the movement stack depended on it.
+
+**Ledge hop — added 2026-08-23**, replacing both of the above. "Add double jumping when you're at
+a ledge but make sure you can't spam it." One forward raycast at roughly chest height, and an
+ordinary jump impulse if it finds a near-vertical surface within range - not a scripted mantle or
+a sustained latch state, just a normal jump gated on being near something worth jumping at.
+Deliberately simpler than vault's own three-raycast landing-point calculation, which never
+survived a playtest either time it was tried: the failure mode of a plain gated jump
+over-triggering (hopping near a wall that wasn't much of a ledge) costs far less than vault's
+failure mode of never triggering when it mattered. Can't-spam is two limits stacked - once per
+airtime (reset on landing) and a 1.2s cooldown timed from the hop itself, so a low ledge landed on
+almost immediately can't chain a fresh hop right back off it.
 
 **Ground slam.** Press a dedicated key (not the slide/crouch key - see below) while airborne and
 you come down hard, keeping the horizontal component. A way to convert height into distance, and

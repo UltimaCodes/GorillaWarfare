@@ -300,41 +300,37 @@ public class PlayerMovement : MonoBehaviour
              + "- this is pure-bhop specifically.")]
     [Range(0.5f, 1f)] [SerializeField] float bhopKeep = 0.92f;
 
-    [Header("Wall run")]
-    [Tooltip("Fraction of normal gravity while wall running. Not zero - full weightlessness reads "
-             + "as flying, not running; a small pull down is what keeps it feeling like a wall "
-             + "under your feet rather than a stopped clock.")]
-    [Range(0.05f, 0.6f)] [SerializeField] float wallRunGravityScale = 0.22f;
+    [Header("Ledge hop")]
+    [Tooltip("How far forward to check for a wall/ledge before an in-air second jump is allowed "
+             + "to fire. Removed wall running entirely 2026-08-23 (direct request) and replaced "
+             + "it with this - a second jump, but only usable near a genuine ledge rather than "
+             + "freely in open air, so it reads as scrambling up onto something rather than a "
+             + "second full jump. Deliberately simpler than the vault system that was cut two "
+             + "passes ago (three raycasts trying to find a landing point and a scripted arc onto "
+             + "it) - that one never actually worked, and a constrained extra jump is far less to "
+             + "get wrong than a scripted mantle is.")]
+    [SerializeField] float ledgeHopCheckDistance = 1f;
 
-    [SerializeField] float wallRunRise = 1.2f;
-    [SerializeField] float wallRunMaxSeconds = 1.25f;
-    [SerializeField] float wallRunCheckDistance = 0.8f;
-    [SerializeField] float wallJumpAway = 5.5f;
-    [SerializeField] float wallJumpUp = 6.4f;
+    [Tooltip("Extra vertical speed the ledge hop grants. Set to jumpSpeed itself rather than a "
+             + "separate number - it should feel like a second jump, not a different move.")]
+    [SerializeField] float ledgeHopUpSpeed = 6.86f;
 
-    [Tooltip("Cooldown after leaving a wall run before another one can start, so jumping off "
-             + "doesn't just re-latch the same wall a frame later.")]
-    [SerializeField] float wallRunReentryDelay = 0.4f;
+    [Tooltip("Extra speed added toward the wall, on top of whatever you were already carrying - "
+             + "the part that actually gets you up and over rather than just hopping in place "
+             + "against it.")]
+    [SerializeField] float ledgeHopForwardSpeed = 3.2f;
 
-    [Tooltip("Small push away from the wall on an exit that isn't a wall-jump - releasing, losing "
-             + "the wall, or timing out. Reported as 'gets you stuck on walls for a second': every "
-             + "frame of an active wall run clips velocity to exactly zero along the wall normal, "
-             + "so at the instant it ends passively there is precisely no speed pointing away from "
-             + "the surface - nothing carries you off it, and OnControllerColliderHit keeps "
-             + "re-clipping the same nothing while you slide along it under gravity instead of "
-             + "actually falling away. Well under wallJumpAway, which is the deliberate payoff for "
-             + "actually jumping off - this only has to be enough to separate.")]
-    [SerializeField] float wallRunPassiveSeparation = 1.1f;
+    [Tooltip("Seconds after a hop before another can fire. On top of the once-per-airtime limit "
+             + "below - direct request was explicit: whatever this turns into, \"make sure you "
+             + "can't spam it\". The once-per-airtime rule alone stops one jump from chaining "
+             + "several hops, but a low ledge could still be landed on almost immediately, and "
+             + "without this a fast bhop-style touch-and-jump could chain a fresh hop right back "
+             + "off it. Starts from the hop itself, not the landing after it, so it can't be timed "
+             + "around by choosing when to touch down.")]
+    [SerializeField] float ledgeHopCooldown = 1.2f;
 
-    bool wallRunning;
-    Vector3 wallNormal;
-    float wallRunEndsAt;
-    float wallRunBlockedUntil = -99f;
-
-    /// Whether a wall run is currently active. Public the same way Sliding/Crouching are, so the
-    /// camera can lean toward the wall while it's happening.
-    public bool WallRunning => wallRunning;
-    public Vector3 WallNormal => wallNormal;
+    bool ledgeHopUsedThisAirtime;
+    float ledgeHopCooldownUntil = -99f;
 
     [Header("Air brake and ground slam")]
     [Tooltip("One key, two moves, told apart by which way you're already going rather than by "
@@ -515,6 +511,7 @@ public class PlayerMovement : MonoBehaviour
         if (grounded && wasAirborne)
         {
             landedAt = Time.time;
+            ledgeHopUsedThisAirtime = false;
 
             if (slamming)
             {
@@ -522,9 +519,6 @@ public class PlayerMovement : MonoBehaviour
                 slamming = false;
                 groundSlamCooldownUntil = Time.time + groundSlamCooldown;
             }
-
-            if (wallRunning)
-                EndWallRun(false);
         }
 
         UpdateStance(listening, dt);
@@ -538,12 +532,16 @@ public class PlayerMovement : MonoBehaviour
         {
             GroundMove(wishDir, wishSpeed, wantsJump, dt);
         }
-        else if (!UpdateWallRun(listening, wantsJump, dt))
+        else
         {
+            // The raw press, not the buffered wantsJump - that stays true for the whole buffer
+            // window (0.22s) after a press, which would retry the ledge check on every frame of
+            // it instead of once on the actual press.
+            if (!listening && KeyBinds.Pressed(KeyBinds.Action.Jump))
+                TryLedgeHop();
+
             AirMove(wishDir, wishSpeed, dt);
         }
-
-        UpdateWallRunScrape();
 
         // The one place total speed is actually bounded, rather than just how often something is
         // allowed to add more of it. Vertical is untouched - this is about bhop and slide chains
@@ -837,114 +835,6 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// Hold the slide/crouch key near a wall while airborne, and stick to it for as long as it's
-    /// held.
-    ///
-    /// Redesigned 2026-08-22, reported as "really weird" - the original auto-latched onto any
-    /// wall you were moving toward fast enough, with no button, which made it unpredictable to
-    /// start and impossible to end on purpose. Direct request was explicit: press the key near a
-    /// wall to start, hold it to stay on, let go and you fall immediately. That's what this is -
-    /// no speed threshold, no "moving toward it" check, just proximity plus the key. Returns
-    /// whether it owned this frame's velocity, so Update() knows whether to fall back to AirMove.
-    ///
-    /// While active, gravity is scaled down rather than removed - full weightlessness reads as
-    /// flying, and the wall stops being a wall - and velocity is clipped to the wall's own
-    /// tangent plane the same way a wall collision already is elsewhere, just every frame instead
-    /// of only on contact, so steering along it doesn't slowly drift back into the wall or away
-    /// from it. A jump is the one other way out, and the only one with a payoff - it pushes away
-    /// from the wall as well as up, rather than just dropping you.
-    /// </summary>
-    bool UpdateWallRun(bool listening, bool wantsJump, float dt)
-    {
-        bool holding = !listening && KeyBinds.Held(KeyBinds.Action.Walk);
-
-        if (wallRunning)
-        {
-            if (!holding)
-            {
-                EndWallRun(false);
-                return false;
-            }
-
-            if (wantsJump)
-            {
-                EndWallRun(true);
-                return false;
-            }
-
-            bool stillWall = Physics.Raycast(transform.position, -wallNormal,
-                                             wallRunCheckDistance + 0.15f, Hitbox.WorldMask,
-                                             QueryTriggerInteraction.Ignore);
-
-            if (!stillWall || Time.time >= wallRunEndsAt)
-            {
-                EndWallRun(false);
-                return false;
-            }
-
-            velocity -= wallNormal * Vector3.Dot(velocity, wallNormal);
-            velocity.y = Mathf.Lerp(velocity.y, wallRunRise, 1f - Mathf.Exp(-6f * dt));
-            velocity.y -= gravity * wallRunGravityScale * dt;
-
-            WallRunTickEffects(dt);
-            return true;
-        }
-
-        if (!holding || Time.time < wallRunBlockedUntil)
-            return false;
-
-        Vector3 right = transform.right;
-        RaycastHit hit;
-
-        if (Physics.Raycast(transform.position, right, out RaycastHit rHit,
-                            wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-        {
-            hit = rHit;
-        }
-        else if (Physics.Raycast(transform.position, -right, out RaycastHit lHit,
-                                 wallRunCheckDistance, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-        {
-            hit = lHit;
-        }
-        else
-        {
-            return false;
-        }
-
-        // Only a genuine wall - near horizontal normal. A steep ramp or a low ceiling shouldn't
-        // start one just because the raycast happened to clip it.
-        if (Mathf.Abs(hit.normal.y) > 0.3f)
-            return false;
-
-        wallRunning = true;
-        wallNormal = hit.normal;
-        wallRunEndsAt = Time.time + wallRunMaxSeconds;
-        wallRunDustTimer = 0f;
-
-        WallRunStartEffects();
-        return true;
-    }
-
-    void EndWallRun(bool jumpOff)
-    {
-        wallRunning = false;
-        wallRunBlockedUntil = Time.time + wallRunReentryDelay;
-
-        if (jumpOff)
-        {
-            velocity += wallNormal * wallJumpAway;
-            velocity.y = wallJumpUp;
-            jumpPressedAt = -99f;
-
-            WallJumpEffects();
-        }
-        else
-        {
-            velocity += wallNormal * wallRunPassiveSeparation;
-        }
-    }
-
-    /// <summary>
     /// Air brake and ground slam, both off Walk entirely as of this pass.
     ///
     /// Ground pound moved first (see GroundPound's own doc comment) because landing is always
@@ -958,7 +848,7 @@ public class PlayerMovement : MonoBehaviour
     /// </summary>
     void UpdateAirAction(bool listening)
     {
-        if (listening || grounded || wallRunning || Grappling)
+        if (listening || grounded || Grappling)
             return;
 
         if (KeyBinds.Pressed(KeyBinds.Action.GroundPound) && Time.time >= groundSlamCooldownUntil)
@@ -992,16 +882,56 @@ public class PlayerMovement : MonoBehaviour
         GroundSlamStartEffects();
     }
 
+    /// <summary>
+    /// A second jump, mid-air, but only near a genuine ledge - replaces wall running entirely
+    /// (removed 2026-08-23, direct request) and is deliberately not the scripted vault that was
+    /// cut two passes before that ("make vaulting possible by doubling jumping" was tried, then
+    /// reported as still not working and removed rather than redesigned again). This isn't trying
+    /// to calculate a landing point and carry you to it - it's an ordinary jump impulse, gated on
+    /// a wall being in front of you, so the player's own momentum does the actual climbing.
+    ///
+    /// One raycast, not three: forward from roughly chest height. Good enough to tell "there's a
+    /// wall here, this reads as a ledge" without the landing-point/clearance maths that made the
+    /// old vault fragile - the failure mode of over-triggering (hopping when there's nothing to
+    /// climb) is far less costly than the old system's failure mode of never triggering at all.
+    /// </summary>
+    void TryLedgeHop()
+    {
+        if (ledgeHopUsedThisAirtime || Time.time < ledgeHopCooldownUntil)
+            return;
+
+        Vector3 origin = transform.position + Vector3.up * (controller.height * 0.3f);
+        Vector3 forward = transform.forward;
+
+        if (!Physics.Raycast(origin, forward, out RaycastHit hit, ledgeHopCheckDistance,
+                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            return;
+
+        // Only a genuine wall - near horizontal normal, same test the old wall run used. A steep
+        // ramp or a low ceiling shouldn't count as a ledge just because the ray happened to clip
+        // it.
+        if (Mathf.Abs(hit.normal.y) > 0.3f)
+            return;
+
+        ledgeHopUsedThisAirtime = true;
+        ledgeHopCooldownUntil = Time.time + ledgeHopCooldown;
+
+        velocity.y = ledgeHopUpSpeed;
+        velocity += forward * ledgeHopForwardSpeed;
+
+        LedgeHopEffects(hit.point);
+    }
+
     // ---------------------------------------------------------------- movement tech effects
     //
-    // One shared burst rather than four near-identical ParticleSystem setups - vault dust, a wall
-    // run's scuff, an air brake's kicked-back debris and a slam's landing ring only differ in the
-    // numbers passed in. Real particles with real velocity throughout, not a static billboard
-    // that fades in place - see BulletDecal.cs's own note on why that specifically reads as weak.
+    // One shared burst rather than a near-identical ParticleSystem setup per mechanic - the
+    // ledge hop's scramble dust, an air brake's kicked-back debris and a slam's landing ring
+    // only differ in the numbers passed in. Real particles with real velocity throughout, not a
+    // static billboard that fades in place - see BulletDecal.cs's own note on why that
+    // specifically reads as weak.
 
     static Material moveBurstMaterial;
     static Sprite[] moveBurstShapes;
-    float wallRunDustTimer;
 
     static Sprite MoveBurstShape(string prefix)
     {
@@ -1144,92 +1074,18 @@ public class PlayerMovement : MonoBehaviour
             PlayerController.BuildGroundSlamImpact(feet);
     }
 
-    void WallRunStartEffects()
-    {
-        MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
-                     3, 30f, 0.4f, 1f, 0.02f, 0.04f, 0.12f, 0.3f);
-    }
-
-    // Dust only - the audio half of running a wall moved to a continuous loop
-    // (UpdateWallRunScrape) instead of a one-shot fired every tick, which read as choppy machine-
-    // gunning of the same clip rather than a sustained sound. Kept as its own method rather than
-    // folded into the loop's own update, since dust wants a fixed cadence and volume wants to
-    // track speed/state continuously - two different things happening to share one timer badly.
-    void WallRunTickEffects(float dt)
-    {
-        wallRunDustTimer -= dt;
-
-        if (wallRunDustTimer > 0f)
-            return;
-
-        wallRunDustTimer = 0.14f;
-        MovementBurst(transform.position - wallNormal * 0.15f, wallNormal, DustTint, "spark",
-                     2, 25f, 0.3f, 0.8f, 0.02f, 0.04f, 0.1f, 0.3f);
-    }
-
-    void WallJumpEffects()
+    /// <summary>
+    /// Reuses AirBrake's fallback shape rather than opening a new empty bank folder for one more
+    /// movement-tech sound - a short, sharp effort noise fits a scramble-up-a-ledge moment about
+    /// as well as it fits a hard stop, and this is a one-shot, not a sustained loop like the wall
+    /// run scrape it replaced, so there's nothing here that needs its own bank the way that did.
+    /// </summary>
+    void LedgeHopEffects(Vector3 at)
     {
         Juice.Shake(0.25f);
-        GameAudio.PlayShaped(GameAudio.WallRun, 0.45f, 1.4f, GameAudio.Vine, 1.2f);
-    }
-
-    AudioClip[] wallRunClips;
-    AudioSource wallRunScrape;
-    bool wasWallRunning;
-    float wallRunAudioSeed;
-
-    /// <summary>
-    /// A continuous loop for as long as a wall run lasts, the same shape `SpeedRush` already uses
-    /// for the slide scrape - attack and release at different rates, a bit of Perlin wobble so a
-    /// long run doesn't sit at one dead-flat pitch. Replaced a one-shot fired every 0.14s, which
-    /// read as the same clip machine-gunning rather than a sustained sound, and which fell back to
-    /// the `Slide` bank - reported as sounding like an actual slide, which a wall run very much
-    /// isn't. Called every frame regardless of `wallRunning` so the volume can release smoothly
-    /// on the frame it ends, the same reason `SpeedRush.UpdateScrape` isn't gated either.
-    /// </summary>
-    void UpdateWallRunScrape()
-    {
-        if (wallRunClips == null)
-        {
-            wallRunClips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.WallRun);
-
-            if (wallRunClips.Length == 0)
-                wallRunClips = Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Vine);
-        }
-
-        if (wallRunClips.Length == 0)
-            return;
-
-        if (wallRunScrape == null)
-        {
-            wallRunScrape = gameObject.AddComponent<AudioSource>();
-            wallRunScrape.loop = true;
-            wallRunScrape.playOnAwake = false;
-            wallRunScrape.spatialBlend = 0f;
-            wallRunScrape.volume = 0f;
-            wallRunAudioSeed = Random.Range(0f, 100f);
-        }
-
-        if (wallRunning && !wasWallRunning)
-        {
-            wallRunScrape.clip = wallRunClips[Random.Range(0, wallRunClips.Length)];
-            wallRunScrape.Stop();
-            wallRunScrape.Play();
-        }
-
-        wasWallRunning = wallRunning;
-
-        float wanted = wallRunning ? 0.42f * GameSettings.SfxVolume : 0f;
-        float rate = wanted > wallRunScrape.volume ? 10f : 22f;
-        wallRunScrape.volume = Mathf.MoveTowards(wallRunScrape.volume, wanted, Time.deltaTime * rate);
-
-        float wobble = (Mathf.PerlinNoise(wallRunAudioSeed, Time.time * 1.6f) - 0.5f) * 0.1f;
-        wallRunScrape.pitch = 0.95f + wobble;
-
-        if (wallRunScrape.volume > 0.001f && !wallRunScrape.isPlaying)
-            wallRunScrape.Play();
-        else if (wallRunScrape.volume <= 0.001f && wallRunScrape.isPlaying)
-            wallRunScrape.Stop();
+        MovementBurst(at, transform.up, DustTint, "spark", 8, 45f, 1f, 2.5f,
+                     0.03f, 0.07f, 0.18f, 0.4f);
+        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 0.85f, GameAudio.Footstep, 1.3f);
     }
 
     void ApplyFriction(float dt)

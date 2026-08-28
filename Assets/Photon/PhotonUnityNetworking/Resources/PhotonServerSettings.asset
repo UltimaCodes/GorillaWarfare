@@ -42,6 +42,7 @@ MonoBehaviour:
   - RPC_ProjectileFired
   - RPC_Attach
   - RPC_Detach
+  - RPC_GroundSlamImpact
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

@@ -8,9 +8,10 @@ using UnityEngine.SceneManagement;
 // walls or spawn points.
 //
 // Climbable cliff clusters - real elevated ground built from the Kenney cliff kit, tall enough
-// to reward the movement tech built the same day (a jump alone gets partway, vault or a wall-run
-// off the rock face gets the rest, the vine gets there in one) - plus a denser scatter of the
-// existing prop kit for detail on the ground between them.
+// to reward the movement tech built the same day (a jump alone gets partway, the ledge hop or a
+// grapple gets the rest) - plus a denser scatter of the existing prop kit for detail on the
+// ground between them. Comment updated 2026-08-23 - wall running and vault were both cut after
+// this was written; the cliffs themselves didn't need to change.
 //
 // Re-runnable: everything this places lives under one "~MapExpansion" group, deleted and rebuilt
 // from scratch every run rather than accumulating - the same convention MapDressing already

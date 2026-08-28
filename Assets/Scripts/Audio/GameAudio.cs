@@ -89,15 +89,18 @@ public static class GameAudio
     public const float HeartbeatVolume = 0.55f;
 
     /// <summary>
-    /// The movement tech's own banks - air brake, wall run, ground slam. Added 2026-08-22
-    /// alongside the mechanics themselves. None of these have sourced audio yet, so every call
-    /// site pairs one of these with a fallback bank and an explicit pitch shift via `PlayShaped`
-    /// below, the same graceful-empty-folder pattern every other bank in this file already uses
-    /// (Shield falling back to Impact, Slide falling back to Footstep, and so on). Drop real
-    /// clips into any of these folders and they take over with no code change.
+    /// The movement tech's own banks - air brake, ground slam. Added 2026-08-22 alongside the
+    /// mechanics themselves. None of these have sourced audio yet, so every call site pairs one
+    /// of these with a fallback bank and an explicit pitch shift via `PlayShaped` below, the same
+    /// graceful-empty-folder pattern every other bank in this file already uses (Shield falling
+    /// back to Impact, Slide falling back to Footstep, and so on). Drop real clips into any of
+    /// these folders and they take over with no code change.
+    ///
+    /// WallRun was here too until wall running was removed entirely 2026-08-23 - its replacement,
+    /// the ledge hop, is a one-shot rather than a sustained loop and reuses AirBrake's own
+    /// fallback instead of needing a folder of its own.
     /// </summary>
     public const string AirBrake = "AirBrake";
-    public const string WallRun = "WallRun";
     public const string Slam = "Slam";
 
     // One place for how loud everything is, rather than a number at each call site.
