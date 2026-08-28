@@ -1144,3 +1144,59 @@ entirely.
 Both verified with real renders at each step rather than trusted from the radius maths alone -
 the pineapple specifically would have been fixed wrong (bigger, again) if the second render
 hadn't shown the actual problem was colour intensity, not size.
+
+# Fifteenth pass — a full cleanup and bug sweep, 2026-08-23
+
+Asked directly to confirm the earlier cleanup sweep actually covered the whole project, plus a
+bug sweep alongside it. Checked every one of the 53 `Assets/Scripts` files and the ~35
+`Assets/Editor` tools against scene/prefab GUIDs, `AddComponent`/`GetComponent` call sites, and
+`Resources.Load`/`[MenuItem]` string references - not just a grep for the class name, which this
+project's own heavy use of runtime `AddComponent` and static factories has already proven
+produces false positives more than once this session.
+
+## The cleanup itself: nothing left to remove
+
+All 53 scripts are live - every one resolves to a scene/prefab GUID, a runtime `AddComponent<T>`,
+a static factory (`Projectile.Launch`, `TrainingDummy.Build`), or a base-class/field-type
+reference. All ~35 editor tools are either the permanent check suite or genuinely re-runnable
+maintenance tools written idempotent on purpose (the established convention in this codebase -
+see `StripRoomManagerView.cs`/`HitboxProfileSeed.cs`, both "already applied, but cheap insurance
+if the fix is ever undone by hand"). `Assets/Resources/Audio` has no orphaned `WallRun` folder or
+any other bank without a matching `GameAudio.cs` constant, and no empty directories anywhere
+under `Assets/Resources` - the wall-run/vault removal earlier this session was already clean.
+
+One genuinely dead field found and removed: **`PlayerController.mouseSensitivity`** - serialized
+on the player prefab, never read anywhere in code. `Look()` uses `GameSettings.Sensitivity`
+instead, a separate persisted setting that replaced it at some point without this leftover ever
+being cleaned up.
+
+## The bug sweep: one real, currently-masked bug
+
+**`PlayerController.ShieldBreak()`** called `GameAudio.PlayPitched(GameAudio.Impact, null,
+GameAudio.ShieldVolume, 1.9f)` as its fallback when the `Shield` audio bank is empty.
+`PlayPitched(bank, clipName, ...)` always wants a *specific* clip name - it calls the two-argument
+`Pick(bank, clipName)` overload, which does `Resources.Load<AudioClip>($"Audio/{bank}/{clipName}")`.
+With `clipName` null, C# string interpolation turns that into `"Audio/Impact/"` - a path with
+nothing after the trailing slash, which can never resolve to a real asset. The fallback this
+method's own doc comment promises ("falling back to something breakage-shaped if no clip has been
+dropped in yet") could never actually fire.
+
+Why nobody noticed: `Assets/Resources/Audio/Shield/` has real clips today, so the primary branch
+always wins and the broken fallback path never runs. It was a landmine sitting under a folder
+that happens to be full right now - the moment `Shield` is ever emptied or renamed, shield breaks
+would go silent (with a misleading `No clip Audio/Impact/` warning in the log) instead of falling
+back the way the code claims to.
+
+Fixed by replacing the whole two-branch method (which also hand-checked `Resources.LoadAll`
+*uncached*, re-scanning the folder on every single shield break) with one call to
+`GameAudio.PlayShaped(GameAudio.Shield, GameAudio.ShieldVolume, 1f, GameAudio.Impact, 1.9f)` -
+`PlayShaped` is already the established helper for exactly this "bank, with a fallback bank and
+an explicit pitch" shape, used the same way for the air brake and the ledge hop's own fallback
+sounds, and it caches the same way `Pick()` does.
+
+Also checked and found clean: `PhotonServerSettings.asset`'s `RpcList` has all seven current
+`[PunRPC]` methods present (confirms `RPC_GroundSlamImpact` registered correctly on its own,
+matching the ninth pass's expectation). Two stale entries remain in the list from before this
+session (`ClickRpc`, `DestroyRpc` - PUN demo leftovers, already noted as harmless in the second
+pass: an unmatched list entry costs nothing, only a *missing* one would). Left alone rather than
+hand-edited - not worth the risk to a Photon-internal asset for a purely cosmetic two-line cleanup.

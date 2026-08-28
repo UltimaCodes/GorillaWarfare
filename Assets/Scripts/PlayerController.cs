@@ -7,7 +7,6 @@ using Photon.Realtime;
 
 public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObservable
 {
-    [SerializeField] float mouseSensitivity = 3f;
     [SerializeField] GameObject cameraHolder;
 
     [Tooltip("Metres the camera drops at full crouch/slide, eased with PlayerMovement's own "
@@ -1273,15 +1272,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// pitching a sourced clip is arranging, and the alternative has been tried and rejected
     /// four times.
     /// </summary>
+    // Was two branches, hand-checking Resources.LoadAll (uncached, re-scanning the folder on
+    // every single shield break) to decide between them. Found during a bug sweep 2026-08-23:
+    // the fallback branch called GameAudio.PlayPitched(GameAudio.Impact, null, ...), and
+    // PlayPitched always wants a specific clip name - a null one interpolates to a bare
+    // "Audio/Impact/" path that Resources.Load can never resolve, so the fallback this comment
+    // has always promised could never actually play. Silent because Shield has real clips today;
+    // the moment that folder is ever emptied, shield breaks would have gone silent (with a
+    // misleading "No clip Audio/Impact/" warning) instead of falling back as documented.
+    // PlayShaped already is the bank-with-a-fallback-bank helper every other movement-tech sound
+    // in the project uses for exactly this shape, and it caches the same way Pick() does.
     void ShieldBreak()
     {
-        if (Resources.LoadAll<AudioClip>("Audio/" + GameAudio.Shield).Length > 0)
-        {
-            GameAudio.Play2D(GameAudio.Shield, GameAudio.ShieldVolume, 0.05f);
-            return;
-        }
-
-        GameAudio.PlayPitched(GameAudio.Impact, null, GameAudio.ShieldVolume, 1.9f);
+        GameAudio.PlayShaped(GameAudio.Shield, GameAudio.ShieldVolume, 1f, GameAudio.Impact, 1.9f);
     }
 
     [Header("Spawning")]

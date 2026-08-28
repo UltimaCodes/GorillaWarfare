@@ -267,7 +267,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3bbafd4cbcb872549997d3d7eb299774, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mouseSensitivity: 3
   cameraHolder: {fileID: 2293998585120115180}
   crouchCameraDrop: 0.35
   items: []
