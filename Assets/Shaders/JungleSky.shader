@@ -1,9 +1,17 @@
-// A soft, painterly daytime sky - a smooth blue gradient, wispy streaked cloud cover built from
-// layered noise, and a glowing sun with a soft halo. Replaced the flat-banded jungle-canopy sky
-// entirely 2026-08-23, direct request against a reference screenshot: this one reads as an open
-// sky over the map rather than a canopy pressing down on it, which is a different mood on
-// purpose - kept the file/shader name so nothing that already points at "Skybox/JungleSky"
-// (SkyboxPhotographer.cs, the JungleSky.mat asset) needed to change.
+// A pixelated, retro-styled daytime sky - a blue gradient, wispy streaked cloud cover built from
+// layered noise, and a glowing sun with a soft halo, all rendered in visible chunky blocks with a
+// reduced colour palette rather than smooth continuous shading. Replaced the flat-banded jungle-
+// canopy sky entirely 2026-08-23, direct request against a reference screenshot - kept the
+// file/shader name so nothing that already points at "Skybox/JungleSky" (SkyboxPhotographer.cs,
+// the JungleSky.mat asset) needed to change.
+//
+// First pass at this (same day) rendered the gradient/clouds/sun smooth and continuous - correct
+// shapes, wrong texture entirely, reported back as missing the reference's actual pixelated
+// quality. Fixed by snapping the view direction itself to a coarse grid before any of the
+// gradient/cloud/sun maths runs, so adjacent screen pixels that land in the same cell come out
+// bit-identical - and by posterizing the final colour to a small number of steps per channel,
+// which is what keeps a retro sky from just being blurry blocks of an otherwise infinite-
+// precision gradient.
 //
 // No source photography or texture to build a cubemap from, same reasoning the original had -
 // this is entirely procedural, a gradient plus hand-rolled value noise, built as a skybox shader
@@ -59,6 +67,18 @@ Shader "Skybox/JungleSky"
         // bright sticker pasted onto an otherwise indifferent sky. Retuned alongside the halo,
         // same reason - was contributing to the same washed-out look.
         [Range(0.0, 1.0)] _SunScatter ("Sky brightening near sun", Float) = 0.16
+
+        [Header(Pixelation)]
+        // How many cells the view direction is snapped to before anything else runs. Lower = big,
+        // obvious blocks (an early N64/PS1 sky); higher = a subtler chunky texture rather than a
+        // smooth one. Not a screen-space pixel count - this quantises the direction vector
+        // itself, so cell size is roughly constant across most of the dome but isn't a literal
+        // grid of on-screen pixels.
+        [Range(16, 200)] _PixelGrid ("Pixel grid density", Float) = 56
+        // Colour steps per channel after everything else is computed. Low = a genuinely limited,
+        // retro-console-era palette; the gradient still reads as a gradient, just a steppy one
+        // instead of an infinite-precision blend.
+        [Range(4, 64)] _ColorLevels ("Colour levels", Float) = 14
     }
 
     SubShader
@@ -96,6 +116,9 @@ Shader "Skybox/JungleSky"
             float _SunHaloSize;
             float _SunHaloIntensity;
             float _SunScatter;
+
+            float _PixelGrid;
+            float _ColorLevels;
 
             struct appdata
             {
@@ -171,6 +194,12 @@ Shader "Skybox/JungleSky"
             {
                 float3 dir = normalize(i.dir);
 
+                // Retro pixelation: snap the direction to a coarse grid before any gradient,
+                // cloud or sun maths touches it, so whole patches of sky come out bit-identical
+                // instead of shading continuously - the chunky, low-res quality that made the
+                // first (smooth) pass read as wrong even though the shapes were right.
+                dir = normalize((floor(dir * _PixelGrid + 0.5)) / max(1.0, _PixelGrid));
+
                 // Smooth three-stop gradient rather than a hard band boundary - a photographic
                 // sky's colour change is continuous, not stepped.
                 float t = saturate(dir.y / max(0.05, _GradientHeight));
@@ -233,6 +262,12 @@ Shader "Skybox/JungleSky"
                 float core = pow(sunDot, _SunSize);
                 float halo = pow(sunDot, max(1.0, _SunHaloSize)) * _SunHaloIntensity;
                 sky += _SunColor.rgb * (core + halo);
+
+                // Posterize last, after the sun's added - a limited palette is the other half of
+                // "retro", separate from the blocky shapes above. Without this the direction-grid
+                // quantisation alone still leaves an effectively continuous colour ramp between
+                // cells, which reads as blurry/low-res rather than genuinely retro.
+                sky = floor(sky * _ColorLevels + 0.5) / _ColorLevels;
 
                 return fixed4(sky, 1);
             }
