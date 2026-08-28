@@ -1307,3 +1307,83 @@ plate and both frames now sit exactly under "140" and "12"/"6" respectively.
 
 Full `PlayModeProbe` and `SceneCheck` both still pass - neither the weight-scaled audio/flash
 change nor the HUD rework touched anything either suite actually asserts on.
+
+# Seventeenth pass — the HUD, actually landed this time, 2026-08-29
+
+Direct continuation of the sixteenth pass's HUD rework, same day - that pass's actual result was
+rejected hard and repeatedly. Recorded in full because the sequence of wrong turns is exactly the
+kind of thing worth not repeating.
+
+## What went wrong, in order
+
+**First reaction:** "font is pretty bad and I still dont like these visuals... I HATE the font."
+The sixteenth pass's plates-and-brackets treatment read as a tactical shooter's HUD (Counter-
+Strike, Valorant - "youre leaning too much into the CS2 vibe"), not ULTRAKILL or Cruelty Squad.
+Sent a pile of real reference screenshots across a dozen different games rather than more
+description, which is the actual useful signal in this whole pass - ULTRAKILL's own HUD is thin
+glowing outlines and clean type over the scene, nothing like a solid black bracketed box.
+
+**Second attempt:** dropped the plates and brackets for a thin neon-glow-outline treatment,
+shown as an HTML/CSS mockup rather than built in the actual project. Reaction: liked the
+direction (away from tactical-HUD), but "I DO NOT LIKE THE GLOW LINE," the text read as generic,
+and the layout was wrong too - three separate complaints landing on one attempt.
+
+**Third attempt**, after a two-question `AskUserQuestion` to narrow "pixelated but not too NES"
+and "how much chrome": swapped the glow for a posterised halo (hard colour rings instead of a
+soft blur, the skybox's own quantise-not-blur move at a much smaller scale), still as an HTML
+mockup. Reaction: **"what the fuck is this, dont make html demos man youre really bad at doing
+this... REALLY think this time."** The medium itself was the problem, not just that attempt - a
+CSS approximation doesn't render with TMP's actual SDF font pipeline, doesn't show the game's own
+toon-outline shader sitting next to it, and asking for reactions to a fake kept every round
+one layer removed from what would actually ship. Should have gone straight to Unity and a real
+screenshot the first time a font was on the table.
+
+## What actually shipped
+
+**A real font, sourced and built for real.** Tried to fetch `m6x11` (Daniel Linssen, the font
+Celeste uses) from itch.io first - its download is gated behind async JS calling a session-scoped
+API `managore.itch.io/m6x11` never exposes in static HTML, and neither a direct `fetch` from the
+page's own context nor a guessed endpoint (`/file/<upload_id>?source=game_download`, tried on
+both the subdomain and `itch.io` proper) returned anything but a 404 or a CORS failure. Abandoned
+rather than keep guessing at a private API. **Jersey 10** instead - Google Fonts, OFL licensed,
+its raw TTF sitting at a stable, directly-curlable GitHub path
+(`google/fonts/main/ofl/jersey10/Jersey10-Regular.ttf`) - a condensed display face built on a
+pixel grid without being an 8x8 arcade font, which is what "pixelated but not too NES" actually
+asks for. Downloaded straight into `Assets/Fonts/Jersey10/` alongside its `OFL.txt`, built through
+the existing `FontAssetBuilder`, no new tooling needed.
+
+**`HudBuilder.FindFont()`** now looks for `Jersey10` instead of `Helvetica Punk` - in-match HUD
+only, menus untouched per Ryaan's own instruction not to touch those yet even though he's said
+directly he wants Helvetica Punk gone from the project eventually.
+
+**The plates, brackets and scanline overlay from the sixteenth pass, all removed outright**
+rather than retuned - `Image(..., "Backer", ...)` and `CornerFrame(...)` deleted from both the
+health and ammo blocks, the `Scanlines` image and its `BuildScanlineTexture` generator deleted
+entirely, `CornerFrame`/`CornerTick` deleted as now-dead code. Replaced with a single move applied
+to every label the HUD builds: `HudBuilder.Text()` now sets a hard SDF outline
+(`ShaderUtilities.ID_OutlineWidth`/`ID_OutlineColor`) on every `TMP_Text` it creates, by default,
+in one place - the same thing `ScreenOutline` already does to every 3D object in view, so the HUD
+is drawn in the game's own ink instead of a convention borrowed from another game's UI.
+
+**Two more fixes that only showed up once actually rendered**, both from mid-turn messages
+reacting to the real screenshot as it happened:
+
+- *"dont use colors that clash with the map colors... try using borders on text, dont make it
+  raw."* The first real render (0.2 outline width) showed exactly that: `140` in the health
+  colour sat nearly unreadable against grass, the outline present but too thin to read as a
+  border rather than a hairline. Raised to 0.38 - a proper cartoon sticker edge, not a line.
+- *"i do not like the healthbar at all, it looks REALLY flat even now, there is literally ZERO
+  depth to it."* True independent of the outline fix - `Fill` was and had always been a single
+  flat `Image` with a solid colour, going back to the original M5 build, and nothing in any pass
+  this session had ever touched it. Added a solid black frame round the whole track (a
+  background-behind-foreground border, not `UnityEngine.UI.Outline` - that component only offsets
+  a copy in one direction, which is right for the crosshair ticks it was built for and wrong for
+  framing all four sides of a bar) and a highlight strip stretched across the top half of `Fill`
+  itself, anchored so it tracks whatever width `GameHud.UpdateHealth` resizes the bar to at
+  runtime without any code on the `GameHud` side needing to know it exists.
+
+Verified with a real offline-match screenshot after every change, using `HudPhotographer.cs`
+(built during the sixteenth pass, reused here) - not the CSS mockups that were the whole reason
+this pass took three extra rounds. `SceneCheck` and the full `PlayModeProbe` suite both still
+pass; neither exercises the visual treatment directly, but both confirm nothing about the HUD's
+actual wiring or runtime behaviour broke underneath it.

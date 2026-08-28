@@ -125,18 +125,21 @@ public static class HudBuilder
         GameObject health = Panel(rootObject.transform, "Health", BottomLeft, BottomLeft, BottomLeft,
                                   new Vector2(48f, 48f), Vector2.zero, null);
 
-        // A hard black slab under the number and the bar, not the soft 0.55-alpha panel the
-        // track alone used to sit on. Cruelty Squad and ULTRAKILL both read their numbers off a
-        // solid plate rather than floating them over whatever the camera happens to be pointed
-        // at - legibility as a style choice, not just a contrast fix.
-        Image(health.transform, "Backer", BottomLeft, BottomLeft, BottomLeft,
-              new Vector2(-16f, -46f), new Vector2(360f, 192f), new Color(0f, 0f, 0f, 0.78f));
-
         TMP_Text healthNumber = Text(health.transform, "Number", font, 76f,
                                      TextAlignmentOptions.BottomLeft, BottomLeft,
                                      new Vector2(0f, 44f), new Vector2(300f, 90f));
         healthNumber.text = "140";
         healthNumber.characterSpacing = 3f;
+
+        // A solid black frame round the whole bar - reported as reading completely flat, and a
+        // colour block with no edge is exactly that, wherever it happens to sit over the map.
+        // A plain background-behind-foreground border rather than a UI Outline component: the
+        // built-in Outline only offsets a copy in one direction (right for the crosshair ticks
+        // it was built for), which reads as a drop shadow, not a frame round all four sides.
+        const float trackBorder = 4f;
+        Image(health.transform, "TrackBorder", BottomLeft, BottomLeft, BottomLeft,
+              new Vector2(-trackBorder, -trackBorder),
+              new Vector2(460f + trackBorder * 2f, 24f + trackBorder * 2f), Color.black);
 
         // The track is the full bar including the overshield stretch; the fill and the shield
         // are sized against it at runtime, so widening this one rect rescales the whole thing.
@@ -146,6 +149,15 @@ public static class HudBuilder
 
         Image fill = Image(track, "Fill", BottomLeft, BottomLeft, BottomLeft,
                            new Vector2(0f, 0f), new Vector2(322f, 24f), new Color(0.55f, 1f, 0.1f));
+
+        // A lighter strip along the top half, stretched to always cover exactly that much of
+        // `fill` regardless of how GameHud resizes it at runtime (stretch anchors read the
+        // parent's *current* rect, not the size it was built at) - what actually reads as
+        // volume rather than a flat swatch, the same top-lit-pill shape most game health bars
+        // use. Not raycast-blocking, not wired anywhere - purely decorative, sits on the fill
+        // it was born on and moves with it for free.
+        Image(fill.transform, "Shine", new Vector2(0f, 0.5f), Vector2.one, Center,
+              Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.3f));
 
         Image shield = Image(track, "Shield", BottomLeft, BottomLeft, BottomLeft,
                              new Vector2(322f, 0f), new Vector2(0f, 24f), new Color(0.35f, 0.8f, 1f));
@@ -161,14 +173,6 @@ public static class HudBuilder
                              TextAlignmentOptions.BottomLeft, BottomLeft,
                              new Vector2(310f, 44f), new Vector2(200f, 50f));
         heal.text = "+35";
-
-        // A viewfinder frame round the number and the bar - four short right-angle ticks rather
-        // than a full outline, so it reads as instrumentation clamped round the readout instead
-        // of boxing it in. This is the one move a colour or font change alone can't make: both
-        // reference HUDs corner their numbers rather than just printing them. Matches the
-        // backer's own bounds exactly, so the plate and the frame read as one object.
-        CornerFrame(health.transform, BottomLeft, new Vector2(-16f, -46f), new Vector2(344f, 146f),
-                   22f, 3f, new Color(0.5f, 1f, 0.1f, 0.9f));
 
         // ---------------------------------------------------------------- ladder, above health
         GameObject ladder = Panel(rootObject.transform, "Ladder", BottomLeft, BottomLeft, BottomLeft,
@@ -192,19 +196,6 @@ public static class HudBuilder
         GameObject ammo = Panel(rootObject.transform, "Ammo", BottomRight, BottomRight, BottomRight,
                                 new Vector2(-48f, 48f), Vector2.zero, null);
 
-        // Same hard plate as the health cluster, mirrored. Sized to the round count and the
-        // spare tally, not to the weapon name's own generous box - the name is a label floating
-        // above the frame the same way the streak floats below health's.
-        //
-        // A BottomRight pivot places anchoredPosition at the rect's own right edge and grows the
-        // box *leftward* from there (size subtracted, not added) - the mirror image of health's
-        // BottomLeft maths, not the same formula with a sign left unflipped. Got this wrong on
-        // the first pass (grew it rightward, same as health) and only caught it because a render
-        // showed the plate sitting a full panel-width away from "30"/"5" - exactly the kind of
-        // wrong-until-rendered bug this project's whole HUD math has form for.
-        Image(ammo.transform, "Backer", BottomRight, BottomRight, BottomRight,
-              new Vector2(20f, -14f), new Vector2(280f, 168f), new Color(0f, 0f, 0f, 0.78f));
-
         TMP_Text weaponName = Text(ammo.transform, "Name", font, 30f,
                                    TextAlignmentOptions.BottomRight, BottomRight,
                                    new Vector2(0f, 150f), new Vector2(560f, 36f));
@@ -224,13 +215,6 @@ public static class HudBuilder
                               new Vector2(0f, 14f), new Vector2(120f, 56f));
         spare.text = "5";
         spare.color = new Color(1f, 1f, 1f, 0.55f);
-
-        // Magenta rather than health's green - the same accent kills and streaks use. Two tones
-        // rather than four or five is what keeps a HUD like this readable instead of just loud:
-        // green is you, magenta is anything about hurting someone else, and ammo is squarely the
-        // second one. Bounds match the backer above exactly, same as health's frame matches its.
-        CornerFrame(ammo.transform, BottomRight, new Vector2(-260f, -14f), new Vector2(20f, 154f),
-                   22f, 3f, new Color(1f, 0.12f, 0.58f, 0.9f));
 
         // ---------------------------------------------------------------- clock, top centre
         GameObject top = Panel(rootObject.transform, "Match", TopCenter, TopCenter, TopCenter,
@@ -395,18 +379,6 @@ public static class HudBuilder
         Wire(so, "damageTemplate", damageRow);
         Wire(so, "arrowContainer", (RectTransform)bearings.transform);
         Wire(so, "arrowTemplate", arrow);
-
-        // ---------------------------------------------------------------- scanlines
-        // Last child, so it draws over literally everything else the HUD does. A faint dark row
-        // every second pixel, built the same way BuildScopeMask is - point filtered rather than
-        // blurred, the same "quantise, don't soften" call the skybox pixelation already made -
-        // so it reads as a screen the readout is being displayed on rather than a haze over it.
-        // Not wired to GameHud: nothing about it changes at runtime, so it needs no field.
-        Image scanlines = Image(rootObject.transform, "Scanlines", Vector2.zero, Vector2.one,
-                                Center, Vector2.zero, Vector2.zero, Color.white);
-        scanlines.raycastTarget = false;
-        scanlines.sprite = Sprite.Create(BuildScanlineTexture(1080),
-                                         new UnityEngine.Rect(0f, 0f, 4f, 1080f), new Vector2(0.5f, 0.5f));
 
         so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -690,67 +662,6 @@ public static class HudBuilder
         return Image(parent, name, Center, Center, Center, position, size, Color.white);
     }
 
-    /// <summary>
-    /// A viewfinder frame round a cluster of readouts - four short right-angle ticks at the
-    /// corners of a box rather than a full outline, so it reads as instrumentation clamped round
-    /// the numbers instead of boxing them in.
-    ///
-    /// min/max are in the same local anchored-position space the caller's own children already
-    /// use, so the same call works for a bottom-left cluster (health) and a bottom-right one
-    /// (ammo) without either side having to mirror coordinates by hand - `anchor` is whatever
-    /// anchor/pivot the caller's other children were built with.
-    /// </summary>
-    static void CornerFrame(Transform parent, Vector2 anchor, Vector2 min, Vector2 max,
-                            float arm, float thickness, Color colour)
-    {
-        CornerTick(parent, anchor, new Vector2(min.x, min.y), arm, thickness, colour, 1, 1);
-        CornerTick(parent, anchor, new Vector2(max.x, min.y), arm, thickness, colour, -1, 1);
-        CornerTick(parent, anchor, new Vector2(min.x, max.y), arm, thickness, colour, 1, -1);
-        CornerTick(parent, anchor, new Vector2(max.x, max.y), arm, thickness, colour, -1, -1);
-    }
-
-    /// One corner of a CornerFrame: two short bars meeting at `corner`, each extending inward
-    /// along one axis by `sign` so all four corners lean into the box rather than out of it.
-    static void CornerTick(Transform parent, Vector2 anchor, Vector2 corner, float arm,
-                           float thickness, Color colour, int signX, int signY)
-    {
-        Image(parent, "~frameH", anchor, anchor, Center,
-             corner + new Vector2(signX * arm * 0.5f, 0f), new Vector2(arm, thickness), colour);
-
-        Image(parent, "~frameV", anchor, anchor, Center,
-             corner + new Vector2(0f, signY * arm * 0.5f), new Vector2(thickness, arm), colour);
-    }
-
-    /// <summary>
-    /// A faint horizontal line on every second row, for the scanline overlay.
-    ///
-    /// Point filtered and built from real alternating pixels rather than a shader, the same
-    /// "quantise, don't blur" approach GameHud.BuildScopeMask and the skybox pixelation already
-    /// use - a soft scanline reads as compression noise, a hard one reads as a screen.
-    /// </summary>
-    static Texture2D BuildScanlineTexture(int height)
-    {
-        Texture2D texture = new Texture2D(4, height, TextureFormat.RGBA32, false) { name = "~scanlines" };
-        Color[] pixels = new Color[4 * height];
-
-        for (int y = 0; y < height; y++)
-        {
-            // Every second row a hair darker rather than solid black - a scanline is the gap
-            // between phosphor rows, not a grid printed over the picture.
-            Color c = new Color(0f, 0f, 0f, (y & 1) == 0 ? 0.05f : 0f);
-
-            for (int x = 0; x < 4; x++)
-                pixels[y * 4 + x] = c;
-        }
-
-        texture.SetPixels(pixels);
-        texture.Apply();
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-
-        return texture;
-    }
-
     /// A stack that lays its own children out top down. The feed and the standings both grow
     /// and shrink by rows, and a layout group means neither has to compute row heights from a
     /// font size that the editor is free to change.
@@ -770,6 +681,15 @@ public static class HudBuilder
         return (RectTransform)go.transform;
     }
 
+    // A near-black rather than pure black, matched to the same edge colour the world's own toon
+    // outline shader draws - the HUD's text reads as drawn in the same ink as everything else on
+    // screen instead of borrowing a convention from another game's UI.
+    static readonly Color OutlineColour = new Color(0.07f, 0.08f, 0.1f);
+
+    // Raised from 0.2 - reported as reading "raw" against the map's own grass and wood, which a
+    // thin line doesn't fix. This is a proper cartoon sticker border now, not a hairline.
+    const float OutlineWidth = 0.38f;
+
     static TMP_Text Text(Transform parent, string name, TMP_FontAsset font, float size,
                          TextAlignmentOptions alignment, Vector2 anchor,
                          Vector2 position, Vector2 dimensions)
@@ -787,6 +707,17 @@ public static class HudBuilder
         if (font != null)
             text.font = font;
 
+        // A hard cartoon outline on every label by default, the same move `ScreenOutline`
+        // already makes on every 3D object in view - a HUD drawn in a different visual language
+        // to the rest of the game is what read as "generic" no matter which font sat behind it.
+        // Each label gets its own material instance (`fontMaterial` does this on first access),
+        // which costs a draw call each rather than batching - fine here, the HUD is a couple of
+        // dozen labels, not thousands.
+        Material material = text.fontMaterial;
+        material.SetColor(ShaderUtilities.ID_OutlineColor, OutlineColour);
+        material.SetFloat(ShaderUtilities.ID_OutlineWidth, OutlineWidth);
+        text.fontMaterial = material;
+
         RectTransform rect = (RectTransform)go.transform;
         rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
         rect.anchoredPosition = position;
@@ -796,12 +727,11 @@ public static class HudBuilder
     }
 
     /// <summary>
-    /// Prefers Helvetica Punk out of the four fonts in the project.
-    ///
-    /// It's the only one of them a number is legible in at a glance - Chomsky is blackletter,
-    /// The Wildeast is a western slab and Bring Me A Helicopter is a display face. A HUD is read
-    /// in the corner of your eye while someone is shooting at you, so this is the one that
-    /// works; the other three are still a dropdown away if that's the wrong call.
+    /// Jersey 10 - a condensed, chunky display face built on a pixel grid without being an 8x8
+    /// arcade font. Replaces Helvetica Punk here specifically: reported directly as not fitting
+    /// the game's own cartoon-retro direction (the skybox's posterised, faceted look, not a
+    /// tactical shooter's stencil). Menus stay on Helvetica Punk/Chomsky for now - this only
+    /// changes what the in-match HUD itself builds with.
     /// </summary>
     static TMP_FontAsset FindFont()
     {
@@ -809,7 +739,7 @@ public static class HudBuilder
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
 
-            if (path.Contains("Helvetica Punk"))
+            if (path.Contains("Jersey10"))
                 return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
         }
 

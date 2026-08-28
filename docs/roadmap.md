@@ -263,13 +263,13 @@ The big aesthetic one. See the philosophy section above.
       a real Canvas built into the game scene by `HudBuilder`, so every position, size, colour
       and font is scene data rather than a constant in an `OnGUI` call
 - [x] Mode selector as real objects, for the same reason
-- [x] Four fonts imported with TextMeshPro assets built (`FontAssetBuilder`). The HUD defaults
-      to Helvetica Punk — the only one of the four a number is legible in at a glance. Revisited
-      2026-08-29 when the HUD was reported as not matching the CS/ULTRAKILL direction and asked
-      to find a better one - rendered specimen crops of all four rather than picking from memory,
-      and Helvetica Punk is still the right call: it's the one genuinely industrial/stencil face
-      in the set, the other three (blackletter, western slab, horror display) were never really
-      in contention for a HUD read at a glance mid-fight. The mismatch wasn't the font.
+- [x] Five fonts now, four imported originally plus **Jersey 10** added 2026-08-29
+      (`Assets/Fonts/Jersey10`, Google Fonts, OFL). Helvetica Punk was defended in an earlier pass
+      of this same day as "the only one of four a number is legible at a glance," reasoning that
+      held up against the other three but missed the actual ask - hated directly and specifically,
+      as its own complaint separate from the plates/brackets/glow that also got rejected. Jersey
+      10 replaces it for the in-match HUD only; menus stay on Helvetica Punk/Chomsky for now, per
+      Ryaan's own request not to touch that side yet.
 - [x] Hitmarkers (headshots read differently)
 - [x] Health as ten blocks and an oversized number, flat saturated colour, stepping rather than
       sliding. The old screen space bar is out of the prefab
@@ -305,20 +305,34 @@ two feeds would either overlap or need a third thing to arbitrate.
       drove the canvas's own RectTransform directly and did nothing at all - Unity ignores an
       overlay canvas's own transform when placing it. Fixed 2026-08-23 by shaking a child
       RectTransform instead, which has no such exemption - see `bug-log.md`'s ninth pass.
-- [x] **CS/ULTRAKILL HUD pass** — reported 2026-08-29 as not matching the design philosophy above
-      (it was never actually checked against it since M5 first shipped, just built functional and
-      left). The gameplay HUD only — menus are Ryaan's own. `GameHud`'s palette pushed off the
-      soft traffic-light green/yellow/red toward the harsher, less pastel one the philosophy
-      section already asked for; `killColour` specifically goes from orange to a hot magenta, the
-      one hue both reference games reach for on anything about hurting someone rather than your
-      own status. Health and ammo - the two always-on readouts - now sit on a solid black plate
-      instead of floating over the game, framed by four short corner ticks (green for health,
-      magenta for ammo) rather than a full box, which is the one move a colour or font change
-      alone can't make: both references corner their numbers rather than just printing them. A
-      faint scanline overlay (alpha 0.05 every second row, point filtered rather than blurred -
-      same "quantise, don't soften" call the skybox pixelation already made) sits over the whole
-      canvas. Verified by an actual screenshot, not eyeballed math - see `bug-log.md`'s sixteenth
-      pass for the ammo-frame bug that render caught.
+- [x] **The in-game HUD's visual language, reworked** — reported 2026-08-29 as not matching this
+      file's own design philosophy above (never actually checked against it since M5 first
+      shipped, just built functional and left). The gameplay HUD only — menus are Ryaan's own.
+      Took three attempts to land, all logged in `bug-log.md`'s sixteenth pass:
+      1. A first pass built the HUD out of solid black plates and hard corner brackets, styled
+         after a reading of "ULTRAKILL/Cruelty Squad" that turned out to be closer to a tactical
+         shooter's HUD (Counter-Strike, Valorant) than either reference actually looks like -
+         rejected directly as leaning into that vibe rather than away from it.
+      2. Shown as HTML/CSS mockups rather than built in Unity, on the theory that iterating in a
+         browser would be cheaper than round-tripping the engine - rejected for the medium itself,
+         not just the specific attempts: a CSS approximation doesn't render like TMP's actual SDF
+         font pipeline, and re-litigating font and layout choices against a fake informed nothing
+         real. Should have gone to Unity and a real screenshot from the first attempt.
+      3. Built for real. **Jersey 10** (Google/Fonts, OFL, `Assets/Fonts/Jersey10`) replaces
+         Helvetica Punk for the in-match HUD specifically - a condensed display face built on a
+         pixel grid without being an 8x8 arcade font, closer to the skybox's own posterised,
+         faceted retro than a literal NES look. Every label TMP builds in `HudBuilder.Text()` gets
+         a hard black SDF outline by default (`ShaderUtilities.ID_OutlineWidth/Color`) rather than
+         floating raw - the same move `ScreenOutline` already makes on every 3D object in view, so
+         the HUD reads as drawn in the game's own ink instead of borrowing another game's chrome.
+         No plates, no brackets, no glow, no scanline overlay - all removed. The health bar got a
+         hard black frame and a stretched highlight strip along its top half (reads as a flat
+         swatch otherwise, reported directly - a colour block with no edge is exactly that,
+         wherever it sits over the map).
+      Verified each time by an actual screenshot of a real offline match
+      (`Assets/Editor/HudPhotographer.cs`, kept as a permanent tool), not eyeballed math or a
+      browser preview - see the sixteenth pass for the ammo-frame sign error and the flat-bar
+      complaint that only showed up once rendered for real.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
