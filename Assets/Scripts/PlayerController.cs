@@ -1416,16 +1416,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // all shouting about it.
         byte flavour = (byte)Random.Range(0, 256);
 
-        PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot, flavour);
+        // Position and rotation travel with the RPC rather than being read off `transform` once
+        // it arrives - the victim's own client destroys this object (via HandleLocalDeath, right
+        // below) in the same breath that sends this, and there's no guarantee the corpse would
+        // still find a live transform to read from by the time the RPC is actually processed.
+        PV.RPC(nameof(RPC_Died), RpcTarget.All, killerActor, weapon ?? string.Empty, headshot, flavour,
+              transform.position, transform.rotation);
 
         if (RoomManager.Instance != null)
             RoomManager.Instance.HandleLocalDeath(transform.position, transform.forward, killer);
     }
 
     [PunRPC]
-    void RPC_Died(int killerActor, string weapon, bool headshot, byte flavour)
+    void RPC_Died(int killerActor, string weapon, bool headshot, byte flavour,
+                 Vector3 deathPosition, Quaternion deathRotation)
     {
         GameAudio.PlayAt(GameAudio.Death, transform.position, GameAudio.DeathVolume);
+
+        // A body left behind rather than the player just vanishing - direct request, "make
+        // bodies ragdoll... until they respawn." No collider, so it can't block a doorway or
+        // catch a shot meant for someone else - felt, not an obstacle.
+        Corpse.Spawn(deathPosition, deathRotation, PlayerColours.For(PV.Owner), MatchState.RespawnDelay);
 
         Player killer = killerActor >= 0 && PhotonNetwork.InRoom
             ? PhotonNetwork.CurrentRoom.GetPlayer(killerActor)

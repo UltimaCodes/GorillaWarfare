@@ -85,6 +85,28 @@ public class TrainingDummy : MonoBehaviour, IDamageable
 
         GameAudio.PlayAt(GameAudio.Death, transform.position, GameAudio.DeathVolume);
 
+        // Reported as "doesn't disappear or die immediately" - true, but the actual gap was
+        // that nothing here ever *moved*: the sound played and then it just stood there,
+        // unresponsive, for deathPause before vanishing outright. The same topple every corpse
+        // gets now (see Corpse.cs) - not a separate, cheaper copy, since the whole point of a
+        // rebuild-free dummy is that its own rig transform is right here to animate directly.
+        Quaternion standing = transform.rotation;
+        Vector3 axis = Random.value > 0.5f ? Vector3.forward : Vector3.back;
+        Quaternion fallen = Quaternion.AngleAxis(85f, transform.TransformDirection(axis)) * standing;
+
+        const float fallSeconds = 0.32f;
+        float t = 0f;
+
+        while (t < fallSeconds)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(t / fallSeconds);
+            transform.rotation = Quaternion.Slerp(standing, fallen, 1f - (1f - k) * (1f - k));
+            yield return null;
+        }
+
+        transform.rotation = fallen;
+
         yield return new WaitForSeconds(deathPause);
 
         // Hidden rather than destroyed and rebuilt. Rebuilding a rig and thirteen hitboxes every
@@ -97,7 +119,7 @@ public class TrainingDummy : MonoBehaviour, IDamageable
 
         yield return new WaitForSeconds(respawnDelay);
 
-        transform.position = home;
+        transform.SetPositionAndRotation(home, standing);
         health = maxHealth;
 
         foreach (Renderer r in GetComponentsInChildren<Renderer>(true))

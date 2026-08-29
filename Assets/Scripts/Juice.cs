@@ -41,8 +41,10 @@ public class Juice : MonoBehaviour
     // position and added a rotational component, which is doing most of the new work: a couple
     // of degrees of roll and pitch reads as the camera being knocked, where the same magnitude
     // in position alone reads as nothing.
-    const float maxShake = 0.16f;
-    const float maxShakeDegrees = 3.5f;
+    // Retuned again 2026-08-29 - reported directly as wanting the camera to carry more of the
+    // hit, the way ULTRAKILL's does, rather than the UI. Roughly 60% more on both axes.
+    const float maxShake = 0.26f;
+    const float maxShakeDegrees = 5.5f;
     const float shakeFalloff = 6.5f;
     const float shakeSpeed = 42f;
 

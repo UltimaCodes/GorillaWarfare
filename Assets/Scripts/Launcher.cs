@@ -149,6 +149,15 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
+        // The sandbox creates its own offline room to get into the game scene at all (see
+        // Sandbox.Open) - Photon fires this callback for that exactly the same as a real
+        // multiplayer room, and with nothing to stop it the room/lobby panel opened for the
+        // second or so before PhotonNetwork.LoadLevel actually left the menu scene behind.
+        // Reported directly as "why does the lobby show up at all? it shouldnt" - it was never
+        // supposed to for a room nobody else can join or see.
+        if (Sandbox.Active)
+            return;
+
         OpenMenu("room");
 
         if (roomNameText != null)

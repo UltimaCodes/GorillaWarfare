@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4185212e77ba8bf45bfc661b19c111ee, type: 3}
   m_Name: Peel
   m_EditorClassIdentifier: 
-  itemName: Slip Hazard
+  itemName: Peel Steel
   damage: 55
   maxRange: 2.4
   falloffStart: 2.4
@@ -23,7 +23,7 @@ MonoBehaviour:
   pelletsPerShot: 1
   melee: 1
   fireKnockback: 0
-  meleeHold: {x: -20, y: 0, z: 0}
+  meleeHold: {x: 160, y: 0, z: 0}
   meleeSwing: 65
   twoHanded: 0
   magazineSize: 0

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Quake/Source style movement.
@@ -260,8 +261,11 @@ public class PlayerMovement : MonoBehaviour
              + "further. Paired with slideKick and slideExitSpeed so the average speed across a "
              + "slide's whole duration comes out above maxGroundSpeed - a slide that averages "
              + "below running speed is a worse way to cross the same ground, which is what the "
-             + "old 7/3.5 pairing did.")]
-    [SerializeField] float slideDrag = 5.5f;
+             + "old 7/3.5 pairing did. Lowered again 2026-08-29 - reported directly as still not "
+             + "worth doing, losing momentum too fast for the risk. From max run (8.13 kicked to "
+             + "~12.2) the old 5.5 drag burned through the entire kick in about 1.2s; at 3.8 that "
+             + "stretches past 1.7s, noticeably more ground covered for the same entry speed.")]
+    [SerializeField] float slideDrag = 3.8f;
 
     [Tooltip("Below this a slide has run out and becomes a crouch. Raised from 3.5 alongside the "
              + "kick and drag retune - a slide now ends at a solid jog rather than a crawl, which "
@@ -343,6 +347,15 @@ public class PlayerMovement : MonoBehaviour
              + "with no cooldown at all - jump, slam, land, jump, slam again, as fast as you can "
              + "press the key.")]
     [SerializeField] float groundSlamCooldown = 1.4f;
+
+    [Tooltip("Blast radius on landing, in metres. Discovered 2026-08-29, while chasing a report "
+             + "that the slam \"doesn't damage dummies\" - it never damaged anyone, dummy or "
+             + "player, ever. The impact effects (dust, sound, screen shake) were the whole thing; "
+             + "nothing underneath them ever called TakeDamage.")]
+    [SerializeField] float groundSlamRadius = 4.5f;
+
+    [SerializeField] float groundSlamDamage = 35f;
+    [SerializeField] float groundSlamKnockback = 8f;
 
     float groundSlamCooldownUntil = -99f;
     bool slamming;
@@ -1081,6 +1094,78 @@ public class PlayerMovement : MonoBehaviour
             owner.ReportGroundSlam(feet);
         else
             PlayerController.BuildGroundSlamImpact(feet);
+
+        DealSlamDamage(feet);
+    }
+
+    /// <summary>
+    /// The AOE the slam never actually had - see the field doc on groundSlamRadius. Same
+    /// dedupe-per-target, distance-falloff, PlayerController-plus-IDamageable shape
+    /// Projectile.Explode already uses, deliberately, rather than a third slightly different
+    /// blast-damage implementation to keep in sync with the other two.
+    ///
+    /// Local only, same as the rest of this method - PlayerMovement only exists on the owner's
+    /// own copy, so there is no IsMine check to make: if this is running at all, it's already the
+    /// one client allowed to decide it happened.
+    /// </summary>
+    void DealSlamDamage(Vector3 at)
+    {
+        Collider[] caught = Physics.OverlapSphere(at, groundSlamRadius,
+            1 << LayerMask.NameToLayer(Hitbox.LayerName), QueryTriggerInteraction.Ignore);
+
+        HashSet<PlayerController> hitPlayers = new HashSet<PlayerController>();
+        HashSet<IDamageable> hitOthers = new HashSet<IDamageable>();
+
+        foreach (Collider collider in caught)
+        {
+            PlayerController hitPlayer = collider.GetComponentInParent<PlayerController>();
+
+            // Can't slam yourself - you're the one causing this, not standing in it.
+            if (hitPlayer == owner)
+                continue;
+
+            if (hitPlayer != null)
+            {
+                hitPlayers.Add(hitPlayer);
+                continue;
+            }
+
+            IDamageable other = collider.GetComponentInParent<IDamageable>();
+            if (other != null)
+                hitOthers.Add(other);
+        }
+
+        foreach (PlayerController hitPlayer in hitPlayers)
+        {
+            float distance = Vector3.Distance(hitPlayer.transform.position, at);
+            float strength = Mathf.Clamp01(1f - distance / groundSlamRadius);
+            float damage = groundSlamDamage * strength;
+
+            if (damage > 0.5f)
+                hitPlayer.TakeDamage(damage, "Ground Pound", false);
+
+            // Thrown outward and up, the same "displaced by the impact" read the shockwave
+            // itself already sells visually - only their own client can move their body, the
+            // same rule every other knockback in this game follows.
+            if (hitPlayer.View != null && hitPlayer.View.IsMine)
+            {
+                Vector3 push = hitPlayer.transform.position - at;
+                push.y = 0f;
+                push = (push.sqrMagnitude > 0.01f ? push.normalized : Vector3.up) + Vector3.up * 0.5f;
+                hitPlayer.Launch(push.normalized * groundSlamKnockback * strength);
+            }
+        }
+
+        foreach (IDamageable other in hitOthers)
+        {
+            Transform otherTransform = ((Component)other).transform;
+            float distance = Vector3.Distance(otherTransform.position, at);
+            float strength = Mathf.Clamp01(1f - distance / groundSlamRadius);
+            float damage = groundSlamDamage * strength;
+
+            if (damage > 0.5f)
+                other.TakeDamage(damage, "Ground Pound", false);
+        }
     }
 
     /// <summary>

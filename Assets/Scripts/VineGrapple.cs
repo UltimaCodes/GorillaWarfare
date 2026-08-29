@@ -85,6 +85,7 @@ public class VineGrapple : MonoBehaviour
 
     int anchorViewID = -1;
     Vector3 anchorWorldPoint;
+    TrainingDummy anchorDummy;
     float attachedAt;
     float lastAttemptAt = -99f;
     bool hitLandedThisAttach;
@@ -156,6 +157,8 @@ public class VineGrapple : MonoBehaviour
         {
             if (targetPlayer != null && !hitLandedThisAttach)
                 LandHit(targetPlayer);
+            else if (anchorDummy != null && !hitLandedThisAttach)
+                LandDummyHit(anchorDummy);
 
             // Small on purpose, same as the throw - this is a landing, not a kill, even on the
             // attach where it happens to also be one. The kill's own weight already comes from
@@ -215,6 +218,14 @@ public class VineGrapple : MonoBehaviour
             if (hits[i].collider.GetComponentInParent<PlayerController>() == player)
                 continue;
 
+            // Vantage points only - reported directly that grappling to the floor read as
+            // wrong, and the brief itself was always "closer to omnidirectional mobility gear,"
+            // which pulls you up and across, not down into the ground you're already standing
+            // on. Gated on the camera's own height rather than the player's feet, so aiming
+            // slightly downward at something still above eye level is still a fair target.
+            if (hits[i].point.y <= ray.origin.y)
+                continue;
+
             float angle = Vector3.Angle(ray.direction, hits[i].point - ray.origin);
 
             if (angle >= bestAngle)
@@ -233,6 +244,13 @@ public class VineGrapple : MonoBehaviour
         RaycastHit hit = hits[bestIndex];
         PlayerController target = hit.collider.GetComponentInParent<PlayerController>();
         int targetViewID = target != null && target.View != null ? target.View.ViewID : -1;
+
+        // Reported directly: a vine hit never hurt a training dummy. LandHit's own path only
+        // ever looks for a PlayerController, which a dummy doesn't have (no movement, no view,
+        // nothing to replicate) - resolved as plain local state instead of threading it through
+        // the RPC, since the sandbox is always a one-person room and nobody else ever needs to
+        // know about it.
+        anchorDummy = target == null ? hit.collider.GetComponentInParent<TrainingDummy>() : null;
 
         Begin(targetViewID, hit.point);
     }
@@ -334,6 +352,7 @@ public class VineGrapple : MonoBehaviour
     {
         Attached = false;
         anchorViewID = -1;
+        anchorDummy = null;
 
         PlayerMovement movement = GetComponent<PlayerMovement>();
         if (movement != null)
@@ -421,6 +440,28 @@ public class VineGrapple : MonoBehaviour
         // No Juice.Hit here - the arrival freeze in UpdateOwner already covers this moment, and
         // a kill doesn't need a second, larger one stacked on top for a "small" effect to stay
         // small.
+    }
+
+    /// Same shape as LandHit, for the one target type that isn't a PlayerController.
+    void LandDummyHit(TrainingDummy dummy)
+    {
+        hitLandedThisAttach = true;
+
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+        float speed = movement != null ? movement.HorizontalSpeed : 0f;
+        float damage = PlayerMovement.MomentumDamage(contactDamage, speed);
+
+        dummy.TakeDamage(damage, "Vine", false);
+
+        int hits = player.RegisterHit();
+        GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
+                              1f + Mathf.Min(hits - 1, 9) * 0.055f);
+
+        if (player.Hud != null)
+        {
+            player.Hud.ShowHit(false);
+            player.Hud.ShowDamage(dummy.transform.position + Vector3.up, damage, false);
+        }
     }
 
     // ---------------------------------------------------------------- visual

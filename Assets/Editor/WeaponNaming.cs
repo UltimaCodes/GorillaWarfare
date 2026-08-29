@@ -29,8 +29,9 @@ public static class WeaponNaming
         // also longer than a Cavendish, which suits the absurd one.
         ("Sniper",  "Big Mike",      true,  true),
 
-        // What's left after you eat one, and what everyone does about it.
-        ("Peel",    "Slip Hazard",  false, false),
+        // Cold steel, but the blade is a banana peel - reported directly as a bad name (it
+        // named the mess left behind, not the weapon), 2026-08-29.
+        ("Peel",    "Peel Steel",  false, false),
     };
 
     [MenuItem("Tools/Gorilla Warfare/Name the weapons")]

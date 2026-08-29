@@ -86,6 +86,7 @@ public class GameHud : MonoBehaviour
     // full health doesn't show a trail catching up from zero.
     float healthTrailFraction = 1f;
     int lastAmmoCount = -1;
+    bool lastReloading;
     float ammoPunchUntil = -99f;
 
     // Drives the punch-in on the big centre callout - reported as the one piece of text on the
@@ -194,6 +195,7 @@ public class GameHud : MonoBehaviour
 
     float hitFlash;
     bool lastHitWasHead;
+    float hitMarkerSpin;
     float healFlash;
     float killFlash;
     float comboFlash;
@@ -392,6 +394,10 @@ public class GameHud : MonoBehaviour
     {
         hitFlash = 1f;
         lastHitWasHead = headshot;
+
+        // A fresh spin every headshot, alternating direction, so a run of headshots doesn't
+        // wind up looking like the same clip playing on a loop.
+        hitMarkerSpin = Random.Range(50f, 100f) * (Random.value > 0.5f ? 1f : -1f);
     }
 
     public void ShowHeal(float amount)
@@ -623,7 +629,12 @@ public class GameHud : MonoBehaviour
         }
 
         float time = Time.unscaledTime * 42f;
-        const float maxPixels = 14f;
+
+        // Cut hard, 2026-08-29 - reported as the UI shake being "too much," with the camera's
+        // own shake raised to take over most of the job a hit's punch is doing (see Juice.cs).
+        // Not zero - the HUD should still visibly react to something big landing, just as a
+        // quiet echo of the camera's own kick rather than competing with it.
+        const float maxPixels = 5f;
 
         Vector2 offset = new Vector2(
             (Mathf.PerlinNoise(hudShakeSeed, time) - 0.5f) * 2f,
@@ -796,19 +807,29 @@ public class GameHud : MonoBehaviour
         spareNumber.text = gun.SpareMagazines.ToString();
         spareNumber.color = gun.SpareMagazines > 0 ? dim : critical;
 
-        // Punches on every round fired and on the magazine coming back full after a reload -
-        // not while "--" is showing mid-reload, which isn't a number changing so much as it is
-        // one being hidden.
-        if (!gun.Reloading)
-        {
-            if (lastAmmoCount >= 0 && gun.Ammo != lastAmmoCount)
-                ammoPunchUntil = Time.unscaledTime + 0.22f;
+        // Punches on every round fired, on starting a reload and on the magazine coming back -
+        // reported directly that "--" sitting there for the whole reload with no reaction at
+        // either end looked dead. Used to only fire on the round count itself changing, which
+        // is exactly the two moments ("--" going up, "--" going away) that aren't a count
+        // changing at all.
+        if (lastAmmoCount >= 0 && (gun.Ammo != lastAmmoCount || gun.Reloading != lastReloading))
+            ammoPunchUntil = Time.unscaledTime + 0.22f;
 
-            lastAmmoCount = gun.Ammo;
-        }
+        lastAmmoCount = gun.Ammo;
+        lastReloading = gun.Reloading;
 
         if (ammoGroup != null)
             ammoGroup.localScale = Vector3.one * PunchScale(ammoPunchUntil);
+
+        // A slow, steady breathe while "--" is up, on top of the punch - reported as looking
+        // "so weird" sitting there static for a second and a half. Continuous rather than
+        // triggered, since there's no discrete moment to punch on in the middle of a reload,
+        // only the fact that one is in progress.
+        if (ammoNumber != null)
+        {
+            float breathe = gun.Reloading ? 1f + Mathf.Sin(Time.unscaledTime * 6f) * 0.08f : 1f;
+            ammoNumber.rectTransform.localScale = Vector3.one * breathe;
+        }
     }
 
     void UpdateCrosshair()
@@ -884,13 +905,31 @@ public class GameHud : MonoBehaviour
         if (hitFlash <= 0f)
             return;
 
-        // Snaps out big and shrinks in rather than only fading. A marker that just dims reads
-        // as a light going out; one that moves reads as something landing.
-        float pop = 1f + (1f - hitFlash) * 0.9f;
-        hitMarker.rectTransform.localScale = Vector3.one * (lastHitWasHead ? 1.6f : 1f) * pop;
+        // Reworked 2026-08-29 - reported as not juicy enough, "not enough dopamine." A body hit
+        // still pops and shrinks; a headshot now does noticeably more: bigger, spins in rather
+        // than just scaling, and flashes white-hot before settling into headshotColour - the
+        // same "arrives hot, cools into place" read the kill callout's own punch already uses,
+        // rather than a flat tint for the marker's whole life.
+        float age = 1f - hitFlash;
+        float pop = 1f + age * 0.9f;
 
-        Color c = lastHitWasHead ? headshotColour : Color.white;
-        hitMarker.color = new Color(c.r, c.g, c.b, hitFlash);
+        if (lastHitWasHead)
+        {
+            // Spins down to the resting 45 degrees rather than starting there - the extra
+            // motion is what separates "landed" from "landed solidly."
+            float spin = hitMarkerSpin * (1f - age * age);
+            hitMarker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f + spin);
+            hitMarker.rectTransform.localScale = Vector3.one * 2f * pop;
+
+            Color hot = Color.Lerp(headshotColour, Color.white, hitFlash * hitFlash);
+            hitMarker.color = new Color(hot.r, hot.g, hot.b, hitFlash);
+        }
+        else
+        {
+            hitMarker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            hitMarker.rectTransform.localScale = Vector3.one * pop;
+            hitMarker.color = new Color(1f, 1f, 1f, hitFlash);
+        }
     }
 
     /// <summary>

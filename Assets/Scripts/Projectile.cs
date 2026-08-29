@@ -333,12 +333,29 @@ public class Projectile : MonoBehaviour
         System.Collections.Generic.HashSet<PlayerController> hitPlayers =
             new System.Collections.Generic.HashSet<PlayerController>();
 
+        // Anything else the blast caught that can take damage but isn't a player - the sandbox's
+        // training dummies, specifically. Reported directly that the pineapple (and, the same
+        // report, the vine and the ground pound) never hurt one at all - true, because each of
+        // those look for a PlayerController specifically rather than the IDamageable interface
+        // regular gunfire already falls back to (see SingleShotGun.FirePellet's own else branch).
+        // A dummy has no PlayerController - no movement, no view, nothing to knock back - so it
+        // was never being found, not just never being hurt.
+        System.Collections.Generic.HashSet<IDamageable> hitOthers =
+            new System.Collections.Generic.HashSet<IDamageable>();
+
         foreach (Collider collider in caught)
         {
             PlayerController player = collider.GetComponentInParent<PlayerController>();
 
             if (player != null)
+            {
                 hitPlayers.Add(player);
+                continue;
+            }
+
+            IDamageable other = collider.GetComponentInParent<IDamageable>();
+            if (other != null)
+                hitOthers.Add(other);
         }
 
         foreach (PlayerController player in hitPlayers)
@@ -395,6 +412,32 @@ public class Projectile : MonoBehaviour
 
             // A heavier stop than a bullet. A direct hit with a launcher is the biggest thing
             // that happens in a fight and it should land like it.
+            Juice.Hit(0.6f);
+        }
+
+        if (!mine)
+            return;
+
+        foreach (IDamageable other in hitOthers)
+        {
+            Transform otherTransform = ((Component)other).transform;
+            Vector3 toward = otherTransform.position + Vector3.up - at;
+            float distance = toward.magnitude;
+            float strength = Mathf.Clamp01(1f - distance / radius);
+            float damage = info.damage * strength;
+
+            if (damage <= 0.5f)
+                continue;
+
+            other.TakeDamage(damage, info.name, false);
+
+            if (shooter == null || shooter.Hud == null)
+                continue;
+
+            shooter.Hud.ShowHit(false);
+            shooter.Hud.ShowDamage(otherTransform.position + Vector3.up, damage, false);
+            GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
+                                  1f + Mathf.Min(shooter.RegisterHit() - 1, 9) * 0.055f);
             Juice.Hit(0.6f);
         }
     }
