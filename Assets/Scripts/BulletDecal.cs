@@ -97,17 +97,41 @@ public class BulletDecal : MonoBehaviour
         Puff(hit.point, hit.normal, bloody);
 
         GameObject host = new GameObject(bloody ? "~blood" : "~impact");
-        host.transform.position = hit.point + hit.normal * LiftOff;
+
+        // The decal never actually rendered at a visible size on world geometry with a
+        // non-uniform scale, which is most of it - confirmed by firing a real shot at a real
+        // wall (Wall1, lossyScale (4, 16, 5)) and reading the spawned decal's own renderer
+        // bounds back: (0.04, 0.15, 0.02), a hairline sliver, not the roughly-cubic ~0.15 a size
+        // in that range should produce. "The impact does not work at all and never shows up" is
+        // exactly what that looks like from the player's side - the object was there the whole
+        // time, just warped down to nearly nothing.
+        //
+        // The parent's own scale isn't the whole problem, though - a first attempt (dividing
+        // local scale by the parent's lossyScale per axis, the same move Hitbox.Neutralise uses)
+        // still came out warped, because that only cancels a non-uniform parent scale correctly
+        // when the child has no rotation of its own. This decal always needs one, to face the
+        // hit normal - and scale and rotation don't commute, so "undo the parent's scale" and
+        // "apply my own rotation" give a different answer depending which happens first. The
+        // fix that's actually correct regardless of rotation: build the exact world-space
+        // transform wanted (position, facing, a uniform `size`), then solve for whatever local
+        // transform produces that under this specific parent, via the parent's own
+        // worldToLocalMatrix - rather than guessing at a local value and hoping it lands right.
+        host.transform.SetParent(hit.collider.transform, false);
+
+        Vector3 worldPos = hit.point + hit.normal * LiftOff;
 
         // Face out of the surface, then spin at random so repeated hits don't tile.
-        host.transform.rotation = Quaternion.LookRotation(-hit.normal, Vector3.up)
-                                  * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
+        Quaternion worldRot = Quaternion.LookRotation(-hit.normal, Vector3.up)
+                              * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
 
         float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.09f, 0.16f);
-        host.transform.localScale = new Vector3(size, size, size);
 
-        // Parented to whatever it landed on, so it moves with a body and dies with it.
-        host.transform.SetParent(hit.collider.transform, true);
+        Matrix4x4 worldMatrix = Matrix4x4.TRS(worldPos, worldRot, Vector3.one * size);
+        Matrix4x4 localMatrix = hit.collider.transform.worldToLocalMatrix * worldMatrix;
+
+        host.transform.localPosition = localMatrix.GetColumn(3);
+        host.transform.localRotation = localMatrix.rotation;
+        host.transform.localScale = localMatrix.lossyScale;
 
         BulletDecal decal = host.AddComponent<BulletDecal>();
         decal.Build(hit.collider.transform, bloody);
