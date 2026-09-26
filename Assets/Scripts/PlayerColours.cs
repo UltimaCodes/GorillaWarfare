@@ -79,7 +79,7 @@ public static class PlayerColours
     /// clear it when the mode changes.
     public static int TeamOf(Player player)
     {
-        if (MatchState.Mode != MatchMode.TeamDeathmatch || player == null)
+        if (!MatchModes.Of(MatchState.Mode).UsesTeams || player == null)
             return -1;
 
         if (!player.CustomProperties.TryGetValue(TeamKey, out object value) || !(value is int team))
@@ -104,7 +104,7 @@ public static class PlayerColours
     /// </summary>
     public static bool SameTeam(Player a, Player b)
     {
-        if (a == null || b == null || MatchState.Mode != MatchMode.TeamDeathmatch)
+        if (a == null || b == null || !MatchModes.Of(MatchState.Mode).UsesTeams)
             return false;
 
         int left = TeamOf(a);
@@ -180,7 +180,7 @@ public static class PlayerColours
     /// </summary>
     public static bool SetTeam(Player player, int team)
     {
-        if (player == null || !PhotonNetwork.InRoom || MatchState.Mode != MatchMode.TeamDeathmatch)
+        if (player == null || !PhotonNetwork.InRoom || !MatchModes.Of(MatchState.Mode).UsesTeams)
             return false;
 
         if (player != PhotonNetwork.LocalPlayer && !PhotonNetwork.IsMasterClient)
@@ -197,7 +197,7 @@ public static class PlayerColours
 
     /// Whether the local player is allowed to move this one.
     public static bool CanAssign(Player player) =>
-        MatchState.Mode == MatchMode.TeamDeathmatch
+        MatchModes.Of(MatchState.Mode).UsesTeams
         && (player == PhotonNetwork.LocalPlayer || PhotonNetwork.IsMasterClient);
 
     /// <summary>
@@ -220,7 +220,7 @@ public static class PlayerColours
 
         // Outside a team mode nobody has a side. Clearing rather than leaving stale values means
         // switching modes back and forth cannot leave somebody wearing red in a deathmatch.
-        if (MatchState.Mode != MatchMode.TeamDeathmatch)
+        if (!MatchModes.Of(MatchState.Mode).UsesTeams)
         {
             foreach (Player player in players)
             {
@@ -287,17 +287,30 @@ public static class PlayerColours
     /// is maintained separately can disagree with the players it is made of - and when it does,
     /// the scoreboard and the winner disagree with each other in front of everybody.
     /// </summary>
+    /// <summary>
+    /// Found reading this file for the tab scoreboard rework: this always summed kills, even
+    /// though the style-score rework made style score the thing that decides Team Deathmatch too
+    /// ("this is now the determining factor for winning in deathmatches - anything that isn't
+    /// gungame honestly"). Team Deathmatch's own win condition (MatchState.FinishMatch, which
+    /// calls this) was quietly still being decided by kills the whole time that rework was live.
+    /// Now reads the same MatchModeInfo.RanksByStyleScore flag everything else in this pass
+    /// switched to, so the team total, the individual scoreboard order and the actual match
+    /// winner all agree on which stat is real.
+    /// </summary>
     public static int TeamScore(int team)
     {
         if (!PhotonNetwork.InRoom)
             return 0;
+
+        string key = MatchModes.Of(MatchState.Mode).RanksByStyleScore
+            ? RoomManager.StyleScoreKey : RoomManager.KillsKey;
 
         int total = 0;
 
         foreach (Player player in PhotonNetwork.PlayerList)
         {
             if (TeamOf(player) == team)
-                total += RoomManager.GetStat(player, RoomManager.KillsKey);
+                total += RoomManager.GetStat(player, key);
         }
 
         return total;

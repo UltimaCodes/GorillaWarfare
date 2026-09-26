@@ -34,6 +34,15 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public const string HeadshotsKey = "hs";
     public const string BestStreakKey = "streak";
 
+    /// <summary>
+    /// The style score - see StyleScore.cs. Written by each client into their own properties
+    /// rather than by the master the way kills/deaths are: the classification a kill earns
+    /// (no-scope, point blank, weapon swap, a movement chain still running) only exists on the
+    /// killer's own client, and only one client ever writes to their own key, so there is no
+    /// race to arbitrate the way there is for kills landing on a shared victim.
+    /// </summary>
+    public const string StyleScoreKey = "style";
+
     GameObject localController;
     GameObject spectatorCamera;
     Coroutine spawnRoutine;
@@ -94,6 +103,25 @@ public class RoomManager : MonoBehaviourPunCallbacks
             {
                 Debug.LogWarning("[room] no SettingsMenu prefab in Resources - "
                                  + "run Tools/Gorilla Warfare/Build the settings menu");
+            }
+        }
+
+        // Same reasoning as the settings screen immediately above - reachable from the menu and
+        // from mid-match, so it rides along on the object that survives the trip between them.
+        if (CrateOpeningScreen.Instance == null)
+        {
+            GameObject cratePrefab = Resources.Load<GameObject>("CrateShop");
+
+            if (cratePrefab != null)
+            {
+                GameObject shop = Instantiate(cratePrefab);
+                shop.name = "CrateShop";
+                shop.transform.SetParent(transform, false);
+            }
+            else
+            {
+                Debug.LogWarning("[room] no CrateShop prefab in Resources - "
+                                 + "run Tools/Gorilla Warfare/Build the crate shop");
             }
         }
 

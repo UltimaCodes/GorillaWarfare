@@ -29,9 +29,12 @@ public static class WeaponNaming
         // also longer than a Cavendish, which suits the absurd one.
         ("Sniper",  "Big Mike",      true,  true),
 
-        // Cold steel, but the blade is a banana peel - reported directly as a bad name (it
-        // named the mess left behind, not the weapon), 2026-08-29.
-        ("Peel",    "Peel Steel",  false, false),
+        // "Peel Steel" was rejected too, same day - "doesn't resemble a knife name, youre going
+        // too deep into the banana names format without giving it room to be a knife." Fang
+        // leads the reverse-grip claw-style blades this is actually posed like (a karambit is
+        // sometimes called exactly that) rather than another banana pun stacked on top of the
+        // last one; Yellow is the one, single nod to what it's skinned as.
+        ("Peel",    "Yellow Fang",  false, false),
     };
 
     [MenuItem("Tools/Gorilla Warfare/Name the weapons")]

@@ -78,7 +78,7 @@ public class SpeedRush : MonoBehaviour
 
     void Update()
     {
-        if (player == null || movement == null || !player.View.IsMine)
+        if (player == null || movement == null || player.View == null || !player.View.IsMine)
             return;
 
         // Horizontal only. Falling is not going fast, and a long drop would otherwise light up

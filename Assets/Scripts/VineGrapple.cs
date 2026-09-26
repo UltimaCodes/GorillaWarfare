@@ -299,6 +299,12 @@ public class VineGrapple : MonoBehaviour
         attachedAt = Time.time;
         hitLandedThisAttach = false;
 
+        // The HUD's movement combo - see MovementCombo.cs. This RPC runs on every client the
+        // same as the thwip sound below, but MovementCombo only ever exists on its owner's own
+        // body, so GetComponent quietly finds nothing and credits nobody on a client that's just
+        // watching somebody else's rope land.
+        GetComponent<MovementCombo>()?.Register("GRAPPLE");
+
         // Runs on every client, same as the RPC itself, so the thwip is positional and everyone
         // nearby hears it - only the person who actually fired it also gets stopped for it.
         GameAudio.PlayAt(GameAudio.Vine, transform.position, 0.85f, 0.06f);
@@ -411,12 +417,8 @@ public class VineGrapple : MonoBehaviour
     {
         hitLandedThisAttach = true;
 
-        if (MatchState.Mode == MatchMode.TeamDeathmatch
-            && player.View != null && target.View != null
-            && PlayerColours.SameTeam(player.View.Owner, target.View.Owner))
-        {
+        if (player.IsTeammate(target))
             return;
-        }
 
         PlayerMovement movement = GetComponent<PlayerMovement>();
         float speed = movement != null ? movement.HorizontalSpeed : 0f;
@@ -424,12 +426,13 @@ public class VineGrapple : MonoBehaviour
 
         target.TakeDamage(damage, "Vine", false);
 
+        // Always non-fatal from this call, same as every other weapon's hit path.
+        player.Style?.RegisterHitLanded();
+
         // The same confirmation every other weapon gives - was missing here despite the comment
         // above claiming to mirror SingleShotGun's hit path. RegisterHit's rising pitch too, so
         // a vine kill on a run of good hits sounds like part of the same streak a gun would.
-        int hits = player.RegisterHit();
-        GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
-                              1f + Mathf.Min(hits - 1, 9) * 0.055f);
+        PlayerController.PlayHitConfirm(player);
 
         if (player.Hud != null)
         {
@@ -451,11 +454,16 @@ public class VineGrapple : MonoBehaviour
         float speed = movement != null ? movement.HorizontalSpeed : 0f;
         float damage = PlayerMovement.MomentumDamage(contactDamage, speed);
 
-        dummy.TakeDamage(damage, "Vine", false);
+        bool fatal = dummy.TakeDamage(damage, "Vine", false);
 
-        int hits = player.RegisterHit();
-        GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
-                              1f + Mathf.Min(hits - 1, 9) * 0.055f);
+        // Same reasoning as SingleShotGun's own dummy branch - this never reaches RegisterKill's
+        // RPC-mediated path, so it has to credit the style score directly.
+        if (fatal)
+            player?.Style?.RegisterDummyKill("Vine", false, false, false);
+        else
+            player?.Style?.RegisterHitLanded();
+
+        PlayerController.PlayHitConfirm(player);
 
         if (player.Hud != null)
         {

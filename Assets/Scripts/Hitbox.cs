@@ -27,14 +27,15 @@ public class Hitbox : MonoBehaviour
     /// True if this box counts as a headshot, for feedback and the kill feed.
     public bool IsHead => partName == "head" || partName == "neck";
 
-    /// Returns true if the damage was applied.
+    /// Returns true if this hit was the fatal blow - see IDamageable.TakeDamage. Nothing here
+    /// currently reads this as "did the damage register at all" (the old meaning), so this can
+    /// pass straight through the target's own answer without a second flag to keep in sync.
     public bool Apply(float baseDamage, string weapon)
     {
         if (target == null)
             return false;
 
-        target.TakeDamage(baseDamage * multiplier, weapon, IsHead);
-        return true;
+        return target.TakeDamage(baseDamage * multiplier, weapon, IsHead);
     }
 
     /// <summary>

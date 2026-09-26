@@ -15,12 +15,12 @@ public class RoomListItem : MonoBehaviour
             return;
 
         // Published in CustomRoomPropertiesForLobby, so it's here without joining first.
-        string mode = "DM";
+        string mode = MatchModes.Of(MatchMode.Deathmatch).ShortName;
         if (info.CustomProperties != null
             && info.CustomProperties.TryGetValue(MatchState.ModeKey, out object value)
             && value is int m)
         {
-            mode = (MatchMode)m == MatchMode.GunGame ? "GUN GAME" : "DM";
+            mode = MatchModes.Of((MatchMode)m).ShortName;
         }
 
         string count = info.MaxPlayers > 0 ? $"{info.PlayerCount}/{info.MaxPlayers}" : info.PlayerCount.ToString();

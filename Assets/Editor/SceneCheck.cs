@@ -42,6 +42,13 @@ public static class SceneCheck
         CheckGameScene();
         CheckMenuScene();
 
+        // SettingsMenu and CrateOpeningScreen are RoomManager-instantiated Resources prefabs,
+        // not scene objects - GameHud, ModeSelector and ColourPicker's own dropped-reference
+        // hazard applies just as much to them, but FindFirstObjectByType would never find a
+        // prefab asset, so these are checked directly rather than from either scene.
+        CheckWiring(PrefabComponent<SettingsMenu>("SettingsMenu"), "SettingsMenu prefab");
+        CheckWiring(PrefabComponent<CrateOpeningScreen>("CrateShop"), "CrateShop prefab");
+
         foreach (string note in Notes)
             Debug.Log($"[scene] {note}");
 
@@ -165,6 +172,11 @@ public static class SceneCheck
     /// stops appearing and looks like a bug in the health code. This walks every serialized
     /// reference and names the empty ones.
     /// </summary>
+    static readonly System.Collections.Generic.HashSet<string> OptionalFields = new System.Collections.Generic.HashSet<string>
+    {
+        "tokenRewardBurst",
+    };
+
     static void CheckHud()
     {
         GameHud hud = Object.FindFirstObjectByType<GameHud>(FindObjectsInactive.Include);
@@ -189,6 +201,14 @@ public static class SceneCheck
                 continue;
 
             if (property.objectReferenceValue != null)
+                continue;
+
+            // tokenRewardBurst is deliberately unwired - GameHud.cs guards it with a null check
+            // specifically because HudBuilder.cs leaves it as an optional particle flourish, not
+            // a dropped reference. Flagging it here was a false positive on every single run;
+            // re-pointing the check rather than deleting it, same convention working-notes.md
+            // already uses for this class of thing.
+            if (OptionalFields.Contains(property.propertyPath))
                 continue;
 
             Failures.Add($"GameHud.{property.propertyPath} is empty - that part of the HUD is missing");
@@ -267,6 +287,49 @@ public static class SceneCheck
 
         if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
             Failures.Add("Menu has no EventSystem - no button is clickable");
+
+        CheckWiring(Object.FindFirstObjectByType<ModeSelector>(FindObjectsInactive.Include), "ModeSelector");
+        CheckWiring(Object.FindFirstObjectByType<ColourPicker>(FindObjectsInactive.Include), "ColourPicker");
+    }
+
+    static T PrefabComponent<T>(string resourceName) where T : Object
+    {
+        GameObject prefab = Resources.Load<GameObject>(resourceName);
+        return prefab != null ? prefab.GetComponent<T>() : null;
+    }
+
+    /// <summary>
+    /// The same "walk every serialized reference, name the empty ones" GameHud already gets in
+    /// <see cref="CheckHud"/>, generalised for the other scene/prefab objects built the same
+    /// hand-wired way (per each builder's own doc comment) and just as able to have a reference
+    /// dragged loose by accident.
+    /// </summary>
+    static void CheckWiring(Object component, string label)
+    {
+        if (component == null)
+        {
+            Failures.Add($"{label} not found - nothing to check");
+            return;
+        }
+
+        int empty = 0;
+        SerializedProperty property = new SerializedObject(component).GetIterator();
+
+        while (property.NextVisible(true))
+        {
+            if (property.propertyPath == "m_Script"
+                || property.propertyType != SerializedPropertyType.ObjectReference)
+                continue;
+
+            if (property.objectReferenceValue != null)
+                continue;
+
+            Failures.Add($"{label}.{property.propertyPath} is empty - dragged loose somewhere");
+            empty++;
+        }
+
+        if (empty == 0)
+            Notes.Add($"{label} is fully wired");
     }
 
     static string Path(Transform t)

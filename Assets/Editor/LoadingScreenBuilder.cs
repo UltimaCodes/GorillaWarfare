@@ -60,6 +60,19 @@ public static class LoadingScreenBuilder
         backdrop.color = Backdrop;
         backdrop.raycastTarget = true;
 
+        // The spinning model - "I want you to improve it by adding a player model in the middle
+        // that just spins around like the gorilla spinning meme." Above the bar, in the space
+        // that used to just be empty backdrop between the top of the screen and the progress bar
+        // itself.
+        GameObject spinnerGo = new GameObject("Spinner", typeof(RectTransform), typeof(RawImage));
+        spinnerGo.transform.SetParent(root.transform, false);
+        RectTransform spinnerRect = (RectTransform)spinnerGo.transform;
+        spinnerRect.anchorMin = spinnerRect.anchorMax = spinnerRect.pivot = new Vector2(0.5f, 0.5f);
+        spinnerRect.anchoredPosition = new Vector2(0f, 90f);
+        spinnerRect.sizeDelta = new Vector2(420f, 420f);
+        spinnerGo.GetComponent<RawImage>().raycastTarget = false;
+        spinnerGo.AddComponent<LoadingScreenSpinner>();
+
         // Slightly below centre, where a progress bar belongs - dead centre reads as a divider
         // cutting the screen in half.
         GameObject track = Box(root.transform, "Track", new Vector2(0f, -60f),

@@ -27,7 +27,17 @@ public static class SettingsMenuBuilder
     static readonly Color Dim = new Color(0.94f, 0.94f, 0.9f, 0.5f);
     static readonly Color Backdrop = new Color(0.03f, 0.03f, 0.04f, 0.93f);
     static readonly Color Face = new Color(0.11f, 0.11f, 0.13f, 1f);
-    static readonly Color Accent = new Color(1f, 0.42f, 0.06f);
+
+    // Was a plain orange - this screen's own colour, chosen independently of and before the rest
+    // of the HUD settled on its own palette. Reported directly: "i dont like the settings menu
+    // look rn." First fix reached for GameHud.killColour's hot magenta, on the theory that
+    // sharing an accent with the rest of the HUD beats an independently-chosen one - reported
+    // right back as "the pink purple color... doesnt fit with the game." Reconsidered: killColour
+    // is specifically this game's *violence* accent (a kill, a headshot) - reusing it for a
+    // neutral settings screen borrowed the wrong half of the palette. Banana yellow instead, the
+    // actual through-line of this game's whole identity (the guns ripen through it, the health
+    // banana is built from it) rather than its combat colour.
+    static readonly Color Accent = new Color(1f, 0.82f, 0.1f);
 
     const float RowHeight = 46f;
     const float PanelWidth = 900f;
@@ -36,6 +46,7 @@ public static class SettingsMenuBuilder
     public static void Run()
     {
         TMP_FontAsset font = FindFont();
+        TMP_FontAsset headingFont = FindHeadingFont();
 
         if (!Directory.Exists(Folder))
             Directory.CreateDirectory(Folder);
@@ -69,7 +80,7 @@ public static class SettingsMenuBuilder
         GameObject frame = Box(panel.transform, "Frame", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                                Vector2.zero, new Vector2(PanelWidth, 780f), Face);
 
-        TMP_Text heading = Label(frame.transform, "Heading", font, 46f, TextAlignmentOptions.Left,
+        TMP_Text heading = Label(frame.transform, "Heading", headingFont, 52f, TextAlignmentOptions.Left,
                                  new Vector2(0f, 1f), new Vector2(40f, -34f), new Vector2(500f, 56f));
         heading.text = "AIM";
         heading.color = Accent;
@@ -94,6 +105,41 @@ public static class SettingsMenuBuilder
                               new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
         sandbox.gameObject.SetActive(false);
 
+        // ---------------------------------------------------------------- crosshair preview
+        // "I want there to be a crosshair visual on the crosshair menu so you can see what
+        // crosshair youre working with." Floats outside the frame's own right edge rather than
+        // inside the scrolling content - content already uses the panel's full width for its
+        // rows, and an inset preview there would sit on top of whatever slider or toggle
+        // happened to be scrolled underneath it. Only shown on the Crosshair tab - see
+        // SettingsMenu.Show, which toggles it alongside switching which rows are built.
+        // The CrosshairPreview component lives directly on the box itself now, not on a separate
+        // child inside it - a first version put it on an inner wrapper, which meant hiding *it*
+        // (SettingsMenu.Show toggling crosshairPreview.gameObject) only hid the tick marks and
+        // left this dark background box sitting on screen permanently on every tab, reported
+        // directly as needing a fix. Toggling the box itself now hides the whole preview, ticks
+        // and background together, in one call.
+        GameObject previewBox = Box(frame.transform, "CrosshairPreviewBox", new Vector2(1f, 0.5f),
+                                    new Vector2(1f, 0.5f), new Vector2(150f, 0f), new Vector2(220f, 220f),
+                                    new Color(0f, 0f, 0f, 0.4f));
+
+        CrosshairPreview preview = previewBox.AddComponent<CrosshairPreview>();
+
+        Image previewUp = PreviewTick(previewBox.transform, "Up");
+        Image previewDown = PreviewTick(previewBox.transform, "Down");
+        Image previewLeft = PreviewTick(previewBox.transform, "Left");
+        Image previewRight = PreviewTick(previewBox.transform, "Right");
+        Image previewDot = PreviewTick(previewBox.transform, "Dot");
+
+        SerializedObject previewSo = new SerializedObject(preview);
+        Wire(previewSo, "up", previewUp.rectTransform);
+        Wire(previewSo, "down", previewDown.rectTransform);
+        Wire(previewSo, "left", previewLeft.rectTransform);
+        Wire(previewSo, "right", previewRight.rectTransform);
+        Wire(previewSo, "dot", previewDot);
+        previewSo.ApplyModifiedPropertiesWithoutUndo();
+
+        previewBox.SetActive(false);
+
         // ---------------------------------------------------------------- tabs
         GameObject tabBar = Empty(frame.transform, "Tabs", new Vector2(0f, 1f),
                                   new Vector2(40f, -104f), new Vector2(PanelWidth - 80f, 54f));
@@ -105,7 +151,7 @@ public static class SettingsMenuBuilder
         tabLayout.childControlWidth = true;
         tabLayout.childControlHeight = true;
 
-        Button tabTemplate = Push(tabBar.transform, "TabTemplate", font, "TAB",
+        Button tabTemplate = Push(tabBar.transform, "TabTemplate", headingFont, "TAB",
                                   new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 54f));
         tabTemplate.gameObject.SetActive(false);
 
@@ -168,6 +214,7 @@ public static class SettingsMenuBuilder
         Wire(so, "toggleRow", toggleRow);
         Wire(so, "choiceRow", choiceRow);
         Wire(so, "bindRow", bindRow);
+        Wire(so, "crosshairPreview", preview);
 
         so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -329,6 +376,15 @@ public static class SettingsMenuBuilder
         rect.offsetMin = rect.offsetMax = Vector2.zero;
     }
 
+    /// One arm of the preview cross - a plain white box, tinted at runtime by
+    /// CrosshairPreview.Refresh the same way GameHud's own real crosshair ticks are.
+    static Image PreviewTick(Transform parent, string name)
+    {
+        GameObject go = Box(parent, name, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            Vector2.zero, new Vector2(3f, 14f), Color.white);
+        return go.GetComponent<Image>();
+    }
+
     static GameObject Empty(Transform parent, string name, Vector2 anchor, Vector2 position,
                             Vector2 size)
     {
@@ -427,13 +483,24 @@ public static class SettingsMenuBuilder
     }
 
     /// The in-game font, since this screen opens over the game as often as over the menu.
-    static TMP_FontAsset FindFont()
+    /// Was hardcoded to "Helvetica Punk" - a font choice this file made on its own, before
+    /// Jersey10/Anton became this project's actual pairing (HudBuilder.FindFont/FindRankFont).
+    /// Reported directly: "it also uses the old font." Same body face the rest of the reworked
+    /// UI reads in now.
+    static TMP_FontAsset FindFont() => FindFontNamed("Jersey10");
+
+    /// The heading and the tab labels get the bolder display face instead - the settings screen
+    /// otherwise had no typographic hierarchy at all, one weight of one font for a page title and
+    /// a slider value alike.
+    static TMP_FontAsset FindHeadingFont() => FindFontNamed("Anton");
+
+    static TMP_FontAsset FindFontNamed(string name)
     {
         foreach (string guid in AssetDatabase.FindAssets("t:TMP_FontAsset", new[] { "Assets/Fonts" }))
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
 
-            if (path.Contains("Helvetica Punk"))
+            if (path.Contains(name))
                 return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
         }
 

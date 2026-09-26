@@ -28,6 +28,25 @@ public class Projectile : MonoBehaviour
     PlayerController shooter;
     bool mine;
 
+    static bool sweepMaskReady;
+    static int sweepMask;
+
+    /// World geometry plus hitboxes, cached the same way SingleShotGun.TraceMask is -
+    /// LayerMask.NameToLayer was being resolved fresh on every live projectile's every Update.
+    static int SweepMask
+    {
+        get
+        {
+            if (!sweepMaskReady)
+            {
+                sweepMask = Hitbox.WorldMask | (1 << LayerMask.NameToLayer(Hitbox.LayerName));
+                sweepMaskReady = true;
+            }
+
+            return sweepMask;
+        }
+    }
+
     Vector3 velocity;
     float bornAt;
     float travelled;
@@ -273,8 +292,7 @@ public class Projectile : MonoBehaviour
         // Swept rather than teleported. At forty metres a second a projectile moves most of a
         // metre per frame, and a point test at each end goes straight through people.
         if (Physics.SphereCast(transform.position, Radius, move.normalized, out RaycastHit hit,
-                               distance, Hitbox.WorldMask | (1 << LayerMask.NameToLayer(Hitbox.LayerName)),
-                               QueryTriggerInteraction.Ignore))
+                               distance, SweepMask, QueryTriggerInteraction.Ignore))
         {
             bool armed = travelled + hit.distance >= arming;
             bool ownBody = shooter != null && hit.collider.transform.IsChildOf(shooter.transform);
@@ -362,9 +380,18 @@ public class Projectile : MonoBehaviour
         {
             Vector3 toward = player.transform.position + Vector3.up - at;
             float distance = toward.magnitude;
-
-            // Linear falloff. Anything fancier is unreadable to the person being hit.
             float strength = Mathf.Clamp01(1f - distance / radius);
+
+            // Damage falloff squared rather than the linear curve knockback still uses below -
+            // reported directly as wanting a real falloff, same request and same fix as the
+            // ground slam's own AOE got the same day (see PlayerMovement.DealSlamDamage). Only
+            // the damage bites less generously toward the edge of the radius; self-knockback
+            // stays linear on purpose - a rocket-jump style launcher wants its mobility half
+            // forgiving even where its damage half isn't. Eased back from a full square
+            // (strength^2) to strength^1.5 - reported directly as "a bit too harsh" once played
+            // against, so still a real falloff, just not as punishing toward the edge of the
+            // radius as the ground slam's own curve (which wasn't reported as a problem).
+            float damageStrength = Mathf.Pow(strength, 1.5f);
 
             bool self = player == shooter;
 
@@ -380,18 +407,30 @@ public class Projectile : MonoBehaviour
 
                 float force = (self ? info.selfKnockback : info.knockback) * strength;
                 player.Launch(push * force);
+
+                // The HUD's movement combo - see MovementCombo.cs. Self-splash only (getting
+                // knocked around by somebody else's grenade isn't a trick you did), and only a
+                // real boost, not just being caught on the edge of somebody else's blast.
+                if (self && strength > 0.3f)
+                    player.GetComponent<MovementCombo>()?.Register("GRENADE JUMP");
             }
 
             if (!mine)
                 continue;
 
             // Damage from the shooter's client only, same as every other weapon here.
-            float damage = info.damage * strength * (self ? info.selfDamageScale : 1f);
+            float damage = info.damage * damageStrength * (self ? info.selfDamageScale : 1f);
 
             if (damage <= 0.5f)
                 continue;
 
             player.TakeDamage(damage, info.name, false);
+
+            // Always non-fatal from this call, same as every other weapon's hit path - but only
+            // for an actual enemy. Blowing yourself up for a grenade jump shouldn't build your
+            // own style multiplier as if you'd hit somebody else.
+            if (!self)
+                shooter?.Style?.RegisterHitLanded();
 
             // The same confirmation every other weapon gives. The launcher was silent on a hit -
             // no marker, no number, no stop - so the only way to learn you had killed somebody
@@ -407,8 +446,7 @@ public class Projectile : MonoBehaviour
             shooter.Hud.ShowHit(false);
             shooter.Hud.ShowDamage(player.transform.position + Vector3.up, damage, false);
 
-            GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
-                                  1f + Mathf.Min(shooter.RegisterHit() - 1, 9) * 0.055f);
+            PlayerController.PlayHitConfirm(shooter);
 
             // A heavier stop than a bullet. A direct hit with a launcher is the biggest thing
             // that happens in a fight and it should land like it.
@@ -424,20 +462,26 @@ public class Projectile : MonoBehaviour
             Vector3 toward = otherTransform.position + Vector3.up - at;
             float distance = toward.magnitude;
             float strength = Mathf.Clamp01(1f - distance / radius);
-            float damage = info.damage * strength;
+            float damage = info.damage * Mathf.Pow(strength, 1.5f);
 
             if (damage <= 0.5f)
                 continue;
 
-            other.TakeDamage(damage, info.name, false);
+            bool fatal = other.TakeDamage(damage, info.name, false);
+
+            // Same reasoning as SingleShotGun's own dummy branch - this never reaches
+            // RegisterKill's RPC-mediated path, so it has to credit the style score directly.
+            if (fatal)
+                shooter?.Style?.RegisterDummyKill(info.name, false, false, false);
+            else
+                shooter?.Style?.RegisterHitLanded();
 
             if (shooter == null || shooter.Hud == null)
                 continue;
 
             shooter.Hud.ShowHit(false);
             shooter.Hud.ShowDamage(otherTransform.position + Vector3.up, damage, false);
-            GameAudio.PlayPitched(GameAudio.Hit, "hit", GameAudio.HitVolume,
-                                  1f + Mathf.Min(shooter.RegisterHit() - 1, 9) * 0.055f);
+            PlayerController.PlayHitConfirm(shooter);
             Juice.Hit(0.6f);
         }
     }

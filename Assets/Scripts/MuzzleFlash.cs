@@ -45,6 +45,7 @@ public class MuzzleFlash : MonoBehaviour
     Light flash;
     ParticleSystem particles;
     ParticleSystemRenderer particlesView;
+    MaterialPropertyBlock propertyBlock;
     float level;
     float tipDistance = 0.35f;
 
@@ -242,10 +243,15 @@ public class MuzzleFlash : MonoBehaviour
 
         if (set.Length > 0)
         {
-            MaterialPropertyBlock block = new MaterialPropertyBlock();
-            particlesView.GetPropertyBlock(block);
-            block.SetTexture("_MainTex", set[Random.Range(0, set.Length)].texture);
-            particlesView.SetPropertyBlock(block);
+            // Reused rather than allocated fresh - an automatic weapon calls Fire many times a
+            // second, and a new MaterialPropertyBlock per shot was avoidable GC pressure on
+            // exactly the weapons that fire the most.
+            if (propertyBlock == null)
+                propertyBlock = new MaterialPropertyBlock();
+
+            particlesView.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetTexture("_MainTex", set[Random.Range(0, set.Length)].texture);
+            particlesView.SetPropertyBlock(propertyBlock);
         }
 
         // A longer weapon's tip sits further from the grip, which reads as a bigger gun and

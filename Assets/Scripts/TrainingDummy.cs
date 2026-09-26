@@ -19,13 +19,17 @@ public class TrainingDummy : MonoBehaviour, IDamageable
     [SerializeField] float maxHealth = 140f;
     [SerializeField] float respawnDelay = 2f;
 
-    [Tooltip("How long the numbers stay up after it dies, before it stands back up.")]
+    [Tooltip("Extra time added to respawnDelay before it stands back up - originally how long "
+             + "a scripted fallen pose stayed up before hiding; now just more time for the "
+             + "ragdoll corpse (see Corpse.Spawn in FallOver) to be worth having spawned.")]
     [SerializeField] float deathPause = 0.6f;
 
     float health;
     MonkeyRig rig;
     bool down;
     Vector3 home;
+    Quaternion homeRotation;
+    Color tint;
 
     public static TrainingDummy Build(Vector3 where, Quaternion facing, Color colour)
     {
@@ -34,6 +38,8 @@ public class TrainingDummy : MonoBehaviour, IDamageable
 
         TrainingDummy dummy = host.AddComponent<TrainingDummy>();
         dummy.home = where;
+        dummy.homeRotation = facing;
+        dummy.tint = colour;
 
         // The same layer players use, so weapons trace against it the same way and the ground
         // probes ignore it for the same reasons.
@@ -68,15 +74,24 @@ public class TrainingDummy : MonoBehaviour, IDamageable
     /// Anything that only worked against dummies would be worse than useless - it would be a
     /// test that passes for a weapon that does not work.
     /// </summary>
-    public void TakeDamage(float damage, string weapon, bool headshot)
+    public bool TakeDamage(float damage, string weapon, bool headshot)
     {
         if (down)
-            return;
+            return false;
 
         health -= damage;
 
         if (health <= 0f)
+        {
+            // StartCoroutine runs FallOver synchronously up to its first yield, which sets
+            // `down = true` as its very first line - so even a second lethal hit landing in the
+            // same frame (a shotgun's other pellets) sees `down` already set and takes the
+            // early-out above instead of reporting a second fatal blow for one death.
             StartCoroutine(FallOver());
+            return true;
+        }
+
+        return false;
     }
 
     IEnumerator FallOver()
@@ -85,41 +100,35 @@ public class TrainingDummy : MonoBehaviour, IDamageable
 
         GameAudio.PlayAt(GameAudio.Death, transform.position, GameAudio.DeathVolume);
 
-        // Reported as "doesn't disappear or die immediately" - true, but the actual gap was
-        // that nothing here ever *moved*: the sound played and then it just stood there,
-        // unresponsive, for deathPause before vanishing outright. The same topple every corpse
-        // gets now (see Corpse.cs) - not a separate, cheaper copy, since the whole point of a
-        // rebuild-free dummy is that its own rig transform is right here to animate directly.
-        Quaternion standing = transform.rotation;
-        Vector3 axis = Random.value > 0.5f ? Vector3.forward : Vector3.back;
-        Quaternion fallen = Quaternion.AngleAxis(85f, transform.TransformDirection(axis)) * standing;
-
-        const float fallSeconds = 0.32f;
-        float t = 0f;
-
-        while (t < fallSeconds)
-        {
-            t += Time.unscaledDeltaTime;
-            float k = Mathf.Clamp01(t / fallSeconds);
-            transform.rotation = Quaternion.Slerp(standing, fallen, 1f - (1f - k) * (1f - k));
-            yield return null;
-        }
-
-        transform.rotation = fallen;
-
-        yield return new WaitForSeconds(deathPause);
+        // A real physics ragdoll now, not a scripted topple - "still no source like ragdoll for
+        // dummies," the same request Corpse.cs already answered for real players (see Ragdoll.cs
+        // for the actual per-bone colliders and joints). This dummy hands the visual off to a
+        // disposable Corpse rather than ragdolling itself: a dummy has to snap back to a clean
+        // standing pose to respawn, which a settled physics simulation can't undo cleanly, so the
+        // trick is to never physically touch this object at all. Corpse.Spawn builds its own
+        // throwaway copy of the same rig, tinted the same colour, at this exact position and
+        // facing, and that copy is the thing that falls and settles - this object just goes
+        // invisible underneath it for as long as the corpse is worth having spawned.
+        Corpse.Spawn(transform.position, transform.rotation, tint, deathPause + respawnDelay);
 
         // Hidden rather than destroyed and rebuilt. Rebuilding a rig and thirteen hitboxes every
         // few seconds while somebody practises is a lot of garbage for no visible difference.
+        // Immediately, not after a pause - the corpse is what's on screen now, and a standing,
+        // unhit-reacting dummy still visible next to its own ragdoll would look broken rather
+        // than dead.
         foreach (Renderer r in GetComponentsInChildren<Renderer>(true))
             r.enabled = false;
 
         foreach (Collider c in GetComponentsInChildren<Collider>(true))
             c.enabled = false;
 
-        yield return new WaitForSeconds(respawnDelay);
+        // Unscaled - a dummy's death is always accompanied by the killing weapon's own
+        // Juice.Hit(), which drops Time.timeScale for a moment. A scaled wait here would let that
+        // same hitstop stretch out how long the dummy stays gone, the exact hazard StyleScore and
+        // SingleShotGun's own timers already call out and avoid.
+        yield return new WaitForSecondsRealtime(deathPause + respawnDelay);
 
-        transform.SetPositionAndRotation(home, standing);
+        transform.SetPositionAndRotation(home, homeRotation);
         health = maxHealth;
 
         foreach (Renderer r in GetComponentsInChildren<Renderer>(true))

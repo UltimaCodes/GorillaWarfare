@@ -105,7 +105,7 @@ public class ColourPicker : MonoBehaviourPunCallbacks
         // Nothing to pick in a team mode. Your colour is your side, chosen by clicking your own
         // name in the list, and leaving eight swatches up that quietly do nothing is a worse
         // answer than taking them away.
-        bool teams = MatchState.Mode == MatchMode.TeamDeathmatch;
+        bool teams = MatchModes.Of(MatchState.Mode).UsesTeams;
 
         if (row != null)
             row.gameObject.SetActive(!teams);

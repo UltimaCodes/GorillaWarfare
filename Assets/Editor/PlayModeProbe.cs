@@ -81,6 +81,12 @@ public class ProbeRunner : MonoBehaviour
     {
         DontDestroyOnLoad(gameObject);
 
+        // -nographics suppresses rendering but not audio - without this, a probe run (gunfire,
+        // deaths, hitmarkers, a full match's worth of sound) plays out loud on whatever speakers
+        // are actually attached. Reported directly: "the game just runs in the background with
+        // the audio on."
+        AudioListener.volume = 0f;
+
         // A probe that hangs is worse than one that fails - it looks like it's still working.
         startedAt = Time.realtimeSinceStartup;
 
@@ -177,6 +183,12 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- the HUD is showing what the game thinks is true ----
         yield return CheckHudReadsTheGame(player);
+
+        // ---- the tab scoreboard actually sits inside its own backdrop ----
+        yield return CheckScoreboardLayout();
+
+        // ---- the PSX filter actually changes the picture ----
+        yield return CheckPsxFilterVisiblyChangesTheImage();
 
         // ---- joining mid match ----
         yield return CheckLateJoinGetsWeapons(player);
@@ -1246,6 +1258,15 @@ public class ProbeRunner : MonoBehaviour
         // ---- presets rebuild the volume ----
         GameSettings.ShaderPreset before = GameSettings.Shaders;
 
+        // Motion blur and the PSX filter are both deliberately independent of the preset ladder
+        // (see GameSettings.PsxFilter/MotionBlur) - PsxFilter defaults to true now, so isolating
+        // "does the preset alone drive the volume" needs both pinned off first, or Off would
+        // legitimately still have a volume for the filter that's still on regardless of preset.
+        bool motionBlurBefore = GameSettings.MotionBlur;
+        bool psxBefore = GameSettings.PsxFilter;
+        GameSettings.SetMotionBlur(false);
+        GameSettings.SetPsxFilter(false);
+
         GameSettings.SetShaders(GameSettings.ShaderPreset.Off);
 
         // Two frames, because Destroy is deferred to the end of the frame it was called in - a
@@ -1271,6 +1292,8 @@ public class ProbeRunner : MonoBehaviour
               $"Off: {offVolumes} | Overripe: {onVolumes}");
 
         GameSettings.SetShaders(before);
+        GameSettings.SetMotionBlur(motionBlurBefore);
+        GameSettings.SetPsxFilter(psxBefore);
         yield return null;
 
         // ---- sensitivity is read from settings rather than the prefab ----
@@ -1633,6 +1656,96 @@ public class ProbeRunner : MonoBehaviour
     /// receives one a moment later. Both halves have to work: the build has to arm them with
     /// something, and the late property has to replace it.
     /// </summary>
+    /// <summary>
+    /// Reported directly as "the text is not on the scoreboard backdrop" - an overlay canvas, so
+    /// no camera render can show it and no screenshot can confirm or deny that report. This is
+    /// the "read it back" equivalent for a layout claim rather than a text claim: real,
+    /// laid-out world corners off both RectTransforms after an actual frame, rather than the
+    /// hand-worked arithmetic that produced the numbers in the first place and could easily be
+    /// wrong the same way twice.
+    /// </summary>
+    IEnumerator CheckScoreboardLayout()
+    {
+        Scoreboard board = Object.FindFirstObjectByType<Scoreboard>(FindObjectsInactive.Include);
+
+        if (board == null)
+        {
+            Check(false, "the scoreboard is in the scene", "no Scoreboard component");
+            yield break;
+        }
+
+        Scoreboard.OpenOverride = true;
+
+        // A few real frames - the layout groups and the canvas both need at least one pass to
+        // settle before GetWorldCorners means anything.
+        for (int i = 0; i < 3; i++)
+            yield return null;
+
+        Canvas.ForceUpdateCanvases();
+
+        RectTransform backdrop = board.BackdropRect;
+        RectTransform rows = board.ContainerRect;
+
+        if (backdrop == null || rows == null)
+        {
+            Check(false, "the scoreboard has a backdrop and a row container",
+                  $"backdrop={(backdrop != null)} rows={(rows != null)}");
+            Scoreboard.OpenOverride = null;
+            yield break;
+        }
+
+        Vector3[] backdropCorners = new Vector3[4];
+        Vector3[] rowsCorners = new Vector3[4];
+        backdrop.GetWorldCorners(backdropCorners);
+        rows.GetWorldCorners(rowsCorners);
+
+        // corners[0] is bottom-left, corners[2] is top-right, for both.
+        bool insideX = rowsCorners[0].x >= backdropCorners[0].x && rowsCorners[2].x <= backdropCorners[2].x;
+        bool insideY = rowsCorners[0].y >= backdropCorners[0].y && rowsCorners[2].y <= backdropCorners[2].y;
+
+        Check(insideX && insideY, "the row column sits inside the backdrop",
+              $"backdrop {backdropCorners[0]}..{backdropCorners[2]}, rows {rowsCorners[0]}..{rowsCorners[2]}");
+
+        // Rows are a five-column table now (Rank/Name/Primary/Secondary/Streak), not one
+        // TMP_Text per row - index 0 is always the column-header row Refresh() writes first, so
+        // the first real player is index 1. Read its Name column specifically, confirming
+        // Refresh() actually populated a player rather than just that the empty template exists.
+        TMP_Text firstRowName = null;
+
+        foreach (Transform child in rows)
+        {
+            if (!child.gameObject.activeSelf)
+                continue;
+
+            TMP_Text candidate = child.Find("Name")?.GetComponent<TMP_Text>();
+
+            if (candidate != null && candidate.text != "NAME")
+            {
+                firstRowName = candidate;
+                break;
+            }
+        }
+
+        Check(firstRowName != null && !string.IsNullOrWhiteSpace(firstRowName.text),
+              "the scoreboard actually filled in a row",
+              firstRowName == null ? "no active player row" : $"reads '{firstRowName.text}'");
+
+        if (firstRowName != null)
+        {
+            RectTransform rowRect = (RectTransform)firstRowName.transform.parent;
+            Vector3[] rowCorners = new Vector3[4];
+            rowRect.GetWorldCorners(rowCorners);
+
+            bool rowInsideX = rowCorners[0].x >= backdropCorners[0].x && rowCorners[2].x <= backdropCorners[2].x;
+            bool rowInsideY = rowCorners[0].y >= backdropCorners[0].y && rowCorners[2].y <= backdropCorners[2].y;
+
+            Check(rowInsideX && rowInsideY, "that row sits inside the backdrop",
+                  $"backdrop {backdropCorners[0]}..{backdropCorners[2]}, row {rowCorners[0]}..{rowCorners[2]}");
+        }
+
+        Scoreboard.OpenOverride = null;
+    }
+
     IEnumerator CheckLateJoinGetsWeapons(PlayerController player)
     {
         // Wipe it, the way a fresh arrival has nothing.
@@ -1714,6 +1827,86 @@ public class ProbeRunner : MonoBehaviour
         System.IO.File.WriteAllBytes(System.IO.Path.Combine(ShotFolder, "scope-mask.png"), mask.EncodeToPNG());
 
         Object.DestroyImmediate(mask);
+    }
+
+    /// <summary>
+    /// Reported directly as "does nothing." Unlike the scoreboard, this one's a camera effect, so
+    /// the same render-to-texture technique OutlinePlayCheck already proved out for ScreenOutline
+    /// works here too - a real before/after pixel comparison rather than trusting that "it
+    /// compiled and the profile has the setting in it" means the picture actually changed.
+    /// </summary>
+    IEnumerator CheckPsxFilterVisiblyChangesTheImage()
+    {
+        Camera camera = PlayerController.LocalCamera;
+
+        if (camera == null || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+        {
+            Check(false, "psx filter changes the render", "no camera or no graphics device to check with");
+            yield break;
+        }
+
+        GameSettings.ShaderPreset presetBefore = GameSettings.Shaders;
+        bool psxBefore = GameSettings.PsxFilter;
+
+        GameSettings.SetPsxFilter(false);
+        yield return null;
+        yield return null;
+
+        Color32[] off = ReadPixels(camera);
+
+        GameSettings.SetPsxFilter(true);
+        yield return null;
+        yield return null;
+
+        Color32[] on = ReadPixels(camera);
+
+        long diff = 0;
+
+        for (int i = 0; i < off.Length; i++)
+        {
+            diff += System.Math.Abs(off[i].r - on[i].r)
+                  + System.Math.Abs(off[i].g - on[i].g)
+                  + System.Math.Abs(off[i].b - on[i].b);
+        }
+
+        double averagePerChannel = diff / (double)(off.Length * 3);
+
+        // A real quantize-and-dither pass moves plenty of pixels by several levels each: this is
+        // a low bar (any of them meaningfully move at all), not a claim about how strong the
+        // effect looks - that's still a taste call for a real render, not this check.
+        Check(averagePerChannel > 0.5, "the psx filter visibly changes the render",
+              $"average per-channel difference {averagePerChannel:F2} across {off.Length} pixels");
+
+        GameSettings.SetPsxFilter(psxBefore);
+        GameSettings.SetShaders(presetBefore);
+    }
+
+    static Color32[] ReadPixels(Camera camera)
+    {
+        const int width = 480;
+        const int height = 270;
+
+        RenderTexture target = new RenderTexture(width, height, 24);
+        RenderTexture previousTarget = camera.targetTexture;
+        RenderTexture previousActive = RenderTexture.active;
+
+        camera.targetTexture = target;
+        camera.Render();
+        camera.targetTexture = previousTarget;
+
+        RenderTexture.active = target;
+        Texture2D shot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        shot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        shot.Apply();
+        RenderTexture.active = previousActive;
+
+        Color32[] pixels = shot.GetPixels32();
+
+        Object.DestroyImmediate(shot);
+        target.Release();
+        Object.DestroyImmediate(target);
+
+        return pixels;
     }
 
     // Renders whatever the player is looking at to a PNG next to the log.

@@ -28,6 +28,11 @@ public static class HudBuilder
     // which is two, and costs nothing to carry.
     const int PipCount = 8;
 
+    // Retuned once already - the first middle-right placement (40 above the vertical middle)
+    // was reported as "a bit too high up, stuff overlaps or doesn't fit properly" against the
+    // style meter cluster above it. Shared so Run() and Repair() can't drift apart on this again.
+    static readonly Vector2 FeedPosition = new Vector2(-48f, -60f);
+
     [MenuItem("Tools/Gorilla Warfare/Build the in-game HUD")]
     public static void Run()
     {
@@ -122,71 +127,136 @@ public static class HudBuilder
         marker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
         marker.gameObject.SetActive(false);
 
-        // ---------------------------------------------------------------- health, bottom left
-        GameObject health = Panel(rootObject.transform, "Health", BottomLeft, BottomLeft, BottomLeft,
-                                  new Vector2(48f, 48f), Vector2.zero, null);
+        // ---------------------------------------------------------------- health, top left
+        // Moved up from the bottom left and turned vertical - the Cruelty Squad health bar was
+        // named directly as the reference: top left, depletes downward, the peel and the banana
+        // distinct from each other rather than one shape, a backshadow/outline so "how much you
+        // lost" and "how much there should be on full" can be read at a glance, and an animated
+        // overshield bar beside it, tilted like ULTRAKILL's own HUD rather than sharing the main
+        // bar's shape.
+        GameObject health = Panel(rootObject.transform, "Health", TopLeft, TopLeft, TopLeft,
+                                  new Vector2(48f, -48f), Vector2.zero, null);
 
-        // The bananameter - literally that, not a tinted rectangle. Direct correction after the
-        // first attempt: "what you did is not what I meant by bananameter." A pixel-art banana
-        // (`BananaSprite`, drawn procedurally the same way every other texture on this HUD
-        // already is - no sourced or hand-painted asset) in three stacked layers: an always-
-        // visible dim husk showing the full shape, a pale trail that lags behind on damage and
-        // catches up (the "inertia" asked for), and the live reading on top, tinted through the
-        // same ripeness palette the weapon's own magazine already uses.
-        //
-        // Leans INTO the corner rather than away from it - reported that the old rectangular
-        // bar's lean pointed the wrong way. Negative rather than the positive angle that bar
-        // used, and there's no separate border frame to carry as a rigid body any more: the
-        // outline is baked into the sprite itself, so the container holding the three layers can
-        // rotate directly.
-        const float barLean = -8f;
-        Vector2 meterSize = new Vector2(300f, 88f);
+        // Close to the sprite's own native aspect (285x250, close to square) rather than
+        // stretched hard into a tall rectangle - the first two attempts at this (one at 90x320,
+        // one at 150x210, both relying on Image.preserveAspect to keep the shape honest) both
+        // rendered wrong in ways that weren't reproducible from reading the code, and reported
+        // back as "disgusting... does not look like my example" - so this trades some of the
+        // exaggerated verticality for a shape that is mathematically guaranteed not to distort:
+        // no preserveAspect at all, just a plain stretch-fill (see BananaLayer) into a box close
+        // enough to the source aspect that stretching it barely moves anything. The vertical
+        // "meter" read leans on the layout instead - the number above, the ladder below, the
+        // overshield beside it - rather than on the banana itself being pulled out of shape.
+        Vector2 meterSize = new Vector2(150f, 160f);
 
-        RectTransform meter = Panel(health.transform, "BananaMeter", BottomLeft, BottomLeft, BottomLeft,
-                                    Vector2.zero, meterSize, null).GetComponent<RectTransform>();
-        meter.localRotation = Quaternion.Euler(0f, 0f, barLean);
+        // Everything under `health` uses a TopLeft pivot and grows downward from there (negative
+        // Y), matching the group's own TopLeft anchor - the bar sits below the number rather than
+        // beside a BottomLeft-pivoted stack, which would grow upward off the top of the screen
+        // instead of down into it. First build of this section got exactly that backwards - see
+        // `bug-log.md`'s twenty-first pass.
+        const float numberHeight = 90f;
+        const float numberGap = 14f;
+        float meterTop = -(numberHeight + numberGap);
 
-        BananaLayer(meter, "Husk", new Color(0.22f, 0.15f, 0.08f, 0.85f), false);
-        Image trail = BananaLayer(meter, "Trail", new Color(1f, 0.96f, 0.75f, 0.55f), true);
-        Image fill = BananaLayer(meter, "Fill", Color.white, true);
+        // The overshield sits behind and slightly offset from the main banana, sharing its own
+        // silhouette rather than being a straight bar - reported directly: "the overshield one
+        // being a curve and it underlapping the banana like in the reference picture." Built
+        // first (and as a plain sibling, not a child of `meter`) specifically so it renders
+        // *behind* the main banana in draw order - Unity UI draws children in hierarchy order,
+        // so whatever is added first sits underneath everything added after it. A second real
+        // asset was never sourced for this - it's the exact same sourced sprite the main banana
+        // uses (see BananaSprite), just tinted and offset, which is what actually makes it read
+        // as "the same banana, shielded" rather than an unrelated shape bolted on the side.
+        Vector2 shieldSize = meterSize * 1.12f;
+        Vector2 shieldOffset = new Vector2(22f, -14f);
 
-        Image shield = Image(meter, "Shield", BottomLeft, BottomLeft, BottomLeft,
-                             new Vector2(meterSize.x, 0f), new Vector2(0f, meterSize.y),
-                             new Color(0.35f, 0.8f, 1f));
+        RectTransform shieldMeter = Panel(health.transform, "OvershieldMeter", TopLeft, TopLeft, TopLeft,
+                                          new Vector2(shieldOffset.x, meterTop + shieldOffset.y), shieldSize, null)
+                                     .GetComponent<RectTransform>();
+
+        // Same lean as the main banana below - two bananas at different angles would read as
+        // misaligned rather than as one shielded piece of fruit.
+        shieldMeter.localRotation = Quaternion.Euler(0f, 0f, -22f);
+
+        BananaOutline(shieldMeter, new Color(0.03f, 0.1f, 0.14f, 1f), 3f);
+
+        Image shieldTrack = BananaLayer(shieldMeter, "Track", new Color(0.15f, 0.45f, 0.55f, 0.55f), false);
+
+        Image shield = BananaLayer(shieldMeter, "Fill", new Color(0.4f, 0.9f, 1f, 1f), true);
         shield.gameObject.SetActive(false);
 
+        // The host itself (outline + empty track) stays visible rather than hiding with the fill
+        // - an empty socket peeking out from behind the main banana reads better than a shape
+        // that appears from nowhere, and it's the "animated" half of the request: even idle it
+        // sits there waiting to be filled instead of only existing at the one moment it has
+        // something in it.
+
+        RectTransform meter = Panel(health.transform, "BananaMeter", TopLeft, TopLeft, TopLeft,
+                                    new Vector2(0f, meterTop), meterSize, null).GetComponent<RectTransform>();
+
+        // Rotated toward the crosshair rather than left at the sprite's own natural lean -
+        // reported directly: "With the banana facing the crosshair (not the opposite)". The
+        // sourced sprite's own stem points up and to the right in its native orientation (see
+        // BananaHealth-CREDIT.txt) - sitting in the top-left corner, that pointed further into
+        // the corner instead of down toward the centre of the screen. Deliberately a modest
+        // correction rather than a full turn toward it: Image.Type.Filled's Vertical/Bottom clip
+        // (see BananaLayer) operates in this same rotated local space, so a large rotation would
+        // swap which screen direction "depletes downward" actually empties toward - a small tilt
+        // nudges the facing without fighting that. First-pass estimate, not measured against a
+        // render - see roadmap.md's Unverified section, same as every other pose number here.
+        meter.localRotation = Quaternion.Euler(0f, 0f, -22f);
+
+        // A cell-shaded outline hugging the banana's own silhouette - reported directly against
+        // the first attempt, which was a rectangle behind the sprite rather than an outline round
+        // its actual shape ("What you did is add a box around it"). See BananaOutline.
+        BananaOutline(meter, new Color(0.07f, 0.05f, 0.02f, 1f), 3f);
+
+        // Split into the peel and the banana itself, per the direct request, rather than one
+        // shape doing both jobs. Both layers are the same sourced sprite (BananaSprite) rather
+        // than a second asset - the peel isn't a separate texture that happens to sit behind the
+        // fruit, it's the same banana, always shown at full size and coloured like a peel. As the
+        // banana layer on top depletes it reveals more of the peel underneath, which reads as
+        // "eaten down toward the skin" as you take damage - the metaphor a second, unrelated
+        // sprite would not have given for free. Still a whole banana, not a peeled-open one -
+        // reported directly not to take the peel off; the split here is tint only, never shape.
+        Image peel = BananaLayer(meter, "Peel", new Color(0.8f, 0.66f, 0.14f, 1f), false);
+        Image trail = BananaLayer(meter, "Trail", new Color(1f, 0.97f, 0.86f, 0.55f), true);
+        Image fill = BananaLayer(meter, "Fill", Color.white, true);
+
         TMP_Text healthNumber = Text(health.transform, "Number", font, 76f,
-                                     TextAlignmentOptions.BottomLeft, BottomLeft,
-                                     new Vector2(0f, meterSize.y + 14f), new Vector2(300f, 90f));
+                                     TextAlignmentOptions.TopLeft, TopLeft,
+                                     Vector2.zero, new Vector2(300f, numberHeight));
         healthNumber.text = "140";
         healthNumber.characterSpacing = 3f;
 
         TMP_Text streak = Text(health.transform, "Streak", font, 22f,
-                               TextAlignmentOptions.BottomLeft, BottomLeft,
-                               new Vector2(0f, -30f), new Vector2(400f, 28f));
+                               TextAlignmentOptions.TopLeft, TopLeft,
+                               new Vector2(0f, meterTop - meterSize.y - 10f), new Vector2(400f, 28f));
         streak.text = "3 IN A ROW";
         streak.color = new Color(1f, 0.55f, 0.1f);
 
         TMP_Text heal = Text(health.transform, "Heal", font, 34f,
-                             TextAlignmentOptions.BottomLeft, BottomLeft,
-                             new Vector2(310f, meterSize.y + 14f), new Vector2(200f, 50f));
+                             TextAlignmentOptions.TopLeft, TopLeft,
+                             new Vector2(310f, 0f), new Vector2(200f, 50f));
         heal.text = "+35";
 
-        // ---------------------------------------------------------------- ladder, above health
-        GameObject ladder = Panel(rootObject.transform, "Ladder", BottomLeft, BottomLeft, BottomLeft,
-                                  new Vector2(48f, 190f), Vector2.zero, null);
+        // ---------------------------------------------------------------- ladder, below health
+        // Was above health when health sat at the bottom of the screen - now sits under the
+        // vertical bar instead, still directly attached to it.
+        GameObject ladder = Panel(rootObject.transform, "Ladder", TopLeft, TopLeft, TopLeft,
+                                  new Vector2(48f, -48f + meterTop - meterSize.y - 40f), Vector2.zero, null);
 
         TMP_Text ladderLabel = Text(ladder.transform, "Label", font, 22f,
-                                    TextAlignmentOptions.BottomLeft, BottomLeft,
-                                    new Vector2(0f, 26f), new Vector2(400f, 28f));
+                                    TextAlignmentOptions.TopLeft, TopLeft,
+                                    Vector2.zero, new Vector2(400f, 28f));
         ladderLabel.text = "RUNG 1 / 5";
         ladderLabel.color = new Color(1f, 1f, 1f, 0.55f);
 
         Image[] pips = new Image[PipCount];
         for (int i = 0; i < PipCount; i++)
         {
-            pips[i] = Image(ladder.transform, $"Pip{i}", BottomLeft, BottomLeft, BottomLeft,
-                            new Vector2(i * 22f, 0f), new Vector2(15f, 15f),
+            pips[i] = Image(ladder.transform, $"Pip{i}", TopLeft, TopLeft, TopLeft,
+                            new Vector2(i * 22f, -32f), new Vector2(15f, 15f),
                             new Color(1f, 1f, 1f, 0.2f));
         }
 
@@ -275,29 +345,43 @@ public static class HudBuilder
         combo.text = "x4";
         combo.color = new Color(1f, 0.95f, 0.25f);
 
-        // Standings, listed under the winner when the round is over.
+        // Standings, listed under the winner when the round is over. Reworked entirely - reported
+        // directly as looking "pretty bad... not updated with the game... old bad fonts". Widened
+        // and the type bumped up a size (28->32) to carry the new rank-number prefix
+        // (GameHud.UpdateStandings colours 1ST/2ND/3RD gold/silver/bronze via a rich-text tag)
+        // without the row feeling any more cramped than the old, plainer one did.
         // Low enough to clear the subtitle above it. The first row starts at the top of this
         // box, so anchoring it any higher puts the standings through the winner's name.
         RectTransform standings = Column(centre.transform, "Standings", Center, Center,
-                                         new Vector2(0f, -110f), new Vector2(700f, 400f),
+                                         new Vector2(0f, -110f), new Vector2(820f, 420f),
                                          TextAnchor.UpperCenter);
 
-        TMP_Text standingRow = Text(standings, "RowTemplate", font, 28f,
+        TMP_Text standingRow = Text(standings, "RowTemplate", font, 32f,
                                     TextAlignmentOptions.Center, Center,
-                                    Vector2.zero, new Vector2(700f, 34f));
-        standingRow.text = "someone   0 / 0";
+                                    Vector2.zero, new Vector2(820f, 38f));
+        standingRow.text = "<color=#FFD11F>1ST</color>  someone   0 STYLE   0 KILLS";
 
-        // ---------------------------------------------------------------- kill feed, top right
-        // Below the clock rather than level with it. At 16:9 a 900 wide box anchored to the
-        // top right reaches back to x 972 and the clock runs out to 1160, so they overlap.
-        RectTransform feed = Column(rootObject.transform, "Feed", TopRight, TopRight,
-                                    new Vector2(-48f, -150f), new Vector2(760f, 320f),
+        // Hidden - a template exists only to be cloned (see GameHud.Row), and is otherwise just
+        // an untracked extra child neither Update method's own pool bookkeeping ever reaches.
+        // Same bug shape fixed on feedRow and breakdownRow below, all three found in the same
+        // sweep - reported directly, on the breakdown list specifically, as "a constant 1.35x
+        // headshot thingy on the right at all times."
+        standingRow.gameObject.SetActive(false);
+
+        // ---------------------------------------------------------------- kill feed, middle right
+        // Moved down off the top right corner to make room for the style meter there instead -
+        // reported directly: "I want something on the top right for this so you will need to
+        // move the killfeed in the middle right". Anchored to the vertical middle rather than
+        // the top, so it grows toward the bottom edge instead of toward the style meter above it.
+        RectTransform feed = Column(rootObject.transform, "Feed", MiddleRight, MiddleRight,
+                                    FeedPosition, new Vector2(760f, 320f),
                                     TextAnchor.UpperRight);
 
         TMP_Text feedRow = Text(feed, "RowTemplate", font, 28f,
                                 TextAlignmentOptions.Right, TopRight,
                                 Vector2.zero, new Vector2(760f, 34f));
         feedRow.text = "someone got peeled by someone else";
+        feedRow.gameObject.SetActive(false);
 
         // ---------------------------------------------------------------- damage bearings
         // A ring of marks around the crosshair saying which way you are being shot from. Its own
@@ -356,20 +440,58 @@ public static class HudBuilder
         Wire(so, "centreSubtitle", subtitle);
         Wire(so, "comboText", combo);
 
-        // The slide chain, roughly level with the hit combo but hugging the right edge of the
-        // screen rather than the centre. Deliberately NOT a child of `centre` - that panel is
-        // built with zero size (it only ever needed to anchor centred children at its own
-        // origin), so a "right" anchor on a child of a zero-*width* parent collapses to the same
-        // point a centred one would and this sat only 70 points left of true centre - invisible
-        // as a bug until Jersey 10's wider glyphs on the kill/ladder title actually reached far
-        // enough left to overlap it. Parented on the root canvas instead, where the anchor means
-        // what it says.
-        TMP_Text slideRank = Text(rootObject.transform, "SlideCombo", rankFont, 50f,
-                                  TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                  new Vector2(-60f, -170f), new Vector2(620f, 80f), 0.5f);
-        slideRank.text = "SLIDE";
+        // The unified style score, top right - moved up off the vertical middle to its own
+        // corner, the same treatment health and ammo already get in theirs. Reworked entirely
+        // from a slide-only combo (see StyleScore.cs); the rank name now carries the multiplier
+        // alongside it ("GOING BANANAS  x2.4") rather than a separate label.
+        //
+        // No permanent score readout - reported directly against an earlier version that showed
+        // one always: "why is there a permanent score on the screen all the time I dont need to
+        // see it like that, i Like the ultrakill style." ULTRAKILL's own meter only ever shows
+        // while there's something to show; the running total still exists (StyleScore.Score) for
+        // the post-match standings and the MOST STYLISH award, it just isn't a fixture of the
+        // live HUD any more.
+        //
+        // Tilted rather than flat - "it should be tilted inwards and not horizontally flat",
+        // matching the lean every other bar on this HUD already uses. Deliberately NOT a child of
+        // `centre` - that panel is built with zero size (it only ever needed to anchor centred
+        // children at its own origin), so a "right" anchor on a child of a zero-*width* parent
+        // collapses to the same point a centred one would. Parented on the root canvas instead,
+        // where the anchor means what it says.
+        const float styleTilt = -6f;
+
+        TMP_Text slideRank = Text(rootObject.transform, "SlideCombo", rankFont, 42f,
+                                  TextAlignmentOptions.Right, TopRight,
+                                  new Vector2(-48f, -48f), new Vector2(560f, 60f), 0.5f);
+        slideRank.text = "PEELING  x1.0";
+        slideRank.rectTransform.localRotation = Quaternion.Euler(0f, 0f, styleTilt);
         slideRank.gameObject.SetActive(false);
         Wire(so, "slideCombo", slideRank);
+
+        // The breakdown - "1.35x HEADSHOT", "1.5x NO SCOPE" and so on for whatever fired on the
+        // last kill, per the reference image's own layout: a named reason next to a number,
+        // stacked. Reported directly that the multiplier's contributing factors needed to be
+        // visible rather than folded into one number with nothing to show for it. Same tilt as
+        // the rank line above it, so the whole cluster reads as one leaning block.
+        // Y=-150, not -118: the rank text above sits in a TopRight-pivoted box whose own meter
+        // bar/border hangs below it down to Y=-129 (rank text top edge at -48, 60 tall, plus the
+        // meter's own ~21px past that) - -118 put the breakdown's top edge eleven pixels inside
+        // that, which is exactly the overlap reported from a real screenshot ("FULL SILVERBACK
+        // x5.4" overlapping "1.30x POINT BLANK"). -150 clears it with room to spare.
+        RectTransform breakdown = Column(rootObject.transform, "Breakdown", TopRight, TopRight,
+                                         new Vector2(-48f, -150f), new Vector2(400f, 200f),
+                                         TextAnchor.UpperRight);
+        breakdown.localRotation = Quaternion.Euler(0f, 0f, styleTilt);
+
+        TMP_Text breakdownRow = Text(breakdown, "RowTemplate", font, 22f,
+                                     TextAlignmentOptions.Right, TopRight,
+                                     Vector2.zero, new Vector2(400f, 26f));
+        breakdownRow.text = "1.35x HEADSHOT";
+        breakdownRow.color = new Color(1f, 0.9f, 0.4f);
+        breakdownRow.gameObject.SetActive(false);
+
+        Wire(so, "breakdownContainer", breakdown);
+        Wire(so, "breakdownTemplate", breakdownRow);
 
         // The rank text alone was just a word changing, four times - asked directly for an
         // ULTRAKILL/DMC style meter under it instead, the same idea as the style bar under
@@ -403,6 +525,73 @@ public static class HudBuilder
         slideMeterFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Right;
         slideMeterFill.fillAmount = 1f;
         Wire(so, "slideMeterFill", slideMeterFill);
+
+        // The movement-tech combo, bottom left - a mirror of the style meter above (same name +
+        // chain-count shape, same tilted bar underneath), reading MovementCombo instead of
+        // StyleScore. Reported directly: "no slide combo text still which should show up... put
+        // that on the middle/bottom left... make new movement tech combos and stuff... this
+        // includes grappling, grenade jumping, bhopping, slide hopping" - a second, separate
+        // counter from the kill-based one above, for traversal instead of combat. Tilted the
+        // other way (+6 rather than -6) so it leans inward from the left edge the same way the
+        // style meter leans inward from the right - two mirrored corners, not the same tilt
+        // copy-pasted. The meter bar hangs ABOVE the text rather than below it, unlike the style
+        // meter's - this cluster sits near the bottom of the screen, and below would push it
+        // off-screen entirely.
+        const float comboTilt = 6f;
+
+        TMP_Text moveCombo = Text(rootObject.transform, "MovementCombo", rankFont, 42f,
+                                  TextAlignmentOptions.Left, BottomLeft,
+                                  new Vector2(48f, 48f), new Vector2(560f, 60f));
+        moveCombo.text = "SLIDE HOP  x1";
+        moveCombo.rectTransform.localRotation = Quaternion.Euler(0f, 0f, comboTilt);
+        moveCombo.gameObject.SetActive(false);
+        Wire(so, "movementCombo", moveCombo);
+
+        Panel(moveCombo.transform, "MeterBorder", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 0f),
+              new Vector2(-meterBorder, 6f - meterBorder), new Vector2(300f + meterBorder * 2f, 12f + meterBorder * 2f),
+              Color.black);
+
+        GameObject moveMeterTrack = Panel(moveCombo.transform, "MeterTrack",
+                                          new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 0f),
+                                          new Vector2(0f, 6f), new Vector2(300f, 12f),
+                                          new Color(0f, 0f, 0f, 0.55f));
+
+        Image moveMeterFill = Image(moveMeterTrack.transform, "Fill", Vector2.zero, Vector2.one, Center,
+                                    Vector2.zero, Vector2.zero, new Color(0.25f, 0.85f, 1f, 0.95f));
+        moveMeterFill.type = UnityEngine.UI.Image.Type.Filled;
+        moveMeterFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+        moveMeterFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left;
+        moveMeterFill.fillAmount = 1f;
+        Wire(so, "movementMeterFill", moveMeterFill);
+
+        // The slide-exhaustion notice, its own element now. First placement (right side,
+        // middle-right) was reported as wrong the same day - "put the spent from the sliding to
+        // the left on top of the movement combo thing." Bottom-left now, directly above the
+        // movement combo's own cluster (which tops out around Y=129 including its meter border -
+        // see the movement combo block above) rather than sharing its spot. Left-aligned to match
+        // sitting over a left-anchored element, no tilt either way - a neutral wait counting down,
+        // not a hype number climbing.
+        TMP_Text spent = Text(rootObject.transform, "SpentText", rankFont, 34f,
+                              TextAlignmentOptions.Left, BottomLeft,
+                              new Vector2(48f, 150f), new Vector2(400f, 50f));
+        spent.text = "SPENT  1.0";
+        spent.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
+        spent.gameObject.SetActive(false);
+        Wire(so, "spentText", spent);
+
+        // "Make sure people get tokens at the end of each round (and a whole animation plays...
+        // with sound effects and vfx etc)." Below centreTitle/centreSubtitle (Y=230/148) so it
+        // never competes with the win/lose announcement - this is a personal, separate moment,
+        // not part of who won. tokenRewardBurst (a particle flourish) is left unwired - optional,
+        // null-checked in GameHud.AwardRoundTokens, a reasonable follow-up rather than a blocker.
+        TMP_Text tokenReward = Text(rootObject.transform, "TokenReward", font, 54f,
+                                    TextAlignmentOptions.Center, TopCenter,
+                                    new Vector2(0f, 60f), new Vector2(700f, 80f));
+        tokenReward.text = "+50 TOKENS";
+        tokenReward.color = new Color(1f, 0.86f, 0.2f);
+        tokenReward.gameObject.SetActive(false);
+        Wire(so, "tokenRewardText", tokenReward);
+
         Wire(so, "resultsBackdrop", results);
 
         // Full screen, behind the rest of the HUD. Red and pulsing when you are nearly dead.
@@ -581,10 +770,11 @@ public static class HudBuilder
 
             if (sibling != null)
             {
-                TMP_Text made = Text(hud.transform, "SlideCombo", sibling.font, 80f,
-                                     TextAlignmentOptions.Right, new Vector2(1f, 0.5f),
-                                     new Vector2(-60f, -170f), new Vector2(680f, 100f));
-                made.text = "SLIDE";
+                TMP_Text made = Text(hud.transform, "SlideCombo", sibling.font, 42f,
+                                     TextAlignmentOptions.Right, TopRight,
+                                     new Vector2(-48f, -48f), new Vector2(560f, 60f));
+                made.text = "PEELING  x1.0";
+                made.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -6f);
                 made.gameObject.SetActive(false);
 
                 comboSlot.objectReferenceValue = made;
@@ -594,6 +784,33 @@ public static class HudBuilder
             }
         }
 
+        // The kill feed's move off the top right corner to make room for the style meter there -
+        // Retune only repositions a TMP_Text, and the feed is a plain RectTransform with its own
+        // anchor to change, so it gets its own check rather than a Retune call.
+        SerializedProperty feedSlot = so.FindProperty("feedContainer");
+        RectTransform feedRect = feedSlot != null ? feedSlot.objectReferenceValue as RectTransform : null;
+
+        if (feedRect != null && feedRect.anchorMin == TopRight)
+        {
+            feedRect.anchorMin = feedRect.anchorMax = feedRect.pivot = MiddleRight;
+            feedRect.anchoredPosition = FeedPosition;
+
+            EditorUtility.SetDirty(feedRect);
+            added++;
+
+            Debug.Log("[hud] moved the kill feed to the middle right");
+        }
+        else if (feedRect != null && feedRect.pivot == MiddleRight && feedRect.anchoredPosition != FeedPosition)
+        {
+            // Retuned again after the first middle-right placement was reported as "a bit too
+            // high up, stuff overlaps or doesn't fit properly".
+            feedRect.anchoredPosition = FeedPosition;
+            EditorUtility.SetDirty(feedRect);
+            added++;
+
+            Debug.Log("[hud] retuned the kill feed's middle-right position");
+        }
+
         // Sizes and positions that changed after the HUD was first built. Applied by name so a
         // scene built by an older version catches up without being replaced - the alternative
         // is telling Ryaan to rebuild and lose whatever he has moved.
@@ -601,17 +818,187 @@ public static class HudBuilder
         added += Retune(so, "centreSubtitle", 42f, new Vector2(0f, 148f), new Vector2(1600f, 56f));
         added += Retune(so, "comboText", 76f, new Vector2(0f, -170f), new Vector2(400f, 96f));
 
-        // Reported too small on 2026-08-17 and again on 2026-08-21. 80 matches and slightly
-        // beats the kill-streak combo text (76, above) - the two are the same idea, a hot streak
-        // told to you as text - and the wider box is so BANANAS!!! at the new size doesn't wrap.
-        // Alignment passed explicitly: Retune defaults to Center, and this one was built Right
-        // to hug the edge of its group rather than sit centred in its box like the other three.
-        // Position moved 2026-08-29 along with a reparent onto the root canvas - see Repair's own
-        // note above; an older scene's slideCombo is still a child of the zero-width Centre panel
-        // and Retune only moves the RectTransform, so this alone won't fix that scene's parent,
-        // only its position once it has (or gets) the right one.
-        added += Retune(so, "slideCombo", 80f, new Vector2(-60f, -170f), new Vector2(680f, 100f),
+        // The leaderboard rework - reported directly as looking "pretty bad... not updated with
+        // the game... old bad fonts." Retune handles the row template's own size/position, but
+        // not its font asset or its container's width - two things a live scene built by an
+        // older version of this file could still be carrying, since nothing before this checked
+        // either.
+        added += Retune(so, "standingsTemplate", 32f, Vector2.zero, new Vector2(820f, 38f));
+
+        SerializedProperty standingsRowSlot = so.FindProperty("standingsTemplate");
+        TMP_Text standingsRowText = standingsRowSlot != null ? standingsRowSlot.objectReferenceValue as TMP_Text : null;
+        TMP_FontAsset bodyFont = FindFont();
+
+        if (standingsRowText != null && standingsRowText.font != bodyFont && bodyFont != null)
+        {
+            standingsRowText.font = bodyFont;
+            EditorUtility.SetDirty(standingsRowText);
+            added++;
+
+            Debug.Log("[hud] fixed the standings row's stale font");
+        }
+
+        SerializedProperty standingsContainerSlot = so.FindProperty("standingsContainer");
+        RectTransform standingsContainerRect = standingsContainerSlot != null
+            ? standingsContainerSlot.objectReferenceValue as RectTransform : null;
+        Vector2 standingsSize = new Vector2(820f, 420f);
+
+        if (standingsContainerRect != null && standingsContainerRect.sizeDelta != standingsSize)
+        {
+            standingsContainerRect.sizeDelta = standingsSize;
+            EditorUtility.SetDirty(standingsContainerRect);
+            added++;
+
+            Debug.Log("[hud] widened the standings container");
+        }
+
+        // Moved up into the top right corner as part of becoming the unified style meter - see
+        // Run()'s own note. Alignment passed explicitly: Retune defaults to Center, and this one
+        // was built Right to hug the edge of its group rather than sit centred in its box like
+        // the other three.
+        added += Retune(so, "slideCombo", 42f, new Vector2(-48f, -48f), new Vector2(560f, 60f),
                         TextAlignmentOptions.Right);
+
+        // Retuned twice the same day it was added. First position (right side, Y=48) sat inside
+        // the kill feed's own fixed-height box (MiddleRight-pivoted, 320 tall, so its content
+        // starts near the *top* of that box at roughly Y=100, not near its Y=-60 anchor point the
+        // way a box growing from empty would suggest) - a real screenshot caught "SPENT 3.0"
+        // printed directly on top of a feed line. Moved to Y=140 on the right to clear the feed,
+        // then reported directly the same day as wrong entirely - "put the spent from the
+        // sliding to the left on top of the movement combo thing." Bottom-left now, Y=150,
+        // clearing the movement combo cluster's own top edge (Y=129 including its meter border).
+        added += Retune(so, "spentText", 34f, new Vector2(48f, 150f), new Vector2(400f, 50f),
+                        TextAlignmentOptions.Left);
+
+        // Retune only ever touches size/position/alignment, not rotation - the tilt is applied
+        // separately here so a scene repaired rather than fully rebuilt still picks it up.
+        SerializedProperty tiltSlot = so.FindProperty("slideCombo");
+        TMP_Text tiltTarget = tiltSlot != null ? tiltSlot.objectReferenceValue as TMP_Text : null;
+
+        if (tiltTarget != null && tiltTarget.rectTransform.localRotation == Quaternion.identity)
+        {
+            tiltTarget.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -6f);
+            EditorUtility.SetDirty(tiltTarget);
+            added++;
+
+            Debug.Log("[hud] tilted the style rank text");
+        }
+
+        // The breakdown sat eleven pixels inside the style meter's own bar/border below the rank
+        // text - a real screenshot caught the overlap ("FULL SILVERBACK x5.4" overlapping "1.30x
+        // POINT BLANK"). Breakdown is a plain RectTransform, not a TMP_Text, so it gets its own
+        // conditional fix rather than going through Retune, same shape as the feed's own reposition
+        // above.
+        SerializedProperty breakdownSlot = so.FindProperty("breakdownContainer");
+        RectTransform breakdownRect = breakdownSlot != null ? breakdownSlot.objectReferenceValue as RectTransform : null;
+        Vector2 breakdownPosition = new Vector2(-48f, -150f);
+
+        if (breakdownRect != null && breakdownRect.anchoredPosition != breakdownPosition)
+        {
+            breakdownRect.anchoredPosition = breakdownPosition;
+            EditorUtility.SetDirty(breakdownRect);
+            added++;
+
+            Debug.Log("[hud] moved the style breakdown down to clear the meter bar");
+        }
+
+        // The movement-tech combo, bottom left - see Run()'s own note for the full reasoning.
+        // Built as a fallback the same shape slideCombo's own block above uses: found missing,
+        // built fresh off an existing element's font rather than replacing anything.
+        SerializedProperty moveSlot = so.FindProperty("movementCombo");
+
+        if (moveSlot != null && moveSlot.objectReferenceValue == null)
+        {
+            SerializedProperty rankSlot = so.FindProperty("slideCombo");
+            TMP_Text rankSibling = rankSlot != null ? rankSlot.objectReferenceValue as TMP_Text : null;
+
+            if (rankSibling != null)
+            {
+                const float comboTilt = 6f;
+                const float meterBorder = 3f;
+
+                TMP_Text moveCombo = Text(hud.transform, "MovementCombo", rankSibling.font, 42f,
+                                          TextAlignmentOptions.Left, BottomLeft,
+                                          new Vector2(48f, 48f), new Vector2(560f, 60f));
+                moveCombo.text = "SLIDE HOP  x1";
+                moveCombo.rectTransform.localRotation = Quaternion.Euler(0f, 0f, comboTilt);
+                moveCombo.gameObject.SetActive(false);
+
+                Panel(moveCombo.transform, "MeterBorder", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 0f),
+                      new Vector2(-meterBorder, 6f - meterBorder), new Vector2(300f + meterBorder * 2f, 12f + meterBorder * 2f),
+                      Color.black);
+
+                GameObject moveMeterTrack = Panel(moveCombo.transform, "MeterTrack",
+                                                  new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 0f),
+                                                  new Vector2(0f, 6f), new Vector2(300f, 12f),
+                                                  new Color(0f, 0f, 0f, 0.55f));
+
+                Image moveMeterFill = Image(moveMeterTrack.transform, "Fill", Vector2.zero, Vector2.one, Center,
+                                            Vector2.zero, Vector2.zero, new Color(0.25f, 0.85f, 1f, 0.95f));
+                moveMeterFill.type = UnityEngine.UI.Image.Type.Filled;
+                moveMeterFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+                moveMeterFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left;
+                moveMeterFill.fillAmount = 1f;
+
+                moveSlot.objectReferenceValue = moveCombo;
+
+                SerializedProperty moveFillSlot = so.FindProperty("movementMeterFill");
+                if (moveFillSlot != null)
+                    moveFillSlot.objectReferenceValue = moveMeterFill;
+
+                added++;
+
+                Debug.Log("[hud] added the movement combo");
+            }
+        }
+
+        // The slide-exhaustion notice, its own element now - see Run()'s own note.
+        SerializedProperty spentSlot = so.FindProperty("spentText");
+
+        if (spentSlot != null && spentSlot.objectReferenceValue == null)
+        {
+            SerializedProperty rankSlot2 = so.FindProperty("slideCombo");
+            TMP_Text rankSibling2 = rankSlot2 != null ? rankSlot2.objectReferenceValue as TMP_Text : null;
+
+            if (rankSibling2 != null)
+            {
+                TMP_Text spent = Text(hud.transform, "SpentText", rankSibling2.font, 34f,
+                                      TextAlignmentOptions.Left, BottomLeft,
+                                      new Vector2(48f, 150f), new Vector2(400f, 50f));
+                spent.text = "SPENT  1.0";
+                spent.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
+                spent.gameObject.SetActive(false);
+
+                spentSlot.objectReferenceValue = spent;
+                added++;
+
+                Debug.Log("[hud] added the spent indicator");
+            }
+        }
+
+        // The round-end token reward callout - see Run()'s own note.
+        SerializedProperty tokenSlot = so.FindProperty("tokenRewardText");
+
+        if (tokenSlot != null && tokenSlot.objectReferenceValue == null)
+        {
+            SerializedProperty titleSlot = so.FindProperty("centreTitle");
+            TMP_Text titleSibling = titleSlot != null ? titleSlot.objectReferenceValue as TMP_Text : null;
+
+            if (titleSibling != null)
+            {
+                TMP_Text tokenReward = Text(hud.transform, "TokenReward", titleSibling.font, 54f,
+                                            TextAlignmentOptions.Center, TopCenter,
+                                            new Vector2(0f, 60f), new Vector2(700f, 80f));
+                tokenReward.text = "+50 TOKENS";
+                tokenReward.color = new Color(1f, 0.86f, 0.2f);
+                tokenReward.gameObject.SetActive(false);
+
+                tokenSlot.objectReferenceValue = tokenReward;
+                added++;
+
+                Debug.Log("[hud] added the token reward callout");
+            }
+        }
 
         if (added == 0)
         {
@@ -681,7 +1068,9 @@ public static class HudBuilder
     static readonly Vector2 Center = new Vector2(0.5f, 0.5f);
     static readonly Vector2 BottomLeft = new Vector2(0f, 0f);
     static readonly Vector2 BottomRight = new Vector2(1f, 0f);
+    static readonly Vector2 TopLeft = new Vector2(0f, 1f);
     static readonly Vector2 TopRight = new Vector2(1f, 1f);
+    static readonly Vector2 MiddleRight = new Vector2(1f, 0.5f);
     static readonly Vector2 TopCenter = new Vector2(0.5f, 1f);
 
     static GameObject Panel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
@@ -747,10 +1136,10 @@ public static class HudBuilder
     }
 
     /// <summary>
-    /// One layer of the banana meter - the husk, the trail or the fill are all this, stretched to
-    /// fill whatever container they're built into so the three stack exactly on top of each
-    /// other. `filled` off gives the always-visible husk; on gives a horizontally clipped layer
-    /// for the trail and the live reading.
+    /// One layer of the vertical health meter - the peel, the trail or the banana itself are all
+    /// this, stretched to fill whatever container they're built into so the three stack exactly
+    /// on top of each other. `filled` off gives the always-visible peel; on gives a vertically
+    /// clipped layer for the trail and the live reading.
     /// </summary>
     static Image BananaLayer(Transform parent, string name, Color colour, bool filled)
     {
@@ -759,14 +1148,54 @@ public static class HudBuilder
         image.sprite = BananaSprite();
         image.type = filled ? UnityEngine.UI.Image.Type.Filled : UnityEngine.UI.Image.Type.Simple;
 
+        // The sourced sprite is a whole banana on a natural diagonal lean, not a tall thin
+        // shape - stretching it to fill an arbitrary box (the first version of this) turned it
+        // into a distorted yellow wedge the moment the box wasn't close to its own aspect ratio.
+        // preserveAspect keeps the real shape intact regardless of the container; Filled clipping
+        // still works correctly on top of an aspect-preserved sprite; it just clips the
+        // aspect-correct rect instead of the stretched one.
         if (filled)
         {
-            image.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
-            image.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left;
+            // Vertical, anchored at the bottom - losing health clips the layer away from the
+            // top down rather than shrinking it from either side, which is the "goes down" the
+            // Cruelty Squad reference bar asked for. Was horizontal, hugging the left edge, back
+            // when this whole meter ran sideways along the bottom of the screen.
+            image.fillMethod = UnityEngine.UI.Image.FillMethod.Vertical;
+            image.fillOrigin = (int)UnityEngine.UI.Image.OriginVertical.Bottom;
             image.fillAmount = 1f;
         }
 
         return image;
+    }
+
+    /// <summary>
+    /// A cell-shaded outline round the banana's actual silhouette, not a box behind it -
+    /// reported directly: "there should be a small cell shaded type outline around the health
+    /// banana... What you did is add a box around it." A rectangular backing reads as a frame
+    /// for a non-rectangular shape; this is the standard cheap trick for an outline that actually
+    /// hugs an arbitrary silhouette without a custom shader - eight solid-tinted copies of the
+    /// same sprite, nudged a couple of points in a ring of directions and drawn behind the real
+    /// layers, so the only pixels that show through are the ones just outside the true shape.
+    /// Always full size (Type.Simple, not Filled) - this is the "how much there should be on
+    /// full" half of the comparison, so it never depletes with the fill on top of it.
+    /// </summary>
+    static void BananaOutline(Transform parent, Color colour, float thickness)
+    {
+        Vector2[] ring =
+        {
+            new Vector2(1f, 0f), new Vector2(-1f, 0f), new Vector2(0f, 1f), new Vector2(0f, -1f),
+            new Vector2(0.7071f, 0.7071f), new Vector2(-0.7071f, 0.7071f),
+            new Vector2(0.7071f, -0.7071f), new Vector2(-0.7071f, -0.7071f),
+        };
+
+        for (int i = 0; i < ring.Length; i++)
+        {
+            Image copy = Image(parent, $"Outline{i}", Vector2.zero, Vector2.one, Center,
+                               ring[i] * thickness, Vector2.zero, colour);
+            copy.sprite = BananaSprite();
+            copy.type = UnityEngine.UI.Image.Type.Simple;
+            copy.preserveAspect = true;
+        }
     }
 
     /// A stack that lays its own children out top down. The feed and the standings both grow

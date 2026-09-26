@@ -67,21 +67,14 @@ public class ModeSelector : MonoBehaviour
 
     void Apply(MatchMode mode, bool host)
     {
-        string name = mode == MatchMode.GunGame ? "GUN GAME"
-                      : mode == MatchMode.TeamDeathmatch ? "TEAM DEATHMATCH"
-                      : "DEATHMATCH";
+        MatchModeInfo info = MatchModes.Of(mode);
+        string name = info.DisplayName;
 
         if (label != null)
             label.text = name;
 
         if (description != null)
-        {
-            description.text = mode == MatchMode.GunGame
-                ? "climb the ladder, two kills a rung, win on the peel"
-                : mode == MatchMode.TeamDeathmatch
-                ? "red against blue, no friendly fire, most kills wins it"
-                : "a random banana every life, most kills on the clock";
-        }
+            description.text = info.Description;
 
         // Anyone who isn't the host sees what was picked rather than a button that refuses to
         // do anything - a dead control is worse than no control.

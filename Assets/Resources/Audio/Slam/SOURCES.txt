@@ -1,0 +1,16 @@
+Two lowFrequency_explosion variants from Kenney's Sci-fi Sounds pack, which is CC0 - no
+attribution required, though the credits should say so anyway. Same pack this project's AirBrake
+already comes from (thrusterFire).
+
+Replaces the original pick (three impactSoft_heavy variants, from Impact Sounds) - reported
+directly as "SO BAD, it sounds like someone hitting their microphone." A soft-material impact was
+the wrong genre entirely for what this needed: a deep, weighty boom under the slam, not another
+Foley thud sitting in the same boxy mid-range every other impact-pack sound already occupies. Only
+two variants rather than three - the pack doesn't have a third - which is an acceptable trade for
+actually sounding like the thing it's supposed to.
+
+Plays at 0.4 volume for the wind-up (PlayerMovement.GroundSlamStartEffects) and at 0.85, pitched
+to 0.8, for the actual landing impact (PlayerController.BuildGroundSlamImpact, reached over an RPC
+so everyone nearby hears it, not just whoever slammed). Also the low body layer under a wall
+smash's own crack (PlayerMovement.WallSmash) - already the heaviest, lowest sound in this game's
+banks, which is exactly the shape a low thump under a different impact wants too.

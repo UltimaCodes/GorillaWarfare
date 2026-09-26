@@ -613,3 +613,101 @@ other half doesn't need forcing onto things that were never bananas to begin wit
 
 Maps get placenames, not fruit or bits — the Compound, the Silo, Canopy, the Zoo. Consistent with
 the same rule: the joke is what's in your hands, not what's under your feet.
+
+---
+
+## 9. Party mode
+
+Researched rather than guessed at — comps checked directly rather than assumed from memory, since
+"friendslop" and its current examples are recent enough that a stale answer would've steered the
+whole design wrong. STRAFTAT (free, proximity-chat, small-lobby FPS — validates the packaging this
+game already has) and Machine Party (Buckshot Roulette's dev, 2-4 players, 15 short lethal
+minigames, "Mario Party but everyone's trying to get each other killed") are the two direct
+references. The decision that came out of that research: keep Gorilla Warfare's competitive PvP
+core exactly as it is — Deathmatch, Gun Game and Team Deathmatch stay untouched, still pickable in
+the lobby the same way — and add **Party as a fourth mode**, a sequence of short rounds with
+cumulative scoring across them (Mario Party's stars, not one round deciding everything) rather than
+a genre rewrite. Two of the rounds in that rotation can just be shortened Deathmatch/Gun Game
+instances, which is what "keep the existing modes" gets for free — same code, one round in a longer
+sequence instead of the whole match.
+
+The one genuinely new system this needs is the round-rotation layer itself: pick N rounds, run
+each, a quick "here's where everyone stands" screen between them, tally at the end. Land that once,
+generically, rather than per-minigame — see `roadmap.md`'s note on `MatchModeInfo` (added
+2026-09-03, during the full-codebase review) for the mode-descriptor pattern this should plug into
+rather than reintroducing another `MatchMode.X` ternary scattered across files.
+
+Everything below is banana-themed skins on both original ideas and well-worn party-game tropes —
+tag, hot potato, sumo, musical chairs, Simon says are generic game-design patterns, not anyone's
+IP, the same way Machine Party and Fall Guys already share half their own tropes with each other.
+Scoped for a small/solo team: 3-4 sharp minigames beats 15 mediocre ones for proving the concept,
+which is also just the honest amount one person can build well.
+
+### The four discussed in most depth
+
+**Ground Pound Arena** (not "Hill" — the zone-capture framing got dropped during design). A
+Smash-Bros-shaped melee mode: hits build a per-player knockback percentage, more damage taken means
+more launch on the next hit, and — a deliberate departure from actual Smash — the percentage decays
+while a player is out of combat, so one bad opening doesn't decide the whole round the way it can
+in a real platform fighter. Ground pound is the finisher: high knockback plus a slam connecting
+sends someone flying, which is why it's asked to carry a bigger AOE, heavier camera kick and more
+particles than its movement-tech version — it's the moment the mode is built around. Reuses the
+ground slam's existing AOE damage/falloff, the Peel's melee swing, `Juice`'s camera shake and
+hitstop, and `MovementBurst`'s dust/debris. New: the knockback-percentage stat and its decay rule,
+and a "launched" player state (briefly no control while flying) that doesn't exist yet — right now
+getting hit just hits you, nothing launches anywhere.
+
+**Slip Hazard**. An open map, no walls, an edge to fall off — a blast-zone shape, not a bounded
+arena. Players carry a small stock of throwable peels (Mario Kart's banana, which is about as
+proven as a "banana as a weapon" mechanic gets). A peel that connects doesn't eliminate on
+contact — it causes a short slide in the direction of the hit, then a ~5-second vulnerable window
+where the slipped player can be punched or ground-pounded off the edge unless they recover in
+time (a skill-based "lock in" input, exact shape still open). Shares its whole ring-out/knockback
+foundation with Ground Pound Arena — build the launch-state-plus-edge-detection system once, both
+modes run on it.
+
+**Vine Race**. An obstacle course built from movement tech already in the game (grapple swings,
+wall-smash, air-brake, slide-hop) rather than true from-scratch procedural generation, which is a
+real specialty and a much bigger technical bet than it looks. Instead: a kit of hand-authored course
+chunks (a grapple gap, a wall-run corridor, a precision air-brake drop, a slide-hop straight), each
+with fixed entry/exit points, shuffled and chained at match start — every chunk pre-tested and
+guaranteed traversable, only the combination is random. `Assets/Editor/MapExpansion.cs` already
+does exactly this "kit of pieces, placed proceduralized" trick for the jungle map's cliff clusters,
+so this isn't a new category of risk, it's the same technique pointed at a race course.
+
+**Shrinking Bunch**. Deathmatch's own combat wholesale, but the arena closes in over 90 seconds.
+Almost no new code beyond the existing weapon/hitbox/scoring systems plus one shrinking volume.
+
+### The rest of the roster (to reach 12-16 total)
+
+Categorised against what actually works in the genre rather than a random grab-bag — Fall Guys
+organizes its whole roster into five shapes (Race, Survival, Hunt, Logic, Final), Party Animals'
+entire identity is "knock people off the platform" (exactly Ground Pound Arena's own shape).
+
+| # | Name | Type | Mechanic | Builds on |
+|---|---|---|---|---|
+| 5 | **King of the Jungle** | Brawl | Small platform, no weapons, pure shove-off sumo | Ground Pound Arena's knockback/launch system |
+| 6 | **Silverback Standoff** | Brawl | Random 1v1 spotlight duel each round, rest spectate | Same system, tiny arena |
+| 7 | **Peel Patrol** | Hazard | Hidden peel tiles in a floor grid, step wrong and slip | Slip Hazard's slip state |
+| 8 | **Peel Parkour Gauntlet** | Race | Same chunk kit as Vine Race, hazard-heavy (rolling bananas, swinging vines) | Course-chunk kit |
+| 9 | **Tug of Peel** | Objective | Two teams grapple a rope, pull the other team in | `VineGrapple`'s pull, repurposed |
+| 10 | **Banana Bunch Collection** | Objective | Race to collect scattered bananas, lowest count cut each round | Simple pickup + counter |
+| 11 | **The Ripe One** | Hot potato | A bomb-banana passes between players (tag or throw), holder loses when it pops | Throw mechanic, the user's own example |
+| 12 | **Grapple Tag** | Hot potato | One "it" player has a grapple speed boost, tags others into their team | Grapple + hit detection |
+| 13 | **Silverback Says** | Logic | Simon-Says call-and-response, wrong or late move eliminates you | Mostly new, cheap (UI + timer) |
+| 14 | **Musical Bananas** | Logic | Musical chairs on marked spots | Cheap (spot check + timer) |
+| 15 | **Grease Monkey** | Logic | Rotating/tilting platform, last one standing | New rigidbody platform, cheap |
+
+A 16th (a copy-the-sequence memory round) is an easy add later if the round count needs stretching.
+
+### Still open
+
+- Ground Pound Arena: does a contestable zone survive alongside the knockback combat, or is it a
+  pure open arena where the only objective is not getting launched off? Both are buildable: they
+  point the level design in different directions and haven't been decided yet.
+- Slip Hazard's "lock in" recovery input — a timed mash, a well-timed single press, something else.
+- The round-rotation meta-layer itself: how many rounds per Party session, how cross-round scoring
+  works, what the between-round standings screen looks like. Not designed yet at all.
+- None of this has been prototyped. Explicitly paused at the planning stage per direct instruction
+  ("we are just planning out right now") — this section is the record of that planning, not a
+  build log.

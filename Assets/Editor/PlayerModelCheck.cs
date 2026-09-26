@@ -91,8 +91,11 @@ public static class PlayerModelCheck
         if (built)
         {
             Transform model = null;
+            // "Model" is what MonkeyRig names the child now (MonkeyRig.ModelChildName), baked or
+            // freshly built - the old "contains gorilla" match predates PlayerRigBaker and could
+            // never pass again after it, whatever the FBX itself contained.
             foreach (Transform t in player.transform)
-                if (t.name.ToLower().Contains("gorilla")) { model = t; break; }
+                if (t.name == "Model" || t.name.ToLower().Contains("gorilla")) { model = t; break; }
 
             Check(sb, model != null, "model parented to player", model == null ? "not found" : model.name);
 

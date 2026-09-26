@@ -1,6 +1,11 @@
-Source: "Spinning Banana" by lawrence_laz, OpenGameArt.org
-https://opengameart.org/content/spinning-banana
+Source: "Banana" by cdgramos, OpenGameArt.org
+https://opengameart.org/content/banana
 
 License: CC0 1.0 Universal (public domain dedication) - no attribution required.
-This file is one frame (frame 9 of 20), cropped to its opaque bounds, taken from the
-original spinning_banana.png rotation sheet.
+Direct file: fruit_banana.png, 285x250, whole banana on a diagonal lean.
+
+Replaced the earlier "Spinning Banana" crop (frame 9 of 20, a horizontal crescent) 2026-08-29 -
+that crop was built for a horizontal bar and distorted badly once stretched into the vertical
+Cruelty Squad-style meter, reading as a plain yellow wedge rather than a banana. This one's
+natural diagonal lean reads correctly in a tall box without forcing it into an aspect ratio
+its source shape was never drawn for.

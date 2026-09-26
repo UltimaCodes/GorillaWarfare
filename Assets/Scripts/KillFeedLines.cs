@@ -32,7 +32,7 @@ public static class KillFeedLines
         "{1} found out what {0}'s banana does",
         "{0} split {1}",
         "{1} got potassium poisoning courtesy of {0}",
-        "{0} har­vested {1}",
+        "{0} harvested {1}",
     };
 
     static readonly string[] Headshot =

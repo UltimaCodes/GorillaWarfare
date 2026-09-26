@@ -7,7 +7,7 @@ using Photon.Pun;
 // Named SingleShotGun for historical reasons - it only did one shot per click when it was
 // written. Everything it needs now comes from its GunInfo, so a weapon's character is data
 // rather than a subclass.
-public class SingleShotGun : Gun
+public class SingleShotGun : Item
 {
     [SerializeField] Camera cam;
 
@@ -79,8 +79,17 @@ public class SingleShotGun : Gun
     // Swaps the old AK/M1911 meshes for a banana. Done at runtime, keyed off the weapon's own
     // name, so there's no prefab surgery and adding a weapon means dropping a Banana<Name>.fbx
     // into Resources/Models/Weapons.
+    /// <summary>
     /// Returns how far the muzzle end sits from the grip, so the flash lands on the tip.
-    float BuildVisual()
+    ///
+    /// Public rather than called only from Awake - WeaponPreviewBaker calls this directly to
+    /// build a real, correctly anchored model onto the player prefab for each weapon, so
+    /// orientation (the melee hold in particular) can be judged and hand-tuned by looking
+    /// directly at the model in the Scene view instead of guessing numbers and re-rendering.
+    /// Awake itself doesn't run outside play mode anyway (see working-notes.md), so a baking
+    /// tool was always going to need to call this piece on its own.
+    /// </summary>
+    public float BuildVisual()
     {
         // Weapons named after their model rather than always Banana<Name>, because not
         // everything on the roster is a banana any more.
@@ -242,20 +251,23 @@ public class SingleShotGun : Gun
             shotsInBurst = 0;
     }
 
-    // How far the weapon dips and tilts during a reload. Replaced the old end-over-end spin
-    // entirely 2026-08-22 - reported as "wayy too weird" no matter how fast it turned, and
-    // looked at other arcade shooters (Redmatch 2 named specifically) for what a reload usually
-    // looks like instead of guessing twice: a dip down and back, not a tumble. A weapon rotating
-    // through a full 360 isn't a gesture anyone recognises as "changing a magazine" - lowering it
-    // and bringing it back up is.
-    const float reloadTiltDegrees = 38f;
-    const float reloadDropDistance = 0.07f;
+    // Replaced the mild symmetric dip 2026-08-29 - reported directly as unsatisfying at any
+    // speed tested, with a concrete idea for what should replace it: eat the old one, then pull
+    // a fresh one out of nowhere. Bigger throw than the old version on purpose - a lean this
+    // shallow read as a wobble, not a gesture.
+    const float reloadTiltDegrees = 95f;
+    const float reloadDropDistance = 0.18f;
 
     /// <summary>
-    /// Down for the first fifth of the reload, held through the middle, back up for the last
-    /// fifth - eased both ways so it reads as a deliberate motion rather than a mechanical linear
-    /// tilt. Always back at rest exactly when TickReload swaps the magazine, same guarantee the
-    /// spin version had, just via a hold instead of a lap count.
+    /// Three beats instead of one shape held for the whole reload. Fast down the first ~30% (down
+    /// the hatch - eaten, not lowered gently), fully retracted and held through the middle (the
+    /// eating), then a sharp pull back for the rest that overshoots past rest and settles - the
+    /// flourish that reads as "pulled a new one out" rather than a mechanism sliding back into
+    /// place. EaseOutBack's overshoot briefly pushes `amount` slightly negative, which is what
+    /// produces the little backward kick past rest before it settles - not a bug, the punch.
+    /// Always lands at exactly zero offset when t reaches 1 (EaseOutBack(1) == 1 exactly), same
+    /// guarantee every version of this has made, so TickReload never swaps the magazine on a
+    /// frame the weapon is still visibly off its mark.
     ///
     /// Skipped for melee - Reload() already refuses to start one (no ammo means Ammo is always
     /// at least magazineSize, the guard that turns Reload() into a no-op), but this still has to
@@ -274,11 +286,11 @@ public class SingleShotGun : Gun
             return;
         }
 
-        float elapsed = Info.reloadTime - (reloadDoneAt - Time.time);
+        float elapsed = Info.reloadTime - (reloadDoneAt - Time.unscaledTime);
         float t = Info.reloadTime > 0.01f ? Mathf.Clamp01(elapsed / Info.reloadTime) : 1f;
 
-        const float downFor = 0.2f;
-        const float upFrom = 0.8f;
+        const float downFor = 0.3f;
+        const float upFrom = 0.55f;
 
         float amount;
         if (t < downFor)
@@ -286,7 +298,7 @@ public class SingleShotGun : Gun
         else if (t < upFrom)
             amount = 1f;
         else
-            amount = 1f - EaseIn((t - upFrom) / (1f - upFrom));
+            amount = 1f - EaseOutBack((t - upFrom) / (1f - upFrom));
 
         visualRoot.localRotation = Quaternion.Euler(reloadTiltDegrees * amount, 0f, 0f);
         visualRoot.localPosition = reloadRestPosition + Vector3.down * (reloadDropDistance * amount);
@@ -318,10 +330,22 @@ public class SingleShotGun : Gun
             return;
 
         reloading = true;
-        reloadDoneAt = Time.time + Info.reloadTime;
+        // Unscaled - reloading isn't blocked by anything that can also trigger hitstop (ground
+        // pound, a grenade, melee all land kills independently of whichever gun is out), so a
+        // reload timed on scaled time could stretch out in real time if one of those lands while
+        // it's running. Same standing rule as everywhere else hitstop can reach.
+        reloadDoneAt = Time.unscaledTime + Info.reloadTime;
 
-        // Was a random clip out of the UI bank, so reloading sounded like clicking a button.
-        GameAudio.Play2D(GameAudio.Reload, GameAudio.ReloadVolume, 0.06f);
+        // Per-weapon folder first, same convention as Shoot/<WeaponName> - drop a real clip into
+        // Resources/Audio/Reload/<WeaponName> and it takes over with no code change, Pick's own
+        // parent-folder fallback means an empty or missing folder silently uses the shared clip
+        // instead. Reported as sounding generic and identical on every weapon; every weapon
+        // shares the one recording for now (nothing fruit-specific has been sourced yet), so the
+        // pitch is shaped by weight in the meantime - quick and light for the pistol, heavy and
+        // slow for the shotgun and sniper - rather than every reload being indistinguishable.
+        float pitch = Mathf.Lerp(1.25f, 0.8f, Info.Weight);
+        GameAudio.PlayShaped($"{GameAudio.Reload}/{gameObject.name}", GameAudio.ReloadVolume, pitch,
+                              GameAudio.Reload, pitch);
     }
 
     /// Timestamp rather than a coroutine. Switching weapons deactivates the old one, which kills
@@ -329,7 +353,7 @@ public class SingleShotGun : Gun
     /// magazine never refilled. It was bricked for the rest of the life.
     void TickReload()
     {
-        if (!reloading || Time.time < reloadDoneAt)
+        if (!reloading || Time.unscaledTime < reloadDoneAt)
             return;
 
         // You ate the old one and pulled a fresh one out.
@@ -548,7 +572,39 @@ public class SingleShotGun : Gun
             if (IsTeammate(hit.collider))
                 return true;
 
-            box.Apply(damage, gameObject.name);
+            // Stashed before the hit resolves, since a kill is only confirmed several frames
+            // later once the death RPC round trips - by then whether you were aiming and how
+            // far away this was would already be gone. Only meaningful against another player;
+            // a dummy has no actor number and no style score to feed it.
+            PlayerController target = hit.collider.GetComponentInParent<PlayerController>();
+            if (target != null && target.View != null && owner != null && owner.Style != null)
+            {
+                owner.Style.RecordShot(target.View.Owner.ActorNumber, gameObject.name,
+                                       owner.IsAiming, hit.distance);
+            }
+
+            bool fatal = box.Apply(damage, gameObject.name);
+
+            // A dummy (or anything else IDamageable that isn't a player) resolves its own death
+            // synchronously right here rather than several frames later over an RPC, so it can
+            // never reach RegisterKill's pendingShots handshake - that only ever fires from
+            // PlayerController.RPC_Died. Credit it directly instead, with the same
+            // headshot/noscope/point-blank/long-range read RegisterKill would compute for a real
+            // kill on this same weapon, using data that's already sitting right here.
+            if (fatal && target == null && owner != null && owner.Style != null)
+            {
+                bool noscope = Info.canAim && !owner.IsAiming;
+                bool pointBlank = hit.distance < StyleScore.PointBlankRange;
+                bool longRange = hit.distance > StyleScore.LongRangeThreshold;
+                owner.Style.RegisterDummyKill(gameObject.name, box.IsHead, noscope, pointBlank, longRange);
+            }
+            else if (owner != null && owner.Style != null)
+            {
+                // Landed but didn't finish them - the multiplier starts here now rather than
+                // waiting for the kill. Covers a real player (always non-fatal from this call -
+                // PlayerController.TakeDamage never returns true) and a non-fatal dummy hit alike.
+                owner.Style.RegisterHitLanded();
+            }
 
             // Hit confirmation. Without this you're firing into the void and guessing.
             if (owner != null && owner.Hud != null)
@@ -559,11 +615,7 @@ public class SingleShotGun : Gun
             // the one piece of information you most wanted was indistinguishable from missing.
             // Every hit in a row comes back a step higher, up to a point. One hit is a tick;
             // six in a row is a rising line, and the line is the part you chase.
-            int hits = owner != null ? owner.RegisterHit() : 1;
-            float pitch = 1f + Mathf.Min(hits - 1, 9) * 0.055f;
-
-            GameAudio.PlayPitched(GameAudio.Hit, box.IsHead ? "headshot" : "hit",
-                                  GameAudio.HitVolume, pitch);
+            PlayerController.PlayHitConfirm(owner, box.IsHead);
 
             // The sound says you hit; the stop says it landed. A headshot gets most of the
             // budget, because the whole reason to aim at a head is that connecting should feel
@@ -576,7 +628,23 @@ public class SingleShotGun : Gun
         }
         else
         {
-            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage, gameObject.name, false);
+            IDamageable other = hit.collider.GetComponentInParent<IDamageable>();
+            bool fatal = other != null && other.TakeDamage(damage, gameObject.name, false);
+
+            // No Hitbox here to say whether this was a headshot, but everything else that makes
+            // a dummy kill invisible to RegisterKill still applies - see the box != null branch
+            // above.
+            if (fatal && !(other is PlayerController) && owner != null && owner.Style != null)
+            {
+                bool noscope = Info.canAim && !owner.IsAiming;
+                bool pointBlank = hit.distance < StyleScore.PointBlankRange;
+                bool longRange = hit.distance > StyleScore.LongRangeThreshold;
+                owner.Style.RegisterDummyKill(gameObject.name, false, noscope, pointBlank, longRange);
+            }
+            else if (other != null && owner != null && owner.Style != null)
+            {
+                owner.Style.RegisterHitLanded();
+            }
         }
 
         return true;
@@ -591,15 +659,11 @@ public class SingleShotGun : Gun
     /// </summary>
     bool IsTeammate(Collider other)
     {
-        if (owner == null || owner.View == null || MatchState.Mode != MatchMode.TeamDeathmatch)
+        if (owner == null)
             return false;
 
         PlayerController hitPlayer = other.GetComponentInParent<PlayerController>();
-
-        if (hitPlayer == null || hitPlayer == owner || hitPlayer.View == null)
-            return false;
-
-        return PlayerColours.SameTeam(owner.View.Owner, hitPlayer.View.Owner);
+        return hitPlayer != null && owner.IsTeammate(hitPlayer);
     }
 
     bool IsOwnedByShooter(Collider other)
@@ -693,6 +757,16 @@ public class SingleShotGun : Gun
 
     static float EaseIn(float k) => k * k;
     static float EaseOut(float k) => 1f - (1f - k) * (1f - k);
+
+    // Standard "back" overshoot - eases to 1 but pushes slightly past it first, then settles.
+    // What turns the last leg of a reload from a mechanical slide into a punch.
+    static float EaseOutBack(float k)
+    {
+        const float c1 = 1.70158f;
+        const float c3 = c1 + 1f;
+        float k1 = k - 1f;
+        return 1f + c3 * k1 * k1 * k1 + c1 * k1 * k1;
+    }
 
     Transform visualRoot;
     Vector3 reloadRestPosition;

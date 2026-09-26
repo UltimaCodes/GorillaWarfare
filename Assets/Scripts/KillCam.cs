@@ -78,16 +78,7 @@ public class KillCam : MonoBehaviour
     /// different object.
     Transform Find()
     {
-        if (target == null)
-            return null;
-
-        foreach (PlayerController player in
-                 FindObjectsByType<PlayerController>(FindObjectsSortMode.None))
-        {
-            if (player != null && player.View != null && player.View.Owner == target)
-                return player.transform;
-        }
-
-        return null;
+        PlayerController player = target != null ? PlayerController.ByOwner(target) : null;
+        return player != null ? player.transform : null;
     }
 }

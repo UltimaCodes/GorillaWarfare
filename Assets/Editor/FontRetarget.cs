@@ -26,7 +26,10 @@ public static class FontRetarget
 
     static readonly string[] Prefabs =
     {
-        "Assets/Prefabs/ScoreboardItem.prefab",
+        // ScoreboardItem.prefab retired 2026-09-03 - the tab scoreboard is code-driven now
+        // (Scoreboard.cs builds pooled TMP_Text rows straight into the scene canvas), the same
+        // shape GameHud's own feed/standings already use, so there's no more per-player prefab
+        // for this tool to retarget.
         "Assets/Resources/PhotonPrefabs/PlayerController.prefab",
         "Assets/Prefabs/PlayerListItem.prefab",
         "Assets/Prefabs/RoomListItem.prefab",

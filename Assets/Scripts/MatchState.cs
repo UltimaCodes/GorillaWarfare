@@ -182,6 +182,7 @@ public class MatchState : MonoBehaviourPunCallbacks
             return found;
 
         Add(found, "TOP BANANA", RoomManager.KillsKey, "kills");
+        Add(found, "MOST STYLISH", RoomManager.StyleScoreKey, "style");
         Add(found, "HEADHUNTER", RoomManager.HeadshotsKey, "headshots");
         Add(found, "ON A ROLL", RoomManager.BestStreakKey, "in a row");
         Add(found, "CRASH TEST DUMMY", RoomManager.DeathsKey, "deaths");
@@ -347,8 +348,22 @@ public class MatchState : MonoBehaviourPunCallbacks
         // PUN never clears player properties, not even between rooms - they follow you into the
         // next game you join. Somebody who finished a gun game four rungs up therefore arrived
         // holding the sniper, and the master, reading that same stale property, agreed with it.
-        // Wipe first, then work out what they should be carrying.
-        newPlayer.SetCustomProperties(new Hashtable { { RungKey, 0 }, { RungKillsKey, 0 } });
+        // Wipe first, then work out what they should be carrying. Widened to every match stat,
+        // not just the rung - the identical problem applies to kills, deaths, headshots, the best
+        // streak and the style score: someone who finished their last match with fifteen kills
+        // would otherwise arrive already leading this one's leaderboard before doing anything in
+        // it. BeginWarmup resets the same set for players already in the room when a match
+        // starts; this covers everyone who joins afterward, which that pass can't reach.
+        newPlayer.SetCustomProperties(new Hashtable
+        {
+            { RungKey, 0 },
+            { RungKillsKey, 0 },
+            { RoomManager.KillsKey, 0 },
+            { RoomManager.DeathsKey, 0 },
+            { RoomManager.HeadshotsKey, 0 },
+            { RoomManager.BestStreakKey, 0 },
+            { RoomManager.StyleScoreKey, 0 },
+        });
         rungs[newPlayer.ActorNumber] = 0;
         rungKills[newPlayer.ActorNumber] = 0;
 
@@ -412,6 +427,15 @@ public class MatchState : MonoBehaviourPunCallbacks
         // server time, so starting it there burned the whole warmup on the lobby.
         if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(PhaseKey))
         {
+            // BeginWarmup already calls Requested(Warmup), which sets awaitingEcho - but
+            // SetCustomProperties doesn't update the local cache until the server echoes it
+            // back, so ContainsKey(PhaseKey) keeps failing for however many frames that round
+            // trip takes. Without this guard, every one of those frames re-entered this branch
+            // and called BeginWarmup again - which clears every score dict and reassigns teams -
+            // on each one, instead of the single time this is meant to run.
+            if (awaitingEcho)
+                return;
+
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
                 == RoomManager.gameSceneIndex)
             {
@@ -440,7 +464,13 @@ public class MatchState : MonoBehaviourPunCallbacks
                 break;
 
             case MatchPhase.Live:
-                FinishMatch(LeaderByKills());
+                // Style score decides everything except gun game - reported directly: "your
+                // score will show up on the leaderboard and this is now the determining factor
+                // for winning in deathmatches (anything that isnt gungame honestly)". Gun game
+                // keeps deciding on kills at this same timeout, same as it always has - a rung
+                // climbed with a lucky no-scope is still a rung climbed, and the ladder itself
+                // is already gun game's own progression system.
+                FinishMatch(Mode == MatchMode.GunGame ? LeaderByKills() : LeaderByScore());
                 break;
 
             case MatchPhase.Over:
@@ -494,6 +524,7 @@ public class MatchState : MonoBehaviourPunCallbacks
                 { RoomManager.DeathsKey, 0 },
                 { RoomManager.HeadshotsKey, 0 },
                 { RoomManager.BestStreakKey, 0 },
+                { RoomManager.StyleScoreKey, 0 },
                 { RungKey, 0 },
                 { RungKillsKey, 0 },
             });
@@ -555,7 +586,6 @@ public class MatchState : MonoBehaviourPunCallbacks
         });
     }
 
-    /// What a player should be carrying right now, under the current mode.
     /// <summary>
     /// What a player should be carrying right now, under the current mode.
     ///
@@ -854,6 +884,20 @@ public class MatchState : MonoBehaviourPunCallbacks
 
         for (int i = 0; i < players.Length; i++)
             scores[i] = RoomManager.GetStat(players[i], RoomManager.KillsKey);
+
+        int winner = Rules.WinnerIndex(scores);
+        return winner >= 0 ? players[winner] : null;
+    }
+
+    /// Same shape as LeaderByKills, reading the style score instead - see StyleScore.cs and the
+    /// switch above.
+    Player LeaderByScore()
+    {
+        Player[] players = PhotonNetwork.PlayerList;
+        int[] scores = new int[players.Length];
+
+        for (int i = 0; i < players.Length; i++)
+            scores[i] = RoomManager.GetStat(players[i], RoomManager.StyleScoreKey);
 
         int winner = Rules.WinnerIndex(scores);
         return winner >= 0 ? players[winner] : null;

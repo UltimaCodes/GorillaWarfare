@@ -626,10 +626,16 @@ public static class WeaponCheck
             Check(sb, lengths["Rifle"] > lengths["Pistol"] * 1.8f, "rifle is a longer banana",
                   $"{lengths["Rifle"]:F2}m vs pistol {lengths["Pistol"]:F2}m");
 
-            GameObject sgm = Resources.Load<GameObject>("Models/Weapons/BananaShotgun");
-            MeshFilter sgf = sgm.GetComponentInChildren<MeshFilter>(true);
-            Check(sb, sgf.sharedMesh.bounds.size.x > 0.15f, "shotgun is two bananas wide",
-                  $"{sgf.sharedMesh.bounds.size.x:F2}m across");
+            GameObject sgm = Weapon<GameObject>("Shotgun");
+            Check(sb, sgm != null, "shotgun model", sgm == null ? "missing" : "loaded");
+
+            MeshFilter sgf = sgm != null ? sgm.GetComponentInChildren<MeshFilter>(true) : null;
+
+            if (sgf != null)
+            {
+                Check(sb, sgf.sharedMesh.bounds.size.x > 0.15f, "shotgun is two bananas wide",
+                      $"{sgf.sharedMesh.bounds.size.x:F2}m across");
+            }
         }
 
         Finish(sb);

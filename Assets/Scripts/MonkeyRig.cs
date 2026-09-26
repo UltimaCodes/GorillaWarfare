@@ -15,6 +15,11 @@ public class MonkeyRig : MonoBehaviour
     [Header("Model")]
     [SerializeField] string modelResource = "Models/Gorilla/gorilla";
 
+    // Name of the child that "Tools/Gorilla Warfare/Bake the player rig" leaves on the prefab.
+    // Build() looks for this before instantiating anything, so a baked player reuses the model
+    // sitting right there in the prefab instead of stacking a second one on top of it.
+    const string ModelChildName = "Model";
+
 
     // Bone names as data, not code - the last model used b_Spine02 style names, this one is
     // Rigify's DEF- convention. Swapping models shouldn't mean editing this file.
@@ -183,14 +188,31 @@ public class MonkeyRig : MonoBehaviour
         wasFlashing = flashing;
     }
 
+    MaterialPropertyBlock tintBlock;
+    Renderer[] tintRenderers;
+    GameObject tintRenderersFor;
+
     void ApplyTint(Color colour)
     {
         if (model == null)
             return;
 
-        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        // Called every frame for the whole spawn-protection window and on every hit-flash - a
+        // fresh MaterialPropertyBlock and a fresh GetComponentsInChildren array on every one of
+        // those calls was real per-frame GC pressure for something that doesn't change between
+        // calls. Cached once and rebuilt only if the model itself was swapped out from under it.
+        if (tintBlock == null)
+            tintBlock = new MaterialPropertyBlock();
 
-        foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
+        if (tintRenderers == null || tintRenderersFor != model)
+        {
+            tintRenderers = model.GetComponentsInChildren<Renderer>(true);
+            tintRenderersFor = model;
+        }
+
+        MaterialPropertyBlock block = tintBlock;
+
+        foreach (Renderer r in tintRenderers)
         {
             r.GetPropertyBlock(block);
 
@@ -206,36 +228,54 @@ public class MonkeyRig : MonoBehaviour
 
     public bool Build(bool hideFromOwner)
     {
-        GameObject prefab = Resources.Load<GameObject>(modelResource);
-        if (prefab == null)
+        // Baked directly onto the prefab already (see ModelChildName above) - reuse it rather
+        // than instantiating a second model on top of the one sitting right there. This is what
+        // lets the gorilla and its hitboxes be real, hand-editable prefab content instead of
+        // something that only exists once Start() has run - reported directly as wanted, since
+        // there was previously nothing in the prefab to select, move or resize.
+        Transform existing = transform.Find(ModelChildName);
+
+        if (existing != null)
         {
-            Debug.LogError($"No model at Resources/{modelResource}", this);
-            return false;
+            model = existing.gameObject;
         }
+        else
+        {
+            GameObject prefab = Resources.Load<GameObject>(modelResource);
+            if (prefab == null)
+            {
+                Debug.LogError($"No model at Resources/{modelResource}", this);
+                return false;
+            }
 
-        model = Instantiate(prefab, transform);
+            model = Instantiate(prefab, transform);
+            model.name = ModelChildName;
 
-        // Capsule pivot is at the middle, model pivot is at the feet.
-        model.transform.localPosition = new Vector3(0f, -1f, 0f);
-        model.transform.localRotation = Quaternion.identity;
+            // Capsule pivot is at the middle, model pivot is at the feet.
+            model.transform.localPosition = new Vector3(0f, -1f, 0f);
+            model.transform.localRotation = Quaternion.identity;
 
-        // Belt and braces against the T-pose: if anything ever re-imports this as Humanoid or
-        // Generic, the Animator would stamp its own pose over everything we write here.
-        foreach (Animator stray in model.GetComponentsInChildren<Animator>(true))
-            Destroy(stray);
+            // Belt and braces against the T-pose: if anything ever re-imports this as Humanoid or
+            // Generic, the Animator would stamp its own pose over everything we write here.
+            foreach (Animator stray in model.GetComponentsInChildren<Animator>(true))
+                Destroy(stray);
+        }
 
         if (!CacheBones())
             return false;
 
         lastPosition = transform.position;
 
-        if (hideFromOwner)
-        {
-            // First person - you shouldn't see your own body from inside its head, but the
-            // shadow should still be there.
-            foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
-        }
+        // Set explicitly both ways rather than only when hiding - a baked model can be reused
+        // by either an owner or a remote copy on different clients, so whichever this instance
+        // is has to be reapplied every time rather than assumed from however it was left at
+        // bake time.
+        UnityEngine.Rendering.ShadowCastingMode mode = hideFromOwner
+            ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly
+            : UnityEngine.Rendering.ShadowCastingMode.On;
+
+        foreach (Renderer r in model.GetComponentsInChildren<Renderer>(true))
+            r.shadowCastingMode = mode;
 
         // No per-object outline applied here. First attempt (Custom/ToonOutline, an inverted
         // mesh hull) read as a broken, gappy line specifically on this model - checked with

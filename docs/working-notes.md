@@ -48,6 +48,32 @@ player's own leg hitboxes, so everyone read as permanently grounded and got foot
 Use `Hitbox.WorldMask`. This was invisible while hitboxes were the wrong size — two bugs
 cancelling out is not the same as no bugs.
 
+**A shader only ever reached with `Shader.Find` and never referenced by a material can get
+stripped from a build.** `Custom/ScreenOutline` wasn't in Graphics Settings' Always Included
+Shaders list — worked fine in every Editor Play Mode test (the Editor never strips anything) and is
+the likely real explanation for an earlier report of the outline missing "in the actual game." Any
+new shader looked up this same way needs adding to that list, via `Tools/Gorilla Warfare/
+Always-include the custom shaders` (`AlwaysIncludeShaders.cs`) rather than by hand — a
+hand-typed GUID in `GraphicsSettings.asset` is a guess, and a wrong one doesn't error, it just
+points at nothing.
+
+**PostProcessing v2's `BlitFullscreenTriangle` takes a `PropertySheet`, not a `Material`, when a
+custom shader is involved.** `context.command.BlitFullscreenTriangle(source, dest, material, 0)`
+compiles-looks-right and fails with a confusing `Rect?` conversion error, because that's a
+different overload entirely. The actual pattern: `var sheet = context.propertySheets.Get(shader);
+sheet.properties.SetFloat(...); cmd.BlitFullscreenTriangle(source, dest, sheet, pass);` — PPv2's
+own factory owns the Material's lifetime through the sheet, which is also one less thing for a
+custom effect to manage by hand.
+
+**A bare `-` (no trailing space) for an empty YAML list entry is not the same as `- ` to Unity's
+own parser**, even though both look like "nothing here" to a person reading the file.
+`ProjectSettings/TagManager.asset` had one blank layer slot missing the trailing space every other
+blank slot had, and that alone was enough to make Unity log `Unable to parse file
+ProjectSettings/TagManager.asset` on every single batch-mode run — tolerated silently (the actual
+layers still resolved fine) rather than failing anything, which is exactly how it went unnoticed
+for so long. If a `.asset`/`.unity` file logs a parse warning, check for exactly this before
+assuming it's benign noise.
+
 ---
 
 ## Conventions
@@ -81,9 +107,28 @@ model at runtime, so a longer weapon reaches further forward instead of further 
 and host migration work without a catch-up path. The clock is a deadline against
 `PhotonNetwork.Time`, not a countdown.
 
+**Who writes a custom property depends on whether it can race.** Kills/deaths/streaks are written
+by the master only (`MatchState.ScoreKill`) because two different killers can land on the same
+victim at once and a read-modify-write from two clients loses one. The style score
+(`StyleScore.cs`, `RoomManager.StyleScoreKey`) is written by each client into its own property
+instead - nothing else ever touches one player's own score, so there's nothing to race, and
+classifying a kill's bonuses only ever has the data it needs on the killer's own client anyway.
+Don't reflexively route a new stat through the master just because kills are - ask whether two
+clients could actually write the same key first.
+
 **Anything that runs during hitstop must use unscaled time.** `Time.timeScale` drops to 0.06 on
 a kill; anything measuring itself with `deltaTime` freezes with the world. This applies to the
 HUD, the kill feed timestamps, the aim transition and `Juice` itself.
+
+**A new mode's display/capability properties go in `MatchModeInfo.cs`, not a new `MatchState.Mode
+== MatchMode.X` comparison.** Added 2026-09-03 after a full-codebase review found the same
+question - does this mode use teams, does it rank by style score, does it show the ladder, what's
+its name - independently re-derived from the raw enum in eight different files, several of them
+disagreeing with each other by the time anyone checked. `MatchModes.Of(MatchState.Mode)` is the one
+place now; extend the struct and its lookup table rather than adding a ninth call site. Match
+length, loadout rules and win-condition selection are the one exception - those stay as
+`MatchState`'s own internal branches on purpose, see this file's own warning above about that
+class being too load-bearing to restructure without a real reason.
 
 ---
 
@@ -113,6 +158,17 @@ take. So the probe reads the labels back instead - the health number against the
 health, the round count against the magazine, the weapon name against what's equipped - which
 catches the thing a screenshot wouldn't anyway: a number that's present, correctly placed and
 stale.
+
+**A layout claim about an overlay canvas can still be checked without a screenshot.** "Is this
+element actually inside that one" doesn't need a picture - `RectTransform.GetWorldCorners()` after
+a couple of real frames (so the layout groups and the canvas have actually settled) gives real,
+laid-out pixel coordinates for any RectTransform, overlay canvas or not. `PlayModeProbe.
+CheckScoreboardLayout` is the reference example: it caught a real bug (the scoreboard's row column
+sitting entirely below its own backdrop instead of inside it) that reading text values alone never
+would have, since the text itself was correct - just positioned somewhere the backdrop wasn't. An
+input-gated UI element needs the same treatment `PlayerController.AimInputOverride` already gives
+aim input to make it testable at all in batch mode: a static nullable override (`Scoreboard.
+OpenOverride`) rather than trying to fake a held key.
 
 **Played on 3-4 clients, and it works.** Ryaan confirmed this on 2026-08-16. Remote weapon
 switching, replicated aim, the kill feed firing on a client that didn't do the killing and host

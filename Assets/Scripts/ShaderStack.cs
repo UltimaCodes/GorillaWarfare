@@ -226,12 +226,13 @@ public class ShaderStack : MonoBehaviour
         fringeRef = null;
         pulseAmount = 0f;
 
-        if (GameSettings.Shaders == GameSettings.ShaderPreset.Off && !GameSettings.MotionBlur)
+        if (GameSettings.Shaders == GameSettings.ShaderPreset.Off && !GameSettings.MotionBlur
+            && !GameSettings.PsxFilter)
             return;
 
         profile = ScriptableObject.CreateInstance<PostProcessProfile>();
 
-        BuildInto(profile, GameSettings.Shaders, GameSettings.MotionBlur);
+        BuildInto(profile, GameSettings.Shaders, GameSettings.MotionBlur, GameSettings.PsxFilter);
 
         GameObject host = new GameObject("~ShaderVolume") { layer = volumeLayer };
         host.transform.SetParent(transform, false);
@@ -263,7 +264,7 @@ public class ShaderStack : MonoBehaviour
     /// a scene or a game running.
     /// </summary>
     public static void BuildInto(PostProcessProfile profile, GameSettings.ShaderPreset preset,
-                                 bool motionBlur)
+                                 bool motionBlur, bool psxFilter = false)
     {
         if (preset != GameSettings.ShaderPreset.Off)
         {
@@ -360,6 +361,19 @@ public class ShaderStack : MonoBehaviour
             blur.enabled.Override(true);
             blur.shutterAngle.Override(180f);
             blur.sampleCount.Override(8);
+        }
+
+        // Also its own toggle, also outside the presets - see PsxFilter.cs. Reported directly as
+        // "does nothing" at the original 0.6 - PlayModeProbe's own before/after pixel check
+        // confirmed the effect was real but small (the intensity-to-level-count curve is a lerp,
+        // so 0.6 only bought 60% of the way toward a strong effect), not actually broken. Raised
+        // to 0.88, re-checked the same way - "not too grainy or pixelated" is a ceiling on how far
+        // to push this, not a request for a slider nobody asked for, so it's still a fixed value.
+        if (psxFilter)
+        {
+            PsxFilter psx = profile.AddSettings<PsxFilter>();
+            psx.enabled.Override(true);
+            psx.intensity.Override(0.88f);
         }
     }
 }

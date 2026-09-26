@@ -42,6 +42,9 @@ public class SettingsMenu : MonoBehaviour
     [SerializeField] RectTransform tabBar;
     [SerializeField] Button tabTemplate;
 
+    /// The live crosshair preview - only means anything on the Crosshair tab, see Show below.
+    [SerializeField] CrosshairPreview crosshairPreview;
+
     [Header("Rows")]
     [SerializeField] RectTransform content;
     [SerializeField] RectTransform sliderRow;
@@ -94,13 +97,7 @@ public class SettingsMenu : MonoBehaviour
             closeButton.onClick.AddListener(Close);
 
         if (resetButton != null)
-        {
-            resetButton.onClick.AddListener(() =>
-            {
-                GameSettings.ResetAll();
-                Show(current);
-            });
-        }
+            resetButton.onClick.AddListener(ResetCurrentTab);
 
         if (quitButton != null)
             quitButton.onClick.AddListener(LeaveToMenu);
@@ -284,6 +281,26 @@ public class SettingsMenu : MonoBehaviour
         Hide();
     }
 
+    /// <summary>
+    /// "Reset to default (page specific)" - used to always be every setting at once, keybinds
+    /// included, which is a strange price for wanting your crosshair colour back. Scoped to
+    /// whichever tab is open; <see cref="GameSettings.ResetAll"/> still exists for anyone who
+    /// really does want the full reset, just not as the only option.
+    /// </summary>
+    void ResetCurrentTab()
+    {
+        switch (current)
+        {
+            case Tab.Aim: GameSettings.ResetAim(); break;
+            case Tab.Audio: GameSettings.ResetAudio(); break;
+            case Tab.Video: GameSettings.ResetVideo(); break;
+            case Tab.Crosshair: GameSettings.ResetCrosshair(); break;
+            case Tab.Keys: GameSettings.ResetKeys(); break;
+        }
+
+        Show(current);
+    }
+
     void Hide()
     {
         IsOpen = false;
@@ -332,6 +349,13 @@ public class SettingsMenu : MonoBehaviour
         if (heading != null)
             heading.text = tab.ToString().ToUpper();
 
+        if (resetButton != null)
+        {
+            TMP_Text resetLabel = resetButton.GetComponentInChildren<TMP_Text>();
+            if (resetLabel != null)
+                resetLabel.text = $"RESET {tab.ToString().ToUpper()}";
+        }
+
         for (int i = 0; i < tabs.Count; i++)
         {
             // The selected tab is drawn at full strength and the rest are dimmed, rather than
@@ -351,6 +375,11 @@ public class SettingsMenu : MonoBehaviour
             case Tab.Crosshair: BuildCrosshair(); break;
             case Tab.Keys: BuildKeys(); break;
         }
+
+        // Only means anything here - a weapon reticle style or FOV slider has nothing for it to
+        // preview.
+        if (crosshairPreview != null)
+            crosshairPreview.gameObject.SetActive(tab == Tab.Crosshair);
     }
 
     void Clear()
@@ -373,6 +402,11 @@ public class SettingsMenu : MonoBehaviour
                GameSettings.SetAdsSensitivity, "F2");
 
         Toggle("invert vertical", GameSettings.InvertY, GameSettings.SetInvertY);
+
+        // Motor accessibility as much as preference - holding a button for the length of every
+        // engagement isn't free for everyone, and it's the single most commonly requested
+        // toggle-vs-hold option in this genre.
+        Toggle("press to aim (toggle)", GameSettings.AimToggle, GameSettings.SetAimToggle);
     }
 
     void BuildAudio()
@@ -415,6 +449,16 @@ public class SettingsMenu : MonoBehaviour
                i => GameSettings.SetShaders((GameSettings.ShaderPreset)i));
 
         Toggle("motion blur", GameSettings.MotionBlur, GameSettings.SetMotionBlur);
+
+        // Its own toggle, same reasoning as motion blur above - see PsxFilter.cs.
+        Toggle("psx filter", GameSettings.PsxFilter, GameSettings.SetPsxFilter);
+
+        // "Add some joke settings too" - real, PlayerPrefs-backed, wired through the exact same
+        // Toggle/Slider helpers as everything above them, which is the whole joke: nothing here
+        // gives away that it does nothing until you go looking for what it's connected to.
+        Toggle("believe in bigfoot", GameSettings.BelieveInBigfoot, GameSettings.SetBelieveInBigfoot);
+        Slider("monkey business level", GameSettings.MonkeyBusinessLevel, 0f, 100f,
+               GameSettings.SetMonkeyBusinessLevel, "F0");
     }
 
     void BuildCrosshair()

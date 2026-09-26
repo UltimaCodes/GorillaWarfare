@@ -1,0 +1,11 @@
+Three impactPlank_medium variants from Kenney's Impact Sounds pack, which is CC0 - no attribution
+required, though the credits should say so anyway. The same pack this project's Shield, Footstep
+and Impact banks already come from.
+
+Plank rather than the pack's Metal/Glass/Plate variants - this game's arena walls are wooden
+fencing (see the sandbox screenshots), so a plank thud reads as the actual material getting hit
+rather than a generic clang standing in for it.
+
+Two layers on a smash: this bank pitched up (1.15, ± a little jitter) for the main crack, and this
+same bank again pitched way down (0.5) as a low body layer under it, falling back to Slam if this
+folder is ever emptied - see PlayerMovement.WallSmash.

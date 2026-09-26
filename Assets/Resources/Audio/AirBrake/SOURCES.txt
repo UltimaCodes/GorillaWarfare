@@ -1,0 +1,10 @@
+Three thrusterFire variants from Kenney's Sci-fi Sounds pack, which is CC0 - no attribution
+required, though the credits should say so anyway.
+
+A short burst rather than the pack's sustained engine loops (spaceEngine, engineCircular) - this
+plays as a one-shot on air brake and on ledge-hop landing, both single actions rather than a held
+state, so a loop would have to be cut short every time rather than actually finishing.
+
+Plays at 0.5 volume, pitched up sharply (1.6) for the air brake itself so it reads as a hard stop,
+and pitched near-normal (0.85) for the ledge-hop reuse - see PlayerMovement.AirBrakeEffects and
+LedgeHopEffects.

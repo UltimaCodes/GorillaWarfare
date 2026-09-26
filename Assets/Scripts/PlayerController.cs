@@ -139,15 +139,46 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         return combo;
     }
 
+    /// <summary>
+    /// The rising-pitch hit-confirmation sound, keyed to the shooter's current combo. One place
+    /// for three lines that were copy-pasted across SingleShotGun, Projectile (twice) and
+    /// VineGrapple (twice) - static and null-tolerant on `owner` specifically because
+    /// SingleShotGun's own call site could reach this with no owner and still wants the sound to
+    /// play, just without a combo to read a pitch from.
+    /// </summary>
+    public static void PlayHitConfirm(PlayerController owner, bool headshot = false)
+    {
+        int hits = owner != null ? owner.RegisterHit() : 1;
+        GameAudio.PlayPitched(GameAudio.Hit, headshot ? "headshot" : "hit", GameAudio.HitVolume,
+                              1f + Mathf.Min(hits - 1, 9) * 0.055f);
+    }
+
     // Multikills - kills close enough together to be one moment rather than two.
     const float multikillWindow = 4f;
 
     int multikill;
     float multikillLapsesAt;
 
+    /// How many kills landed within multikillWindow of each other - read by StyleScore for its
+    /// own multikill bonus, same data ShowKill already reads for the HUD callout.
+    public int Multikill => Time.time < multikillLapsesAt ? multikill : 0;
+
     /// The local player, for anything that needs to reach them from elsewhere - a kill is
     /// reported on the victim's view, so healing the killer means finding them.
     public static PlayerController Local { get; private set; }
+
+    static readonly Dictionary<Player, PlayerController> byOwner = new Dictionary<Player, PlayerController>();
+
+    /// <summary>
+    /// The body belonging to a given Photon player, or null if they don't have one right now
+    /// (dead and waiting to respawn, or mid-teardown).
+    ///
+    /// A dictionary maintained on Awake/OnDestroy rather than the "walk every PlayerController in
+    /// the scene comparing View.Owner" scan that KillCam and this class's own damage-direction
+    /// lookup each used to do independently, every frame in KillCam's case.
+    /// </summary>
+    public static PlayerController ByOwner(Player owner) =>
+        owner != null && byOwner.TryGetValue(owner, out PlayerController found) ? found : null;
 
     // Set the moment health hits zero, cleared by respawning into a fresh controller. Guards
     // against a burst landing after the killing shot and being counted as a second kill.
@@ -203,6 +234,21 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     public PhotonView View => PV;
 
+    /// <summary>
+    /// Whether `other` is on your own side. Always false outside a team mode and false against
+    /// yourself, so deathmatch, gun game and self-damage are all untouched by this - one place
+    /// for the check that used to be reimplemented per-weapon in SingleShotGun and VineGrapple,
+    /// each also re-testing the mode directly even though PlayerColours.SameTeam already returns
+    /// false outside a team mode on its own.
+    /// </summary>
+    public bool IsTeammate(PlayerController other)
+    {
+        if (other == null || other == this || View == null || other.View == null)
+            return false;
+
+        return PlayerColours.SameTeam(View.Owner, other.View.Owner);
+    }
+
     /// What the HUD needs to draw itself.
     public SingleShotGun ActiveGun =>
         items != null && itemIndex >= 0 && itemIndex < items.Length ? items[itemIndex] as SingleShotGun : null;
@@ -215,6 +261,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     PlayerMovement movement;
     VineGrapple vine;
+    StyleScore style;
+    MovementCombo movementCombo;
+
+    /// The unified style score - see StyleScore.cs. Null on anyone but your own body, same as
+    /// movement and vine's own mine-only pieces.
+    public StyleScore Style => style;
+
+    /// The movement-tech combo counter - see MovementCombo.cs. Named MoveCombo rather than Combo
+    /// - this class already has an unrelated Combo (the consecutive-hits counter above,
+    /// RegisterHit's own) and this is a different thing entirely, not a replacement for it.
+    public MovementCombo MoveCombo => movementCombo;
 
     /// <summary>
     /// Holds the aim button on behalf of a test. Null means read the mouse as normal.
@@ -224,6 +281,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     /// transition stalls halfway. Overriding the input instead exercises the actual path.
     /// </summary>
     public static bool? AimInputOverride { get; set; }
+
+    /// Latched state for <see cref="GameSettings.AimToggle"/> - press once to start aiming,
+    /// again to stop, instead of holding the button the whole time. A motor-accessibility option
+    /// as much as a preference; only read when that setting is on.
+    bool aimToggled;
 
     /// True while the right mouse button is down on a weapon that can aim. Read by the weapon
     /// for its spread, and by the HUD to get the crosshair out of the way.
@@ -236,6 +298,9 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     void Awake()
     {
         PV = GetComponent<PhotonView>();
+
+        if (PV.Owner != null)
+            byOwner[PV.Owner] = this;
 
         // Resolved once. It was being found by walking every transform on the player, from
         // four separate call sites, on an object that respawns every time you die.
@@ -262,7 +327,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         // Hidden from its owner - you shouldn't see your own body from inside its head - but it
         // still casts a shadow.
-        rig = gameObject.AddComponent<MonkeyRig>();
+        //
+        // Reused rather than always added fresh - "Bake the player rig" leaves a MonkeyRig
+        // sitting on the prefab already, and adding a second one on top would drive the same
+        // bones from two components at once.
+        rig = GetComponent<MonkeyRig>();
+        if (rig == null)
+            rig = gameObject.AddComponent<MonkeyRig>();
+
         if (!rig.Build(PV.IsMine))
         {
             Destroy(rig);
@@ -291,7 +363,24 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (rig != null)
         {
-            int boxes = Hitbox.BuildFor(transform, this);
+            // Same idea as the rig above - a baked prefab already carries a full set of hitbox
+            // colliders, and building another set on top would leave two overlapping colliders
+            // per limb, doubling every hit. Re-bind the existing ones to this instance instead.
+            Hitbox[] existingBoxes = GetComponentsInChildren<Hitbox>(true);
+            int boxes;
+
+            if (existingBoxes.Length > 0)
+            {
+                foreach (Hitbox hitbox in existingBoxes)
+                    hitbox.Bind(this, hitbox.multiplier, hitbox.partName);
+
+                boxes = existingBoxes.Length;
+            }
+            else
+            {
+                boxes = Hitbox.BuildFor(transform, this);
+            }
+
             if (boxes == 0)
                 Debug.LogError("No hitboxes built - this player cannot be shot.", this);
         }
@@ -334,6 +423,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // Only on your own body. Wind lines around somebody else's gorilla would be drawn
             // in their peripheral vision, not yours.
             gameObject.AddComponent<SpeedRush>();
+
+            // Mine-only for the same reason - classifying a kill only ever needs data your own
+            // client already has. A fresh component starts at multiplier 1 on its own, which is
+            // all a new life needs since PhotonNetwork.Destroy/Instantiate means there is no
+            // previous instance's state to carry over or reset.
+            style = gameObject.AddComponent<StyleScore>();
+            movementCombo = gameObject.AddComponent<MovementCombo>();
             PlaceViewModel();
 
             // The HUD is a scene object now rather than something bolted onto the player, so
@@ -395,6 +491,12 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
         if (Local == this)
             Local = null;
+
+        // Only if it's still this instance - a respawn can construct the new body and register
+        // it before the old one's OnDestroy runs, and removing then would evict the new entry.
+        if (PV != null && PV.Owner != null && byOwner.TryGetValue(PV.Owner, out PlayerController mine)
+            && mine == this)
+            byOwner.Remove(PV.Owner);
     }
 
 
@@ -421,7 +523,21 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (MatchState.Phase == MatchPhase.Over)
             return;
 
-        UpdateAim(AimInputOverride ?? KeyBinds.Held(KeyBinds.Action.Aim));
+        bool aimInput;
+
+        if (GameSettings.AimToggle)
+        {
+            if (KeyBinds.Pressed(KeyBinds.Action.Aim))
+                aimToggled = !aimToggled;
+
+            aimInput = aimToggled;
+        }
+        else
+        {
+            aimInput = KeyBinds.Held(KeyBinds.Action.Aim);
+        }
+
+        UpdateAim(AimInputOverride ?? aimInput);
 
         // Not while the settings screen is up. The mouse is being used to drag sliders, and
         // reading it as look input meant the camera span round behind the panel while you
@@ -803,6 +919,72 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     }
 
     /// <summary>
+    /// Crashing into a wall. Same reasoning as ReportGroundSlam above, for the same class of
+    /// bug reported directly this pass: "the movement tech effect being local only, make it
+    /// global." PlayerMovement.WallSmash only ever ran on the owner's own client.
+    /// </summary>
+    public void ReportWallSmash(Vector3 point, Vector3 normal, float strength)
+    {
+        PV.RPC(nameof(RPC_WallSmashImpact), RpcTarget.All, point, normal, strength);
+    }
+
+    [PunRPC]
+    void RPC_WallSmashImpact(Vector3 point, Vector3 normal, float strength) =>
+        BuildWallSmashImpact(point, normal, strength);
+
+    public static void BuildWallSmashImpact(Vector3 point, Vector3 normal, float strength)
+    {
+        PlayerMovement.MovementBurst(point, normal, PlayerMovement.WallSmashDust, "circle", 20, 70f,
+                                     3f, 7f, 0.35f, 0.75f, 0.4f, 0.5f);
+        PlayerMovement.MovementBurst(point, normal, PlayerMovement.WallSmashTint, "spark", 22, 55f,
+                                     5f, 12f, 0.16f, 0.36f, 0.3f, 0.35f);
+
+        GameAudio.PlayAtShaped(GameAudio.WallSmash, point, 0.95f,
+                               1.15f + Random.Range(-0.06f, 0.06f), GameAudio.Impact, 1.1f);
+
+        // The low body layer under the crack - Slam is the fallback, same reasoning this call
+        // already had before the RPC move: already the heaviest, lowest sound in this game's own
+        // banks, which is exactly the shape a low thump under an impact wants.
+        GameAudio.PlayAtShaped(GameAudio.WallSmash, point, 0.6f, 0.5f, GameAudio.Slam, 0.6f);
+    }
+
+    /// Same fix again, for the air brake's skid.
+    public void ReportAirBrake(Vector3 point, Vector3 direction)
+    {
+        PV.RPC(nameof(RPC_AirBrakeImpact), RpcTarget.All, point, direction);
+    }
+
+    [PunRPC]
+    void RPC_AirBrakeImpact(Vector3 point, Vector3 direction) => BuildAirBrakeImpact(point, direction);
+
+    public static void BuildAirBrakeImpact(Vector3 point, Vector3 direction)
+    {
+        PlayerMovement.MovementBurst(point, direction, Color.white, "star", 6, 40f, 1.5f, 3f,
+                                     0.03f, 0.06f, 0.16f, 0.3f);
+
+        // Footstep, not Slide - reported as sounding the same as an actual slide, which this
+        // shouldn't, being the opposite of one (a hard stop rather than a sustained scrape).
+        GameAudio.PlayAtShaped(GameAudio.AirBrake, point, 0.5f, 1.6f, GameAudio.Footstep, 1.8f);
+    }
+
+    /// Same fix again, for the ledge hop - reuses AirBrake's own bank rather than needing one of
+    /// its own, same reasoning PlayerMovement.LedgeHopEffects always had for it.
+    public void ReportLedgeHop(Vector3 point, Vector3 up)
+    {
+        PV.RPC(nameof(RPC_LedgeHopImpact), RpcTarget.All, point, up);
+    }
+
+    [PunRPC]
+    void RPC_LedgeHopImpact(Vector3 point, Vector3 up) => BuildLedgeHopImpact(point, up);
+
+    public static void BuildLedgeHopImpact(Vector3 point, Vector3 up)
+    {
+        PlayerMovement.MovementBurst(point, up, PlayerMovement.DustTint, "spark", 8, 45f, 1f, 2.5f,
+                                     0.03f, 0.07f, 0.18f, 0.4f);
+        GameAudio.PlayAtShaped(GameAudio.AirBrake, point, 0.5f, 0.85f, GameAudio.Footstep, 1.3f);
+    }
+
+    /// <summary>
     /// Throws this player. Explosions and grapples both come through here.
     ///
     /// Only ever called on the client that owns the body - movement is simulated locally and a
@@ -1152,9 +1334,14 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         }
     }
 
-    public void TakeDamage(float damage, string weapon, bool headshot)
+    public bool TakeDamage(float damage, string weapon, bool headshot)
     {
         PV.RPC(nameof(RPC_TakeDamage), PV.Owner, damage, weapon, headshot);
+
+        // Never the fatal blow from here - a player's own death only resolves once RPC_Died
+        // round-trips back (see IDamageable.TakeDamage), and that's where a real kill gets
+        // credited, not this call.
+        return false;
     }
 
     [PunRPC]
@@ -1194,20 +1381,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // RPC left them.
         if (Hud != null && info.Sender != null)
         {
-            foreach (PlayerController other in
-                     FindObjectsByType<PlayerController>(FindObjectsSortMode.None))
-            {
-                if (other != null && other.View != null && other.View.Owner == info.Sender)
-                {
-                    Hud.ShowDamageFrom(other.transform.position);
-                    break;
-                }
-            }
+            PlayerController other = ByOwner(info.Sender);
+
+            if (other != null)
+                Hud.ShowDamageFrom(other.transform.position);
         }
 
         // Shake without a stop. Being shot shouldn't freeze your game - that's the one moment
         // you most need control, and stealing it turns a fight into a slideshow.
         Juice.Shake(Mathf.Clamp01(damage / 50f));
+
+        // Getting hit costs you a piece of your style multiplier - reported directly as wanted,
+        // to balance a mechanic that otherwise only ever goes up while you're doing well.
+        style?.RegisterHitTaken();
 
         if (currentHealth <= 0f)
             Die(info.Sender, weapon, headshot);
@@ -1452,6 +1638,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             // rather than a scored one - nobody else needs to know your health went up.
             if (Local != null)
                 Local.RewardKill();
+
+            // Classifying this kill (headshot/no-scope/point-blank/weapon-swap/movement-chain)
+            // only ever needs data that already lives on the killer's own client, so this runs
+            // here rather than in MatchState.ScoreKill, which only the master runs.
+            Local?.Style?.RegisterKill(PV.Owner.ActorNumber, weapon, headshot);
 
             // The biggest stop in the game. Killing someone is the thing every other piece of
             // feedback has been building toward, so it gets the whole budget.

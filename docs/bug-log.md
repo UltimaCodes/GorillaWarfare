@@ -1650,3 +1650,1277 @@ Verified with real `HudPhotographer` screenshots (`GW_HUD_MODE=GunGame`, to see 
 the banana together in one frame) - the banana's actual pixel art, the underlay's visible shadow
 behind "140," and the meter's new border all confirmed by looking at the render, not by reading
 the code back. `SceneCheck` and the full `PlayModeProbe` suite both still pass.
+
+# Twenty-first pass — a giant backlog in one sitting: the player prefab, reload, the style score, and the health bar rebuilt again, 2026-08-29
+
+One long session working through an eighteen-item list in order, closing with an explicit
+instruction not to leave any of it for later. Grouped here by system rather than in the order they
+landed, since several were independent.
+
+## The gorilla model and hitboxes existed only at runtime
+
+"Put the gorilla player 3d model and the hitboxes on the prefab so I can change them to my
+liking." Both `MonkeyRig.Build` and `Hitbox.BuildFor` instantiated/generated everything fresh on
+every spawn - nothing about the model or a single collider ever existed on the prefab asset, so
+there was nothing in it to select, move or resize between matches.
+
+Rather than rearchitect either system, made both idempotent and added a bake step on top:
+`MonkeyRig.Build` now checks for a child literally named `"Model"` before instantiating anything,
+and reuses it if present; `PlayerController.Start` checks for existing `Hitbox` children before
+calling `Hitbox.BuildFor` and re-binds them to the live instance instead of building a second,
+overlapping set (which would have doubled every hit). `Tools/Gorilla Warfare/Bake the player rig`
+(`PlayerRigBaker.cs`, new, re-runnable) opens the prefab, runs the exact same `Build`/`BuildFor`
+calls once against it, and saves the result - real, hand-editable content in the prefab, with the
+runtime path now just reusing whatever's there instead of building its own copy on top. Verified
+with the full `PlayModeProbe` suite (spawn, respawn, hitbox coverage) rather than assumed safe from
+reading the diff - a subtle miss here would have meant either a duplicated model or damage being
+silently double-counted, neither of which a compiler catches.
+
+## The reload animation and its sound
+
+"Nothing you have ever added for reload has worked" territory, again - the previous pass's dip
+(down, hold, back up, all one shape) was reported as unsatisfying at any speed tried, with an
+actual concept offered this time: eat the old one, pull a fresh one out of nowhere. Replaced the
+symmetric ease with three distinct beats - fast hard drop, a held moment fully retracted, then a
+sharp pull-back that overshoots past rest (`EaseOutBack`) before landing exactly on it - see
+`roadmap.md`'s "Later polish" for the full account. Reload sound moved off the single generic clip
+onto a per-weapon lookup (`Resources/Audio/Reload/<WeaponName>`, same parent-folder fallback
+`Shoot/<WeaponName>` already established) pitched by the weapon's own `Weight` in the meantime,
+since no fruit-specific audio has actually been sourced yet - flagged directly rather than quietly
+passed off as solved, per this project's own standing rule about not inventing assets.
+
+## The style score
+
+The biggest single piece: a full rework of the slide-only combo meter into a unified scoring
+system, and the new decider for who wins a deathmatch. Design, the "why" behind each number, and
+what's still unverified all live in `roadmap.md`'s new "Style score and the combo/scoring rework"
+section rather than duplicated here. Worth recording the one real design problem solved along the
+way: classifying a kill as a no-scope or a point-blank needs the *shooter's* aim state and the hit
+distance at the *moment of the shot*, but a kill is only confirmed several frames later once the
+death RPC round-trips back - by then that context is gone. Solved by having `SingleShotGun`
+stash it (`StyleScore.RecordShot`, keyed by target actor number) at the moment damage is dealt, and
+having the kill-confirmation RPC (`PlayerController.RPC_Died`, which every client already receives,
+including the killer's own) look it up rather than try to reconstruct it after the fact.
+
+## The health bar, rebuilt a third time
+
+"Style it like the Cruelty Squad health bar" - top left, vertical, depletes downward, the peel and
+the banana as separate layers, a backshadow/outline for comparing current health against full, and
+a diagonal animated overshield bar beside it. Full account, including the deliberate choice not to
+source a second sprite for the peel, in `roadmap.md`'s HUD section (item 7). The one implementation
+trap worth naming: the overshield bar used to be a horizontal extension of the main bar's own
+track, resized by `RectTransform.sizeDelta` directly. Once the main bar became a fixed-size
+vertical `Image.Type.Filled` gauge (matching how the main health fill already worked, rather than
+inventing a second mechanism), the shield had to move to the same `fillAmount` approach against its
+own ceiling (`OvershieldCeiling - MaxHealth`) - reusing the old resize code against a bar that no
+longer resizes would have silently done nothing.
+
+All four verified together: a batch-mode compile check, `HudBuilder.Repair` reporting exactly the
+pieces it expected to add, the full `PlayModeProbe` suite passing (spawn, hitboxes, a real kill
+exercising `StyleScore.RegisterKill`, death and respawn), and a real `HudPhotographer` screenshot of
+the rebuilt HUD - not eyeballed from the diff alone, per this project's own standing rule about
+declaring a visual change done without rendering it first.
+
+# Twenty-second pass — a real screenshot, a real sweep, 2026-08-29
+
+Same-day continuation. A real screenshot of the twenty-first pass's work surfaced three separate
+bugs the automated checks above never could - none of them are things `PlayModeProbe` or a compile
+pass can see. Followed by a direct request for a full bug/optimization sweep, which turned up
+several more that had nothing to do with what the screenshot showed.
+
+## What the screenshot actually caught
+
+- **The health banana rendered as a plain yellow wedge**, not a banana at all. Two compounding
+  causes: the sprite was force-stretched into a box far taller than its own aspect ratio (fixed by
+  giving up on `Image.preserveAspect` - its behaviour wasn't matching what the code assumed and
+  there was no way to debug it further than "it's wrong" without more targeted tooling - and using
+  a box close enough to the sprite's own 285x250 aspect that plain stretch-fill barely moves
+  anything), and the replacement sprite had never been re-run through
+  `Tools/Gorilla Warfare/Configure banana sprite import` after being swapped in, so it likely wasn't
+  even importing as a `Sprite` yet.
+- **The style meter's rank+multiplier line never appeared in real play**, only in the forced
+  `HudPhotographer` render - correct behaviour actually (it's meant to hide until a run is active),
+  but with nothing on screen to explain a bare "0" next to it, reported as looking like "a random
+  number." Removed the permanent score readout entirely rather than labelling it - "why is there a
+  permanent score on the screen all the time I dont need to see it like that, i Like the ultrakill
+  style."
+- **Two Unity batch-mode invocation bugs**, unrelated to any of the above but found while chasing
+  the screenshot: `-nographics` suppresses rendering but not audio, so every automated check that
+  entered play mode had been playing real sound the whole time - fixed with
+  `AudioListener.volume = 0f` at the top of both `HudPhotographer` and `PlayModeProbe`'s boot
+  coroutines. And `HudPhotographer` was being run with `-batchmode`, which its own doc comment
+  already explained breaks `ScreenCapture` (no real end-of-frame ever arrives) - it wasn't failing,
+  it was hanging forever, which is worse. Runs without `-batchmode` now, exactly as documented.
+
+## The bug and optimization sweep
+
+Requested directly after the above. Found by re-reading each system built this same day with fresh
+eyes rather than assuming yesterday's review caught everything:
+
+- **Three UI row templates were permanently visible** (`breakdownTemplate`, `feedTemplate`,
+  `standingsTemplate`) - a template exists only to be cloned (`GameHud.Row`), but none of the three
+  were ever given `gameObject.SetActive(false)` at build time, so the original template object sat
+  on screen forever as an extra, untracked row. Only the breakdown one was ever actually reported
+  ("a constant 1.35x headshot thingy on the right at all times") - the other two were presumably
+  just less noticeable, not actually fine.
+- **Ground pound dealt damage with no hitmarker, damage number or hit sound** - `DealSlamDamage`
+  called `TakeDamage` directly and stopped there, never calling the same `ShowHit`/`ShowDamage`/
+  `RegisterHit` sequence `Projectile.Explode`'s own AOE hits already give. Added, matching that
+  exact pattern.
+- **`StyleScore` used scaled time throughout**, against this project's own standing rule (a kill's
+  hitstop drags `Time.timeScale` down right when the multiplier is freshest). Switched every timer
+  to unscaled - and fixing `SingleShotGun`'s reload timer the same way immediately surfaced a second
+  bug it caused: `UpdateReloadFlip` was still reading `reloadDoneAt` against scaled `Time.time`,
+  so the two clocks disagreed the moment they diverged. Fixed the same pass rather than left as a
+  new inconsistency.
+- **`RegisterHitTaken`/`RegisterWallSmash` were publishing a Photon property write on every single
+  hit or wall smash**, despite neither ever changing the score - only the multiplier. Removed; only
+  `RegisterKill` publishes now.
+- **A dead property** (`TierFraction`) that nothing had ever read. Deleted.
+- **The style score was never reset between matches** - the single most serious find. `PUN never
+  clears player custom properties` is this project's own oldest, most-repeated bug class (three
+  separate prior incidents, all in `working-notes.md`'s "Decided, don't relitigate" and bug-log's
+  own second/third passes), and the style score walked straight into a fourth: `MatchState.
+  BeginWarmup` resets kills/deaths/headshots/best streak/rung for everyone already in the room at
+  match start, but never touched the new `StyleScoreKey` - and `OnPlayerEnteredRoom` reset *only*
+  the gun game rung for anyone joining afterward, not even the older stats. A player who finished a
+  match with any style score would carry it into the next one and corrupt the actual win condition,
+  not just a cosmetic number. Fixed both reset points, and widened the join-time one to match
+  `BeginWarmup`'s full set - it had the identical gap for kills/deaths/headshots/streak all along,
+  just never on anything that could be blamed for deciding a match's winner before this.
+- A second, related gap in the same area: `StyleScore` itself only rebuilds on death/respawn, not
+  on a new match starting - a player alive and standing around when a new match begins keeps their
+  old component, old `score` and all, and their first kill of the new match would have published
+  last match's total right back over the property reset above. Added a same-frame check in
+  `StyleScore.Update()`: entering Warmup with a nonzero local score clears it and republishes.
+- Assorted smaller items: a stale doc comment still saying "husk" after the rename to "peel", a
+  redundant double-read of `player.Overshield` in the same method.
+
+Verified with a batch-mode compile check and the full `PlayModeProbe` suite after each round of
+fixes, same discipline as every other pass. The visual half (does the health bar actually look
+right now) is explicitly not verified here - see the twenty-first pass's own note on why that
+verification loop moved to Ryaan doing it directly.
+
+# Twenty-third pass — why the style meter still didn't work, plus tuning, 2026-08-29
+
+Same-day continuation, after Ryaan tested the twenty-second pass's fixes directly and reported
+back: "style meter STILL does not work and the slide meter exhaust only shows up but not the other
+thingies" - despite the sweep above having already fixed every bug it could find *in* `StyleScore`
+itself. That was the tell that the actual bug was somewhere else entirely.
+
+## The style meter never had a kill to react to
+
+Root cause: every kill Ryaan could actually produce in solo sandbox testing was architecturally
+invisible to `StyleScore.RegisterKill`, which only ever fires from
+`PlayerController.RPC_Died`. Two separate reasons, both structural rather than logic bugs:
+
+- **A training dummy's death never goes through `RPC_Died` at all.** `TrainingDummy` has its own
+  entirely separate `FallOver` path with no networked actor, no kill feed entry, and no call
+  anywhere near `MatchState.ReportKill` or `StyleScore.RegisterKill`. It was built to answer
+  weapon-tuning questions ("does the shotgun fall off where it should"), and never wired to the
+  scoring system because scoring didn't exist yet when it was built.
+- **A self-kill can't satisfy `RegisterKill`'s own gate either.** `RPC_Died`'s crediting code reads
+  `if (killer != null && killer.IsLocal && killer != PV.Owner)` - and `PlayModeProbe`'s own death
+  test (`player.TakeDamage(500f, "Pistol", true)`) makes killer and victim the same `Player`,
+  meaning this entire code path had only ever been exercised by reflection-forcing fields directly
+  in `HudPhotographer`, never through real gameplay logic. That's a real gap in the probe suite,
+  not just the sandbox - it explains why nothing already automated had caught this.
+
+Both point at the same fix: give a dummy kill its own, synchronous crediting path rather than
+trying to route it through a mechanism built for a networked death. `IDamageable.TakeDamage`
+changed from `void` to `bool` - true if this specific call was the fatal blow.
+`PlayerController.TakeDamage` always returns `false` (a real kill still only ever gets credited via
+`RPC_Died`, several frames later, exactly as before); `TrainingDummy.TakeDamage` returns `true`
+exactly once, on the call that brings health to zero (safe against a shotgun's other pellets
+landing lethal in the same frame - `StartCoroutine(FallOver)` runs synchronously up to its first
+`yield`, which sets the `down` guard as its very first line, before `TakeDamage` even returns).
+`Hitbox.Apply`'s existing `bool` return - unused by its only caller, confirmed by grep before
+touching it - now passes this straight through instead of meaning "was damage applied."
+
+New `StyleScore.RegisterDummyKill(weapon, headshot, noscope, pointBlank)` sits next to
+`RegisterKill` rather than behind it - a dummy kill resolves synchronously at the point of death,
+so it has nothing to look up in `pendingShots` the way a real kill's async RPC confirmation does.
+Both now share the actual scoring math through a new `ApplyKillGain` (extracted from what used to
+be the back half of `RegisterKill` verbatim) so there's exactly one place that turns a
+classification into a multiplier/score change, not two copies that could drift.
+
+Wired into every place a shot can land a fatal blow on something that isn't a player:
+`SingleShotGun.FirePellet` (both the normal hitbox branch and the no-hitbox `IDamageable` fallback
+right below it - found while wiring the first one, same gap, same fix), `PlayerMovement.
+DealSlamDamage`'s non-player loop, `Projectile.Explode`'s non-player loop, and
+`VineGrapple.LandDummyHit`. Only the gun path computes a real noscope/point-blank read (it has
+`owner.IsAiming` and `hit.distance` sitting right there, same data `RegisterKill` itself uses for a
+real kill on the same weapon); ground pound, grenade and vine dummy kills credit flat, no bonus
+tags - deliberately, to match what a real *player* kill through those same three weapons already
+gets today (none of them ever populate `pendingShots`), rather than making a dummy kill more
+generous than the real thing it's standing in for.
+
+This should also explain "the slide meter exhaust only shows up but not the other thingies"
+without being a second bug: `StyleScore.Active` (`multiplier > 1.001f`) could never go true with
+zero kills ever credited, so anything in `GameHud` gated on it - the rank line, the breakdown rows
+- had nothing to show, while whatever "exhaust" effect Ryaan's seeing is presumably driven by
+something that doesn't depend on `Active` (the base slide/movement system itself, still intact).
+Reasoned through rather than independently confirmed - flagged for Ryaan to check in the same
+sandbox pass that found the original bug.
+
+## Requested tuning, same message
+
+- **Ground pound damage now scales with impact speed.** `GroundSlam` sets a fixed initial
+  `velocity.y`, but actual impact speed grows under gravity during the fall - captured at the top
+  of `SlamLandingEffects`, before anything else that frame can touch it, as `impactSpeed`, turned
+  into `speedScale = clamp(impactSpeed / groundSlamSpeed, 1, 2.5)`, and applied only to damage (not
+  knockback - a harder landing hitting harder is the point; flinging things further on top of that
+  wasn't asked for and would fight the AOE falloff tuned two passes ago).
+- **Grenade AOE damage now has the same harsh falloff ground pound already got.** Re-read
+  `Projectile.Explode` in full before touching it, since the report ("it doesnt right now") implied
+  no falloff existed at all - it did, linear, already correct for knockback. What was actually
+  missing was the *harsher* squared curve ground pound's own damage got in the previous pass;
+  mirrored it here rather than building a second AOE system, keeping knockback linear on purpose -
+  a rocket-jump-style launcher should stay forgiving for mobility even where it bites harder for
+  damage.
+- **The knife's hold pose rotated 180° on Y** (`meleeHold`), a one-line data change on
+  `Peel.asset` - the previous pass's melee-pose work got the tilt right but left it facing backward.
+- **Renamed again**: "Peel Steel" → "Yellow Fang." Reported directly as still not reading as a
+  knife name, "going too deep into the banana names format without giving it room to be a knife" -
+  the whole point of moving this weapon off the fruit-pun pattern in the first place. "Fang" reads
+  as an actual blade name on its own (karambits are sometimes called this) rather than another
+  banana joke wearing a knife's clothes.
+
+## Self-inflicted: forgot this project's own documented rule about `-quit`
+
+First verification attempt this pass ran `PlayModeProbe` with `-quit` on the command line, same as
+every other batch tool here - and got a clean exit, zero output, no failures logged, nothing. Not a
+hang, not a crash: it looked like a suite that ran and found nothing wrong, which is the most
+dangerous shape a broken check can take. `PlayModeProbe.Run()` calls `EditorApplication.
+EnterPlaymode()`, which only *schedules* the transition rather than blocking on it, so `-quit` won
+the race and shut Unity down before play mode, `Boot()`, or a single check ever ran.
+
+This exact rule was already written down - `working-notes.md`'s "How to verify" section, plainly:
+"`PlayModeProbe` must not [take `-quit`] — it enters play mode and exits itself." Should have been
+checked before running the tool, not after getting a suspiciously-empty result back. Re-ran without
+`-quit` and got the real output (150+ checks, `[play] ===== ALL PASS =====`). No code or doc change
+needed here - the rule was already correct and already in the right place - just a reminder that
+"how to verify" is worth reading, not just having written once.
+
+Verified with a batch-mode compile check (`PlayerRigBaker.Run`, which also re-baked the weapon
+preview onto the player prefab to pick up the rotated knife) and the full `PlayModeProbe` suite,
+correctly invoked this time - all existing checks still pass, confirming the `IDamageable` signature
+change didn't break anything already covered. The new dummy-crediting wiring itself isn't exercised
+by an automated check yet (`PlayModeProbe` has no dummy-kill test at all, and building one properly
+means firing a real raycast at a real dummy rather than calling `RegisterDummyKill` directly, which
+would only prove the method works and not that anything actually calls it) - verified by hand
+instead, reading every one of the five call sites against the actual field types (confirmed via
+grep, not assumed) before editing. Real confirmation is Ryaan's own sandbox pass.
+
+# Twenty-fourth pass — a real screenshot again, a movement combo, dummies ragdoll, 2026-08-29
+
+Same-day continuation. Ryaan ran the fixed style meter himself and sent back a real screenshot -
+proof the dummy-crediting fix landed (a real kill, "FULL SILVERBACK x5.4" with a real breakdown)
+but also proof of a new bug the fix itself exposed: the rank text and the breakdown rows
+overlapped. Same message asked for three more things: a second, separate movement-tech combo
+meter bottom left, real ragdoll physics for training dummies (not just players), and permission to
+source real SFX regardless of copyright.
+
+## The overlap
+
+`slideRank`'s own box uses a TopRight pivot (its top edge sits at the anchored Y, not centred on
+it - confirmed by reading `Text()`'s implementation directly rather than assumed a second time),
+so the meter bar hanging off its bottom - built as a child anchored to `slideRank`'s own bottom-
+right corner - actually extends to Y=-129, not the Y=-99 an earlier, wrong pivot assumption would
+have given. `breakdown`'s own top edge sat at Y=-118, eleven pixels inside that. Moved to Y=-150 in
+both `Run()` and `Repair()` (the second as an unconditional position correction, same shape the
+kill feed's own retune already uses - Breakdown is a plain RectTransform, not a TMP_Text, so it
+can't go through `Retune()`). `HudPhotographer` also needed the same breakdown rows actually
+populated to reproduce the bug at all - its reflection-forcing previously only set `multiplier`/
+`comboExpiresAt`/`score` directly, never touching `lastBreakdown` (only `ApplyKillGain` populates
+it), so the panel it photographed had a rank line and no rows under it. Fixed by reflection-adding
+real `BreakdownEntry` values matching the reported scenario (POINT BLANK + WEAPON SWAP) - readonly
+on a `List<T>` field only blocks reassigning the field, not mutating the list already in it.
+
+## The movement-tech combo
+
+"No slide combo text still which should show up... put that on the middle/bottom left now I guess...
+make new movement tech combos and stuff... this includes grappling, grenade jumping, bhopping,
+slide hopping, etc and make this be affected by you crashing into something." A second, separate
+counter from the kill-based style score - traversal instead of combat, bottom left instead of top
+right, never touching the score or the win condition.
+
+New `MovementCombo.cs` - deliberately not folded into `StyleScore`, and deliberately not built by
+rewiring `PlayerMovement.SlideChain` into something broader: that field's speed math has been
+tuned across several passes (the chain-bonus compounding fix, the fatigue system, bhop's own
+separate air-speed caps) and rewiring its *meaning* to also drive a HUD counter would have risked
+the actual gameplay feel for a cosmetic display. Instead a lightweight, independent counter
+(`Register(tech)` extends a chain and remembers the name; `Break()` zeroes it) that four systems
+call into without needing to know about each other:
+
+- **Slide hop** - `PlayerMovement`'s existing chain-increment line, the same moment `StyleScore.
+  RegisterKill` already reads `SlideChain` from.
+- **Bhop** - a jump landing inside `bhopGrace` of the last touchdown (`GroundMove`'s own jump
+  branch) - the same timing window `bhopKeep` already rewards with kept speed, credited to the
+  combo too rather than only to velocity.
+- **Grapple** - `VineGrapple.RPC_Attach`. Runs on every client same as the rope's thwip sound
+  right below it; `MovementCombo` only ever exists on its owner's own body, so `GetComponent`
+  quietly finds nothing on a client just watching somebody else's rope land.
+- **Grenade jump** - `Projectile.Explode`'s self-knockback branch, gated on `strength > 0.3f` so
+  a nearby-but-not-really-a-boost tap on the blast's edge doesn't count as a trick.
+
+`PlayerMovement.WallSmash` now breaks this the same call breaks `StyleScore`'s own multiplier -
+"make this be affected by you crashing into something" answered by the existing crash-detection
+threshold rather than a second one.
+
+Hit one real naming collision building this: `PlayerController` already had an unrelated `combo`/
+`Combo` (`RegisterHit`'s consecutive-hits counter, feeding the hit-pitch climb) - a same-name field
+and property for a completely different concept, caught immediately by the compiler (`CS0102`) on
+the first compile-check rather than silently shadowing anything. Renamed the new one to
+`movementCombo`/`MoveCombo`.
+
+New bottom-left HUD block mirrors the style meter's own shape (name + chain count, tilted, a
+draining bar) rather than inventing a new visual language - tilted the *other* way (+6° rather than
+-6°) so both corners lean inward symmetrically, and the meter bar hangs *above* the text instead of
+below it, since this cluster sits near the bottom of the screen and "below" would push it off-screen
+entirely. Built in both `Run()` and `Repair()`, the latter as a fallback off `slideCombo`'s own font
+- same shape the style meter's own Repair fallback already used.
+
+## Training dummies ragdoll now too
+
+"Still no source like ragdoll for dummies" - `Corpse.cs` already answered this for real players two
+passes ago; dummies were left on their old scripted topple specifically because a dummy has to
+snap back to a clean standing pose to respawn, which a settled physics simulation can't undo. The
+fix is the same one that resolved "how does a dummy explode from a grenade with no rigidbody" for
+damage: don't ragdoll the dummy itself, hand the visual off to a disposable `Corpse.Spawn` copy at
+the dummy's exact position/rotation/tint, while the original object goes invisible underneath it
+immediately (not after a pause - a standing, unhit-reacting dummy still visible next to its own
+falling ragdoll would look broken, not dead) and resets cleanly once its own timer's up. New `tint`/
+`homeRotation` fields on `TrainingDummy` exist only to carry data `Corpse.Spawn` needs into
+`FallOver`, which no longer touches `transform` at all before the reset.
+
+## Sourcing real SFX
+
+Explicit, broad permission given this pass: "I want you to find ANY sound effect online that fits
+the profile or need we have regardless of it being copyrighted or not since I will be remaking them
+later and this will not go anywhere beyond my computer." Extends the standing asset-sourcing rule
+(previously exercised once, for a single reference image) to this session's remaining `GameAudio.cs`
+gaps.
+
+Checked the real `Resources/Audio` folders rather than trusting `GameAudio.cs`'s own doc comments,
+which turned out to be stale in three places - Shield, Slide and Vine all already have real sourced
+clips (from an earlier pass this session's transcript doesn't cover in this window) despite their
+comments still describing empty folders waiting for one. Fixed those comments while in the file.
+The genuinely empty ones - confirmed by listing the actual directories, not assumed - were
+`AirBrake`, `Slam` and `WallSmash`. `Reload` has exactly one generic clip and no per-weapon fruit
+sounds yet; left alone this pass, in scope for a future one specifically about it rather than
+squeezed in here.
+
+All three sourced from Kenney's asset packs (kenney.nl) - CC0, no login wall, and (confirmed by the
+filenames already present in Shield/Footstep/Impact) the same library this project's existing
+sounds already come from, so the new ones match in recording style rather than introducing a
+different mic/room into the mix:
+
+- **Slam** (ground pound) - `impactSoft_heavy` x3, from Impact Sounds. "Soft" over the pack's
+  Wood/Metal/Plate/Bell variants because a fist and the ground it hits are both flesh-and-earth,
+  not a hard material ringing.
+- **WallSmash** - `impactPlank_medium` x3, from the same pack. Picked "plank" specifically because
+  this game's arena walls are wooden fencing (visible in the sandbox screenshot earlier this pass),
+  not masonry or metal - the material in the sound now matches the material on screen.
+- **AirBrake** - `thrusterFire` x3, from Sci-fi Sounds. A short burst rather than the pack's
+  sustained engine loops, matching this being a one-shot (air brake, and the ledge hop that reuses
+  its fallback) rather than a held state.
+
+A `SOURCES.txt` in each new folder, matching the credit-file convention `Shield/README.txt` and
+`Explosion/SOURCES.txt` already established - what was picked, why, and exactly which call sites
+use it and at what volume, so a future pass replacing these with hand-made audio knows what it's
+replacing and why that choice was made. Caught and corrected one wrong claim while writing Slam's
+own file: first draft said the ground-pound landing had no dedicated impact sound at all, based on
+`PlayerMovement.cs` alone - re-checking found it does, in `PlayerController.BuildGroundSlamImpact`
+(reached over an RPC, which is why a `PlayerMovement.cs`-only grep missed it). Fixed before it
+became a false "known gap" note baked into the repo.
+
+Verified: a batch-mode compile check that caught the `Combo` naming collision immediately, the full
+`PlayModeProbe` suite (all pass, no regressions from any of the movement-tech hooks or the dummy
+rewrite), and a real `HudPhotographer` screenshot - not eyeballed from the diff, the same discipline
+the last two passes both leaned on - confirming both the breakdown no longer overlaps the meter bar
+and the new "GRENADE JUMP x3" block renders correctly bottom left. The dummy ragdoll itself has no
+screenshot here - `HudPhotographer` doesn't spawn a sandbox or a dummy, and it reuses `Corpse.Spawn`
+verbatim rather than a new code path, so confidence comes from that reuse plus the passing probe
+suite rather than a fresh render. Real confirmation is Ryaan's own sandbox pass, same as the style
+meter fix above it.
+
+The SFX work got its own final compile check after landing (clean) and each new `.ogg` confirmed
+carrying a real Unity-generated `.meta` file, proving the import actually happened rather than
+just sitting as an untracked file. Not verified by ear - nothing in this session's tooling can play
+and judge a sound, the same limitation `AudioCheck` has always had for anything beyond measuring
+shape (clip length, peak, onset count). Worth a listen in a real client before trusting the volumes
+picked here.
+
+# Twenty-fifth pass — the spent indicator, a bigger combo, global movement effects, 2026-08-29
+
+Same-day continuation, four more items in one message.
+
+## The spent indicator gets its own spot
+
+Used to borrow the style meter's own rank text (`slideCombo`) for "SPENT 2.1" while a slide chain
+was on cooldown - reported directly: "add the spent (for the sliding) to the right, not connected
+to either combo bar." New `GameHud.spentText`, its own field, its own `UpdateSpentIndicator`,
+reading `PlayerMovement.Exhausted` directly rather than borrowing anything. First placement
+(middle-right, Y=48) collided with the kill feed - a real screenshot caught "SPENT 3.0" printed
+directly over "You took Rival's head clean off." Root cause: the feed's own box is middle-right
+*pivoted* (320 tall, centred on its Y=-60 anchor), so its content starts near the top of that box
+at roughly Y=100, not near the anchor point the way an empty-growing list would suggest - the same
+category of pivot-direction mistake as the health bar's very first build a few passes back. Moved
+to Y=140, clear of the feed's box entirely, confirmed with a second render.
+
+## The combat combo, fleshed out
+
+Reported directly: "flesh out the combat combo bar more because it has only a few combos and its
+not that fun at all." Five new bonuses alongside the original headshot/no-scope/point-blank/
+weapon-swap/slide-chain:
+
+- **LONG RANGE** - point blank's opposite, a kill confirmed past `StyleScore.LongRangeThreshold`
+  (18m, a first guess - there's no real map to measure a "long" shot against yet).
+- **AIRBORNE** - `!movement.Grounded` at the moment of the kill. A ground pound can only ever land
+  airborne, so it always carries this too - intentional, not a loophole - jumping into a slam is
+  exactly the committed risk this exists to reward.
+- **BLADE FINISH** - the signature melee weapon specifically (`weapon == "Peel"`), not "any melee"
+  in general, since this game only has the one.
+- **KILL STREAK xN** - consecutive kills without dying (`PlayerController.Killstreak`, already
+  existed for the heal-per-streak system, just never fed the style score before).
+- A named multikill callout (**DOUBLE PEEL**, **BUNCH KILL**, **GORILLA WARFARE**, **GOING
+  FERAL** for 2/3/4/5+) rather than a bare number - reads as its own moment rather than a bigger
+  version of a normal kill, the same reasoning the rank tiers use banana/gorilla names instead of
+  letters. Needed a new `PlayerController.Multikill` getter; the field already existed
+  (`RewardKill` already fed it to `Hud.ShowKill`), just had no public accessor yet.
+
+Four of the five needed zero new parameters threaded through every call site - airborne, blade,
+killstreak and multikill are all computed straight off `StyleScore`'s own cached `owner`/`movement`
+references inside `ApplyKillGain` itself. Only long-range needed real plumbing, mirroring
+point-blank's own existing shape exactly (same `pendingShots`/`hit.distance` data, opposite
+comparison).
+
+Quaake/UT's own multi-kill words ("Double Kill", "Ultra Kill") were avoided on purpose, same
+reasoning the rank tiers dodge lettered ULTRAKILL-style names - and "RAMPAGE" specifically was
+already spoken for by the top rank tier, so it couldn't be reused here even though it's the
+classic-arena-shooter word every one of these lists reaches for.
+
+## The multiplier starts on damage, not on the kill
+
+The actual redesign underneath the new bonuses: "your multiplier starts when you damage someone
+and do stuff but when you kill someone you actually get the points." Before this, the multiplier
+sat completely cold through an entire gunfight and only ever moved the instant something died -
+new `StyleScore.RegisterHitLanded()` now bumps it (a small, capped +0.12, gated by a 0.35s
+cooldown so a fast weapon spraying a whole magazine into one target can't trivially max it out
+before the fight is decided) the moment *any* damaging hit connects, on a real player or a dummy
+alike. Score itself is untouched by this - `ApplyKillGain` is still the only place `score` ever
+changes, exactly as before, so "the kill is what actually pays out" holds; landing hits just means
+the payout is bigger by the time the kill lands, because the multiplier had already been climbing
+through the fight instead of starting cold.
+
+Wired into the same eight call sites the dummy-kill-crediting fix touched two passes ago - every
+place a shot, a slam, a blast or a vine pull can land non-fatal damage now credits this alongside
+whatever HUD hit-confirmation it already gave. Two things worth being careful about, both handled:
+self-damage from a grenade jump doesn't credit a hit against yourself (`Projectile.Explode` already
+distinguishes `self` for the knockback formula, reused here), and a teammate hit in a team mode
+doesn't credit anything either, because every one of these call sites already returns early on a
+teammate before reaching the point this new call sits at.
+
+## Movement-tech effects were local only
+
+"Fix the movement tech effect being local only, make it global." `PlayerMovement.WallSmash`,
+`AirBrakeEffects` and `LedgeHopEffects` all built their dust/spark/sound directly inline rather
+than over an RPC - and `PlayerMovement` only ever exists on its owner's own client (destroyed on
+every remote copy in `PlayerController.Start`), so none of the three had ever been visible or
+audible to anyone standing nearby when someone else did them. The exact same bug `PlayerController.
+ReportGroundSlam` already fixed for the ground pound, just never applied to the other three
+movement-tech impacts that share its shape.
+
+Same fix, same pattern, three more times: `ReportWallSmash`/`ReportAirBrake`/`ReportLedgeHop` on
+`PlayerController`, each an RPC to `RpcTarget.All`, each landing on a shared static
+`BuildXxxImpact` that does the actual particle/sound work (`BuildGroundSlamImpact`'s own shape,
+copied rather than reinvented). Hitstop/shake/the shader pulse stay local-only in all three, same
+reasoning `BuildGroundSlamImpact`'s doc comment already gives - it's your own impact, not something
+a bystander's camera should shake for. `AirBrakeEffects`/`LedgeHopEffects`'s sound moved from
+`PlayShaped` (flat, 2D, only ever meant for a solo listener) to `PlayAtShaped` (positional) as part
+of the same change, since everyone hearing it now needs to hear it coming from where it happened.
+
+Verified: a batch-mode compile check after each round (the first one caught a real naming
+collision immediately, see below), the full `PlayModeProbe` suite passing with zero regressions,
+and two real `HudPhotographer` screenshots - one that caught the spent-indicator/kill-feed overlap
+before it shipped, a second confirming the fix and separately confirming the longest new breakdown
+label ("1.60x GORILLA WARFARE") fits its box without overflowing. The movement-effect networking
+fix has no screenshot of its own - a single-client render can't show whether a *second* player
+would have seen or heard something - so that one is reviewed-correct by pattern-matching against
+`BuildGroundSlamImpact`'s already-proven shape, not independently rendered.
+
+**One near-miss worth recording**: while sourcing the SFX two passes ago, `PlayerController`
+already had an unrelated `combo`/`Combo` (the consecutive-hits counter feeding the hit-pitch
+climb) - unrelated to this session's own `MovementCombo`, but the exact same name. Compiler caught
+it immediately (`CS0102`) the first time either was built; renamed the movement-tech one to
+`movementCombo`/`MoveCombo`. Recorded again here as a reminder this class of collision is a real,
+recurring risk in a file this large, not a one-off - grep for a name before introducing it,
+not just after the compiler complains.
+
+# Twenty-sixth pass — tokens and the crate opening system, 2026-08-29
+
+Same-day, same message as the four items above. The biggest single ask of the whole session:
+"add the gambling crate stuff... make sure people get tokens at the end of each round... add a
+button for people to open crates... three tiers... make the entire opening experience with the
+whole counter strike style stuff... make sure this is the BEST crate opening feature ever."
+
+## What research actually changed about the build
+
+Two searches before touching code: how real case-opening screens are built, and what's actually
+known about why they work. The concrete takeaways that shaped this:
+
+- **The spin is long on purpose.** CS2's own runs close to six seconds - a Stanford study
+  (Knutson) found the anticipation phase, not the reveal itself, is where the dopamine response
+  actually peaks. `CrateOpeningScreen`'s spin runs 5.6 seconds for the same reason - the reveal at
+  the end is comparatively quick, because it isn't where the real payoff is.
+- **Near-miss rigging is a real, documented dark pattern** - engineering the reel to
+  almost-but-not-quite land on a rare item to manufacture false hope, independent of what the
+  actual result is. Deliberately not built here: `CrateInfo.Roll()` decides the honest result up
+  front, and every filler card around it is drawn from that same crate's real odds table
+  (`crate.Roll()` again, not a uniform shuffle) - a rare-looking card can land next to the result
+  by genuine chance, never by design.
+- **Escalating presentation by rarity** isn't a loot-box-specific trick - it's the same "bigger
+  moments get more of the existing budget" rule this project already applies everywhere (a
+  headshot over a body shot, a kill over a hit). `CrateRarityInfo.Weight()` turns that into one
+  formula (particle/shake/sound scale with it) rather than five hand-tuned copies, one per tier.
+
+## The economy
+
+New `PlayerWallet.cs` - tokens, `PlayerPrefs`-backed with the same `Prefix` convention
+`GameSettings.cs` already established, because a wallet has to survive between sessions the way a
+Photon room property never does (the opposite of this project's usual "PUN never clears custom
+properties" bug class - this one actually needs to persist past the room, not get cleared with
+it). Flat 50 tokens at the end of every round (`GameHud.AwardRoundTokens`, hooked into the
+existing `MatchPhase.Over` transition with a one-shot guard so it fires once per round, not once
+per frame across the whole 12-second results screen) - no performance scaling, because the brief
+only asked for "make sure people get tokens," not a tuned economy on top of it.
+
+The reward callout itself is local and personal - "a whole animation plays for the person who got
+it" - same reasoning a kill sound only plays for the killer: what you earned is your own moment,
+reusing the existing punch-scale/Juice/GameAudio.Kill language this HUD already speaks everywhere
+else rather than inventing a second one for tokens specifically.
+
+## Five rarities, three crates
+
+`CrateRarity.cs`: SCRAP/SPROUT/PRIMAL/MYTHIC/APEX, gray/green/blue/purple/gold - the standard
+Diablo II/WoW ladder, kept because it reads instantly to anyone who's played a loot-bearing game
+since, but every name is this game's own and deliberately shares zero words with StyleScore's rank
+tiers or multikill callouts (three systems all naming escalating tiers of roughly the same five
+rungs would blur into each other with any overlap).
+
+`CrateInfo.cs`: Rotten (100 tokens) / Ripe (300) / Holy (750), continuing the same ripeness
+vocabulary the guns already use rather than starting a fourth naming scheme. Odds scale with
+price - Holy's APEX chance (6%) is twelve times Rotten's (0.5%) - because a top crate that's
+basically the same as the cheap one would make the whole tier system pointless. All of this is a
+first guess nobody has opened a real one against yet, the same caveat every other feel number in
+this project carries.
+
+## The build
+
+`CrateOpeningScreen.cs` (runtime) + `CrateShopBuilder.cs` (Editor, builds it as a prefab). Prefab
+rather than scene content - same reasoning `SettingsMenuBuilder.cs` already established for the
+settings menu: this has to be reachable from wherever a "open crates" button ends up living, and
+scene content would tie it to one scene for no reason. **Not yet wired to any actual button in any
+scene** - built and verified standalone; whoever adds the entry point drags `CrateShop.prefab` in
+and calls `SetActive(true)` on it.
+
+The carousel: a masked viewport, a wide strip of cloned cards sliding left under a fixed pointer,
+quintic ease-out (`1-(1-k)^5`) rather than linear-then-stop so slowing down reads as losing
+momentum rather than hitting a wall - tried cubic first, it still felt like arriving rather than
+settling. A tick sound fires whenever a new card crosses the pointer rather than on a fixed timer,
+pitched down as the real speed decays under the curve, so the audio sells the deceleration even
+without watching closely.
+
+Two real bugs a real screenshot caught, both fixed the same pass:
+
+- **The backdrop rendered almost fully see-through** despite 0.95 alpha on a near-black colour -
+  the game world behind it was clearly, brightly visible rather than the near-blackout the maths
+  says 95% opacity should produce. Root cause not fully chased down (no debugger reaches into a
+  batch-mode render) - sidestepped instead by going fully opaque, since a modal shop screen never
+  needed to show the game behind it in the first place.
+- **Every button rendered as an empty rectangle** - "OPEN ANOTHER", "CLOSE", all of them.
+  `BuildTextButton`'s own `label` parameter sat right there and was never actually assigned to the
+  text component it built; the `Text()` call only ever received the GameObject's internal name
+  ("Label") as content. A real screenshot of the reveal screen caught blank buttons before this
+  shipped; fixed by actually setting `labelText.text = label`.
+
+A third, smaller one found the same way: the reveal's own full-screen glow only reaches 60% alpha
+even at APEX, low enough that the landing pointer's white line was still faintly visible bleeding
+through it in a screenshot. Fixed by having `Reveal()` hide the carousel viewport outright rather
+than trusting the glow to cover it - the reel has no reason to still be there once the result is
+showing.
+
+Verified: a batch-mode compile check after each round, the full `PlayModeProbe` suite passing with
+zero regressions (nothing in it exercises the crate system directly - it isn't wired to a match or
+a button yet - so this only confirms the addition didn't break anything already covered), and
+three real `HudPhotographer` screenshots - the selection page, and the reveal forced to APEX via
+reflection (spending 750 real tokens and sitting through a real 5.6s spin isn't a reasonable way to
+check a screenshot). Both real bugs above were caught by those renders, not by reading the code
+back.
+
+**What's still genuinely unverified, beyond the usual "numbers are a first guess"**: nobody has
+watched a real spin decelerate and land - the carousel's physics were verified by forcing the
+*end* state (Reveal) directly, not by watching `SpinCarousel()` actually run and checking the tick
+timing/easing feel correct in motion. The three crate accent stripes' actual on-screen width
+relative to each card wasn't independently confirmed either - the selection-page screenshot shows
+them, but this pass didn't zoom in and measure.
+
+# Twenty-seventh pass — the follow-up list, then a sweep, 2026-08-29
+
+Same-day, a follow-up message with ten more items plus "how do I access the crates?" (answered by
+one of the ten - see below) and a mid-pass note that the settings screen's look and font still
+weren't right. Grouped by system.
+
+## Movement combo and the spent indicator
+
+Bhop pulled back out of `MovementCombo`, per direct request - the `GroundMove` jump branch that
+credited it is gone, doc comments updated to stop describing a trick that no longer counts.
+`spentText` moved a second time - middle-right had already been retuned once this session (see
+the twenty-fifth pass) to clear the kill feed, then reported directly as wrong entirely: "put the
+spent from the sliding to the left on top of the movement combo thing." Bottom-left now, Y=150,
+clearing the movement combo's own cluster (which tops out at Y=129 including its meter border).
+
+## The leaderboard, reworked
+
+Reported directly as looking "pretty bad right now and not updated with the game," plus stale
+fonts. The data was already correct (style score for everything but gun game, kills/deaths
+otherwise) - this was entirely presentation. 1ST/2ND/3RD now colour gold/silver/bronze via a
+`<color=#HEX>` rich-text tag on just the rank-number span (the same medal colours the crate
+rarities' own top tier reuses), row font bumped 28->32pt, container widened 700->820 to carry the
+new prefix without cramping, and the awards list gets a real "AWARDS" header instead of a blank
+line. `Repair()` needed two new checks Retune can't do on its own - font asset and container
+width aren't things Retune touches, and a scene built before either changed would otherwise never
+pick them up.
+
+**A real bug caught rendering the results screen for the first time**: `tokenRewardBurst?.Play()`
+threw `UnassignedReferenceException`. `tokenRewardBurst` is a deliberately-unwired optional
+`ParticleSystem` field (no particle flourish built for it yet), and Unity's "missing reference"
+state on a `SerializeField` isn't true C# `null` - `?.` uses a raw reference check that misses it,
+where `if (x != null)` correctly goes through `UnityEngine.Object`'s own overloaded `==` and
+catches it. A `?.` on any Unity-Object-typed field is only actually safe once something has
+confirmed it's either really null or really assigned - never for a field that might be sitting at
+Unity's own "None." Swept the rest of the session's own code for the same shape afterward and
+found nothing else - this was the only optional, deliberately-unwired reference in the batch.
+
+**A second, more serious bug found the same way**: forcing a player's style score for that same
+screenshot and reading `+0 TOKENS` back from the new reward formula (see below) exposed that
+`StyleScore.Awake()` never seeded `score` from the room's own existing custom property. A fresh
+`StyleScore` is built on every respawn (`PlayerController.Start`'s own `AddComponent`, same as
+`SpeedRush` - there's no previous instance to carry state over from), so any player who died even
+once during a match would have their *entire accumulated score silently overwritten* the next
+time they killed anyone, because `Publish()` unconditionally writes whatever `score` currently
+holds over the room property - and a fresh instance starts at 0. This is the stat
+`MatchState.LeaderByScore` uses to decide who wins deathmatch, corrupted by the single most
+ordinary thing that happens in a match. Fixed by seeding `score` from
+`RoomManager.GetStat(PhotonNetwork.LocalPlayer, RoomManager.StyleScoreKey)` in `Awake()` - the
+existing warmup-boundary reset in `Update()` is untouched and still the thing that actually zeroes
+it for a new match.
+
+## Ground pound's sound
+
+"SO BAD, it sounds like someone hitting their microphone." The original pick (`impactSoft_heavy`,
+Impact Sounds) was the wrong genre entirely for what a ground pound needs - a soft-material Foley
+thud, not a boom. Replaced with `lowFrequency_explosion` from Sci-fi Sounds (the same pack
+`AirBrake` already uses) - a real low-end boom instead of another impact-pack thud sitting in the
+same boxy mid-range as everything else. Only two variants exist in that pack, down from three -
+an acceptable trade for actually sounding like the thing it's supposed to.
+
+## The settings screen: colour, font, a live crosshair preview, joke settings
+
+Fonts and colours were this screen's own choices, made independently of and before Jersey10/Anton
+became the rest of the reworked UI's actual pairing - reported directly, twice in the same pass,
+first as part of the general list and then again on its own once the first fix hadn't gone far
+enough: "i dont like the settings menu look rn and it also uses the old font too." `FindFont()` was
+hardcoded to search for "Helvetica Punk" by name; now resolves "Jersey10" the same way
+`HudBuilder.FindFont` does, with a new `FindHeadingFont()` ("Anton") for the page heading and tab
+labels specifically - the screen had exactly one type weight before this, a title and a slider
+value in the same voice. Accent colour moved from a plain orange to the same hot magenta
+`GameHud.killColour` already uses, so this screen reads as part of the same game instead of a
+different one bolted on.
+
+New live crosshair preview - "I want there to be a crosshair visual on the crosshair menu so you
+can see what crosshair youre working with." `CrosshairPreview.cs` is deliberately simpler than
+`GameHud.UpdateCrosshair`, not a shared copy of it - no weapon equipped on the settings screen
+means no reticle style or dynamic spread to preview, just the plain static cross most of a match
+is actually spent looking at, redrawn from the same `GameSettings` values the sliders next to it
+write to (subscribed to `GameSettings.Changed`, so it updates live while dragging a slider rather
+than only on the next tab switch). Floats outside the settings frame's own right edge rather than
+inset into the scrolling content - content already uses the panel's full width for its rows, and
+an inset preview there would sit on top of whatever happened to be scrolled underneath it. Shown
+only on the Crosshair tab (`SettingsMenu.Show` toggles it alongside switching which rows build).
+
+Two joke settings, real PlayerPrefs-backed entries wired through the exact same Toggle/Slider
+helpers as every real setting on the screen, which is the actual joke - "believe in bigfoot" and
+"monkey business level" persist and toggle exactly like Fullscreen or Sensitivity do, right up
+until you go looking for what either one is actually connected to.
+
+## Tokens: given at the start, spent on cheaper crates, earned exponentially
+
+"Give every player 100 points from the start" - `PlayerWallet.Tokens`'s own `PlayerPrefs` fallback
+doubles as the starting grant now (100 instead of 0), so a fresh install reads 100 until the first
+real Add/Spend writes an actual value. Crate costs cut roughly 10x across the board (Rotten
+100->10, Ripe 300->50, Holy 750->100) - the round-end reward needed to actually be reachable
+against them.
+
+The reward itself: "proportional to how many points you got in that game... cap it at 50...
+exponential and not linear or logarithmic." `GameHud.RoundTokensFor` is a base-2 exponential,
+`50 * (2^(score/2500) - 1)`, clamped to the 0-50 range - climbs slowly at low scores and
+accelerates toward the cap rather than paying out most of the reward for a merely middling
+performance. 2500 is a first guess with nothing played against it yet, same caveat as the crate
+odds and everything else numeric this pass added.
+
+## Answered directly: how do you access the crates
+
+A new "CRATES" button in the title menu, next to Settings - `TitleMenuCrateButton.cs` (Editor,
+re-runnable, additive) clones the existing SettingsButton in `Canvas/TitleMenu/ButtonContainer`
+rather than hand-building a new one, swaps `OpenSettingsButton` for a new `OpenCrateShopButton`
+(same shape, same reasoning: the crate shop doesn't exist until `RoomManager` has instantiated it
+from a prefab, so there's nothing in the scene for an inspector reference to point at), and
+retitles the cloned label. `CrateOpeningScreen` picked up the same singleton-on-a-persistent-object
+shape `SettingsMenu` already used (`Instance`, instantiated once by `RoomManager.Awake` alongside
+the settings screen) specifically so this button had something to call.
+
+## The loading screen gets a spinning model
+
+"I want you to improve it by adding a player model in the middle that just spins around like the
+gorilla spinning meme." `LoadingScreenSpinner.cs` builds its own self-contained diorama - a
+`MonkeyRig` model, a directional light, a camera rendering to a `RenderTexture` - rather than
+depending on whatever 3D scene happens to be behind the loading screen's own UI canvas, because
+the loading screen shows up exactly when a scene transition is in progress, the one moment there's
+no guarantee a normal game camera exists at all, let alone one pointed somewhere useful. Placed
+20,000 units from true world origin rather than on a dedicated culling-mask layer - simpler than
+adding and wiring a new layer for one spinning prop, and the preview camera's own short (10 unit)
+far clip plane means it physically cannot render anything else regardless of what layer it ends up
+sharing. Not independently screenshotted - the loading screen only exists mid-scene-transition,
+which `HudPhotographer`'s own boot flow doesn't pass through, and reproducing that timing
+specifically wasn't worth building a fourth diagnostic tool for at the end of this pass. Reviewed
+by hand instead: `MonkeyRig.Build` is already proven to work standalone from `TrainingDummy`
+and `Corpse`, neither of which is networked either.
+
+## The requested sweep
+
+Checked for the same `?.`-on-possibly-unassigned-Unity-reference shape that caused this pass's
+first real bug, across every script this session touched - found nothing else matching it. Found
+one real latent fragility instead: nothing in the current UI can close `CrateOpeningScreen` while
+a spin is running (its only close button lives on `selectPage`, which isn't showing during one),
+but Unity stops every coroutine on a GameObject the instant it deactivates regardless of cause,
+which would skip `RunOpening`'s own `spinning = false` at the end and leave that guard stuck true
+forever - permanently refusing every future crate open, through a path nothing currently exercises
+but that costs one line in `OnDisable` to close off before something else that closes menus from
+outside ever gets added.
+
+**Found but deliberately not fixed, flagged instead**: `GameHud.UpdateStandings`'s new rank-number
+rich-text tag and the kill feed's own long-standing text interpolation both drop a player's own
+display name straight into a `TMP_Text` with rich text enabled by default - a player who named
+themselves with a stray `<color=...>` or similar could corrupt formatting on everyone's screen,
+not just their own. Not new to this pass (the feed has always done this; standings only just
+started using rich text itself) and not a security issue in the sense this project's own "Decided,
+don't relitigate" list already accepts (client-authoritative, small trusted rooms) - a low-stakes
+display prank, not an exploit. Worth a real fix (strip or escape `<` once at the name-input layer
+rather than everywhere a name gets displayed) but not one made under an already-enormous pass on
+someone else's actual ask list.
+
+Verified: a batch-mode compile check after every round of changes, the full `PlayModeProbe` suite
+passing with zero regressions at the end of the whole pass, and real `HudPhotographer` screenshots
+of the results screen (caught both real bugs above) and the settings screen (confirmed the new
+font, colour and live crosshair preview together, not just individually).
+
+# Twenty-eighth pass — the crates button did nothing, a leftover preview box, the wrong yellow, 2026-08-29
+
+Same day, a follow-up report with a console screenshot: clicking CRATES in the real game logged
+`[crates] nothing to open - RoomManager never instantiated the screen`, twice. Three fixes.
+
+## The crate shop's Awake never ran
+
+Root cause: `CrateShopBuilder` built the prefab's own root already inactive
+(`root.SetActive(false)`), meaning a button elsewhere could later call `SetActive(true)` on it to
+"open" it. But `RoomManager.Awake` instantiates that prefab once, up front, same moment it
+instantiates `SettingsMenu` - and Unity never calls `Awake` on a GameObject that's inactive at the
+moment it's created, including one instantiated already-inactive. `CrateOpeningScreen.Instance`
+was therefore never set, silently, from the very first build of this feature - every click on the
+real button hit the `Instance == null` branch and logged exactly the warning reported.
+
+Missed by every verification this session ran on the crate shop, because `HudPhotographer`'s own
+check loaded and instantiated a *second*, separate copy of the prefab directly and activated
+*that* one - which fires Awake completely normally, and produced a perfectly good-looking
+screenshot every time, of a code path a real player's button never actually uses. Fixed in two
+places: the actual bug (root stays permanently active now; a new child `panel` - matching
+`SettingsMenu`'s own already-correct shape exactly - is what `Open()`/`Close()` toggle instead),
+and the test that missed it (`HudPhotographer` now calls `CrateOpeningScreen.Instance.Open()`,
+the same call the real button makes, rather than building its own separate instance). The second
+fix matters as much as the first - without it, this exact class of bug would pass every future
+screenshot check again the next time it happens somewhere else.
+
+## The crosshair preview's background box never hid
+
+The `CrosshairPreview` component lived on an empty child transform *inside* the visible dark
+background box, not on the box itself. `SettingsMenu.Show` toggling `crosshairPreview.gameObject`
+therefore only ever hid the tick marks - the box behind them, with its own `Image`, stayed on
+screen on every tab. Fixed by moving the component onto the box GameObject directly and parenting
+the ticks under it instead of under a redundant middle layer - one toggle now hides the whole
+thing, ticks and background together.
+
+## The magenta accent didn't fit
+
+The twenty-seventh pass's own fix (plain orange -> `GameHud.killColour`'s hot magenta, reasoning
+that sharing an accent with the rest of the HUD beat an independently-chosen one) was reported
+right back as wrong: "i dont like the pink purple color it doesnt fit with the game." Reconsidered
+rather than just reverted - `killColour` is specifically this game's *violence* accent, used for
+kills and headshots, and a neutral settings screen borrowing it was reaching for the wrong half of
+the palette. Banana yellow instead - the colour that actually runs through the whole game's
+identity (ripening guns, the health banana) rather than its combat half.
+
+Verified: batch-mode compile checks, the full `PlayModeProbe` suite (all pass), and real
+`HudPhotographer` screenshots of both - the crate shop screenshot now goes through
+`CrateOpeningScreen.Instance.Open()` and shows the real select page (100 tokens, the three
+rebalanced prices) exactly as a real player would see it; the settings screenshot confirms the new
+yellow accent on the Crosshair tab.
+
+## A first pass of the requested full-game sweep
+
+Time-boxed rather than exhaustive - "the entire game" is 800+ scripts deep at this point in the
+project, and a real line-by-line pass on all of it isn't a same-session task on top of everything
+above it. Started with the mechanically-checkable version of this pass's own two real bugs
+(`?.` on a possibly-unassigned Unity reference, dead state that's written but never read) across
+this session's own new files specifically, since those are both the least reviewed and the most
+likely to still be carrying something:
+
+- `CrateOpeningScreen.TickInterval` - declared, commented, never once used. The actual tick timing
+  works by comparing which card index the pointer has reached frame to frame, not by a fixed
+  interval at all; this constant was left over from an earlier version of that idea. Deleted.
+- `spawnedCardImages`/`spawnedCardLabels` - two full lists, populated every single card of every
+  single spin, never read anywhere. Destroying each card's own root (`spawnedCards`, which *is*
+  used) already destroys its children - these two were pure dead weight. Deleted.
+- No other `?.`-on-Unity-reference matches found outside the one already fixed.
+
+Continuing this properly - the rest of the movement/weapon/networking code, not just today's own
+additions - is real, valuable, and explicitly still owed; it just isn't something to compress into
+the tail end of an already enormous pass. Flagging that honestly here rather than claiming a full
+audit that didn't happen.
+
+One pre-existing, unrelated item noticed in passing: both `PlayModeProbe` runs this pass logged
+`Unable to parse file ProjectSettings/TagManager.asset: [Parser Failure at line 41...]` - present
+before any of today's edits too (confirmed against this session's earlier probe log), so not
+something today's changes caused. Cosmetic so far - the Ragdoll layer it presumably concerns still
+resolves correctly (no "No 'Ragdoll' layer" error from `Corpse.PrepareRagdollLayer`, and the full
+suite still passes) - but worth a look if TagManager ever needs hand-editing again.
+
+# Twenty-ninth pass — the sweep this project's own notes called "explicitly still owed", 2026-09-03
+
+The twenty-seventh pass time-boxed the full-game sweep to this session's own new files, on the
+mistaken belief the project was "800+ scripts deep" - later corrected in conversation to the real
+number (107: 67 under `Assets/Scripts`, 40 under `Assets/Editor`; the 800+ figure was Unity's own
+asset-count log counting every installed package's scripts, not this project's code) and explicitly
+flagged as "real, valuable, and explicitly still owed." This is that pass: every file in both
+folders, read in full, via four parallel review agents (one per third of `Assets/Scripts`, one for
+all of `Assets/Editor`) rather than one pass reading all 107 serially. Also asked for in the same
+sitting: preparing the codebase for new game modes ahead of the Party-mode minigames being designed
+(see `ideas.md`), an optional PSX filter, settings-menu UX research, and a main-menu pass.
+
+## Every match mode was re-derived from the raw enum in eight different files
+
+The reviews' single biggest recurring finding: `MatchState.Mode == MatchMode.X` (or `!=`)
+comparisons scattered across `GameHud`, `ColourPicker`, `ModeSelector`, `PlayerColours` (five
+separate call sites on its own), `RoomListItem`, `ScoreboardItem`, `SingleShotGun` and `VineGrapple`
+- each independently re-deriving "does this mode use teams," "does it rank by style score," "does
+it show the gun-game ladder," or its display name. A new mode meant hunting down and hand-editing
+every one of those call sites, with no compiler error if one was missed - exactly the shape of
+problem Party's minigames were about to make much worse.
+
+Fixed with one new file, `MatchModeInfo.cs`: a `MatchModeInfo` struct (display name, short name,
+description, `UsesTeams`, `RanksByStyleScore`, `ShowsLadder`) and a `MatchModes.Of(MatchMode)`
+lookup. All eight files now read a property instead of re-deriving one. Deliberately does *not*
+own match length, loadout rules or win-condition selection - those stay as `MatchState`'s own
+internal branches, which is already the one place they live and which this project's own docs
+mark too fragile (client-authoritative, room-property-driven, a long documented history of
+same-shape bugs) to restructure into a bigger strategy-object refactor without a reason better
+than tidiness. That deeper refactor is a real, separate follow-up, not done here.
+
+Concrete bugs this same refactor fixed along the way, found because they were the exact places the
+old per-file logic had drifted from each other:
+- `GameHud`'s mode label showed "DEATHMATCH" for Team Deathmatch too - the ternary only ever
+  checked for Gun Game.
+- The lobby room list badged every Team Deathmatch room `[DM]`, indistinguishable from a plain
+  Deathmatch room - same missing branch, different file.
+- Team Deathmatch's scoreboard rows looked identical to free-for-all's - no side shown anywhere
+  despite `PlayerColours` already tracking one per player. Now tints the name in the player's own
+  drawn colour (`PlayerColours.For`) when the mode uses teams.
+- `SingleShotGun` and `VineGrapple` each re-checked `MatchState.Mode == MatchMode.TeamDeathmatch`
+  on top of calling `PlayerColours.SameTeam`, which already returns false outside a team mode on
+  its own - redundant, and each had its own copy of "resolve a hit to a PlayerController, then ask
+  if it's a teammate." Both now call a single `PlayerController.IsTeammate(PlayerController)`.
+
+## Other real bugs found reading every file
+
+- `GameHud.ShowDamageFrom`'s eviction-when-full path always reused `damageArrows[0]`, unlike the
+  near-identical `FreeDamageLabel` right below it in the same file, which correctly scans for the
+  oldest by `born` time - a just-spawned indicator could get stolen out from under a much older
+  one. Mirrored the correct pattern.
+- `MatchState.Update`'s "no phase in the room yet" branch called `BeginWarmup()` - which itself
+  calls `Requested(Warmup)`, setting `awaitingEcho` - but never checked `awaitingEcho` before
+  re-entering that branch. `SetCustomProperties` doesn't update the local cache until the server
+  echoes it back (a documented trap in this file already), so `ContainsKey(PhaseKey)` kept failing
+  for however many frames that round trip took, and `BeginWarmup` - which clears every score dict
+  and reassigns teams - fired again on *every one* of those frames instead of once. Same
+  `awaitingEcho` guard every other transition in this file already uses.
+- `Launcher`'s region-fallback path wrote `PhotonNetwork.PhotonServerSettings.AppSettings
+  .FixedRegion = string.Empty` directly - mutating the committed `PhotonServerSettings.asset` in
+  place. Unity does not revert ScriptableObject field writes made in Play Mode the way it reverts
+  scene changes, so hitting this fallback once during editor testing would have permanently wiped
+  the project's own `FixedRegion` (deliberately `uae`, chosen for the actual Pakistan/UAE/Italy
+  test group) off disk. Now clones `AppSettings` via a JSON round-trip and hands
+  `ConnectUsingSettings` the clone, leaving the real asset untouched. Found the same setting
+  already blank on disk while fixing this - restored to `uae`, confirmed by `SceneCheck`, which
+  fails outright if it's ever empty.
+- `TrainingDummy.FallOver` waited on scaled `WaitForSeconds` for its respawn timer, but a dummy's
+  death is always accompanied by the killing weapon's own `Juice.Hit()`, which drops
+  `Time.timeScale` - the exact hazard this project's own conventions already call out for anything
+  that can coincide with hitstop. Switched to `WaitForSecondsRealtime`.
+- `SpeedRush.Update` read `player.View.IsMine` with no null check on `View`, unlike the equivalent
+  ownership check everywhere else in the codebase. Added the guard.
+- `WeaponCheck`'s shotgun-width assertion loaded `"Models/Weapons/BananaShotgun"` directly instead
+  of through the file's own `Weapon<T>()` helper (which tries both the plain and `Banana`-prefixed
+  names specifically because assets are mid-migration off that prefix) - would have thrown
+  `NullReferenceException` outright rather than failing the check cleanly if the shotgun model
+  were ever renamed the way others already have been.
+- A stray invisible soft-hyphen (U+00AD) inside `KillFeedLines.cs`'s "harvested" line, a paste
+  artifact risking a missing-glyph box in exactly the fonts already flagged as having incomplete
+  character coverage.
+- `ProjectSettings/TagManager.asset` had inconsistent blank-layer-slot formatting (one `-` line
+  missing the trailing space every other blank entry had), which made Unity's own YAML parser log
+  `Unable to parse file ProjectSettings/TagManager.asset` on *every single batch-mode run this
+  entire project has ever done* - noted as a known, pre-existing, "cosmetic so far" item at the end
+  of the twenty-seventh pass and left for later. Traced properly this time by testing the actual
+  hypothesis (trailing whitespace) rather than guessing twice more at the format - confirmed by the
+  warning disappearing entirely on the next run once every blank entry matched.
+- `Assets/Editor/GraphicsSettings.asset`'s Always Included Shaders list never had `Custom/
+  ScreenOutline` in it - the cell-shading outline is found at runtime with `Shader.Find` and isn't
+  referenced by any material, which is exactly the condition under which Unity's shader stripping
+  can cut a shader from a *built* player while it keeps working fine in the Editor (which never
+  strips anything). This is the likely real explanation for an earlier, never-resolved report this
+  session of the outline being missing "in the actual game" specifically. Fixed via a new tool,
+  `Tools/Gorilla Warfare/Always-include the custom shaders` (`AlwaysIncludeShaders.cs`), rather
+  than hand-typing a GUID into the settings asset - confirmed the hard way first, by typing two
+  fabricated-looking GUIDs into `GraphicsSettings.asset` directly and catching it before running
+  anything, then building the tool to let `SerializedObject` assign the real ones instead.
+
+## Performance
+
+- `MonkeyRig.ApplyTint` allocated a fresh `MaterialPropertyBlock` and a fresh
+  `GetComponentsInChildren<Renderer>` array on every call - and it's called every frame for the
+  whole ~2s spawn-protection window after every respawn, for every player, on every client, plus
+  again on every hit-flash. Both cached now, rebuilt only if the model itself changes.
+- `MuzzleFlash.Fire` allocated a `MaterialPropertyBlock` per shot - real GC pressure on an
+  automatic weapon. Cached as a field.
+- `Projectile.Update`'s per-frame `SphereCast` resolved `LayerMask.NameToLayer` fresh every call
+  for every live projectile, instead of caching it the way `SingleShotGun.TraceMask` already does
+  for the equivalent lookup. Same lazy-init pattern applied.
+- `KillCam.Find` and `PlayerController`'s own damage-direction lookup both scanned every
+  `PlayerController` in the scene with `FindObjectsByType` to find the one owned by a given Photon
+  player - `KillCam`'s copy did this every `LateUpdate` frame for the whole killcam duration.
+  Replaced both with `PlayerController.ByOwner(Player)`, a dictionary maintained on
+  `Awake`/`OnDestroy`.
+
+## Duplication
+
+- The rising-pitch hit-confirmation sound (`RegisterHit()` then `GameAudio.PlayPitched` at a pitch
+  derived from the combo count) was copy-pasted seven times across `SingleShotGun`, `Projectile`
+  (twice), `PlayerMovement` (twice) and `VineGrapple` (twice). One shared
+  `PlayerController.PlayHitConfirm(PlayerController, bool headshot = false)` now, static and
+  null-tolerant on the owner specifically because `SingleShotGun`'s own call site could reach it
+  with no owner and still wants the sound to play.
+- `Gun.cs` added nothing over `Item` - it only re-declared an already-required abstract override,
+  and had exactly one subclass. Folded away; `SingleShotGun` now extends `Item` directly.
+- `SceneCheck`'s exhaustive empty-serialized-reference walk only ever covered `GameHud`. Pulled
+  into a shared `CheckWiring` and extended to `ModeSelector`, `ColourPicker` (both real scene
+  objects in the menu, same "can have a reference dragged loose" risk `GameHud` already has) and
+  the `SettingsMenu`/`CrateShop` Resources prefabs (checked by loading the prefab asset directly,
+  since `FindFirstObjectByType` only ever finds scene instances). All four came back fully wired -
+  new coverage, not a bug caught, but coverage that didn't exist before this pass.
+
+**Found and flagged, not fixed this pass**: the editor tools folder's single biggest duplication is
+its screenshot-capture sequence (create a `RenderTexture`, swap `targetTexture`, `Render()`, swap
+`RenderTexture.active`, `ReadPixels`/`Apply`, restore, `EncodeToPNG`) - hand-written independently
+at least seven times across `OutlineCheck`, `HitboxPhotographer`, `PeelPhotographer`,
+`SkyboxPhotographer`, `TwoHandedPhotographer`, `OutlinePlayCheck` and `PlayModeProbe`, well over a
+hundred duplicated lines. Also: `Find(scene, name)` reimplemented in four different scene builders,
+a "find descendant by name" helper reinvented five more times under different names, three separate
+`Wire(SerializedObject, ...)` helpers, and the Jersey10 font asset looked up three different ways
+across three files. All real, all editor-only (zero runtime risk either way), and all left alone
+this pass rather than mechanically refactored across seven-plus files with no dedicated verification
+budget left to spend on tooling that doesn't ship. A good first project for whenever editor tooling
+gets its own pass.
+
+## Settings menu: reset per page, a PSX filter, toggle-to-aim
+
+"Reset to default (page specific)" - `GameSettings` used to have exactly one `ResetAll()`, and the
+settings screen's one reset button always called it, taking keybinds and every other tab with it
+just because someone wanted their crosshair colour back. Split into `ResetAim`/`ResetAudio`/
+`ResetVideo`/`ResetCrosshair`/`ResetKeys`, each only touching the PlayerPrefs keys that page can
+actually change and reloading through the existing `Load()` rather than duplicating what each
+property's default is a second time. The settings screen's reset button now calls whichever one
+matches the open tab and relabels itself ("RESET VIDEO", etc.) each time the tab changes.
+`ResetAll()` still exists and still does everything at once.
+
+Researched what actually makes a settings menu good rather than guessing: colourblind modes,
+scalable text and toggle-vs-hold options for motor accessibility came up repeatedly. Colourblind
+work was scoped out deliberately - this HUD's actual colour-coding (red/blue teams, brightness-led
+emphasis, a white hit-flash) is already fairly safe, and the one real green-adjacent case (the
+ripeness-based health bar) has been through enough rounds of Ryaan's own direct, specific correction
+this session that re-theming its palette without asking first would be overstepping, not helping.
+Toggle-to-aim shipped instead - a `GameSettings.AimToggle` bool, read in `PlayerController.Update`
+(latches on `KeyBinds.Pressed(Aim)` instead of reading `Held` every frame when it's on), new toggle
+row on the Aim tab. Toggle-to-crouch/slide was considered and dropped - that key has its own long,
+specific bug history (shared with the slide buffer and air brake, several past passes' worth) and
+touching it for an accessibility option that wasn't directly asked for wasn't worth the risk.
+
+The PSX filter: a genuine PPv2 custom effect (`PsxFilter.cs` + `PsxFilter.shader`), added to
+`ShaderStack` as its own toggle outside the preset ladder, same reasoning as motion blur already
+uses - a vibe, not a quality tier. Scoped after research (PS1-shader writeups, PPv2's own
+`PropertySheet`-based custom-effect pattern - the actual `BlitFullscreenTriangle` overload takes a
+`PropertySheet`, not a raw `Material`, which the first pass got wrong and the compile check caught)
+to what a single screen-space pass can actually do safely: 5-bit-per-channel colour quantization
+with an ordered 4x4 dither, fixed at a tasteful 0.6 intensity rather than exposed as a slider nobody
+asked for. Deliberately does not attempt vertex snapping or affine texture warping - both are
+per-material vertex-shader techniques that would mean touching every shader already in the project
+(the banana materials, the skybox, `ScreenOutline` itself) to apply safely, not something one
+post-process pass can add. Compiles clean and passes the full suite; not yet screenshotted with the
+toggle on specifically - worth a look in a real session before calling the *look* of it finished,
+same as every other visual thing on the Unverified list below.
+
+## Main menu
+
+Reviewed rather than re-themed. No functional bug turned up in `Menu.cs`/`MenuManager.cs` by either
+review agent, and this project's own docs mark the menu's visual language as Ryaan's own repeatedly
+and specifically (M5: "the gameplay HUD only - menus are Ryaan's own"; the font section: "menus
+stay on Helvetica Punk/Chomsky for now, per Ryaan's own request not to touch that side yet") - a
+stronger, more specific, more repeated signal than this pass's own general permission to go wide.
+What this pass *did* improve there: `ModeSelector` and `ColourPicker`'s new `SceneCheck` coverage
+(above) catches a dropped reference on either before it ships silently broken, and the mode-info
+refactor means `ModeSelector.Apply` no longer hand-lists every mode's name/description in a ternary
+that would need editing per new mode.
+
+## Verified
+
+Batch-mode compile checks throughout, then the full seven-suite check (`WeaponCheck`,
+`PlayerModelCheck` via the others, `RemoteCopyCheck`, `SceneCheck`, `MatchCheck`, `AudioCheck`,
+`PlayModeProbe`) at the end - all pass, zero regressions from any of the above. `SceneCheck`
+specifically re-run five times over the course of this pass while chasing the TagManager format
+issue, each run a real data point rather than a guess.
+
+# Thirtieth pass — the tab scoreboard, rebuilt the same way, 2026-09-03
+
+Same request shape as the twenty-ninth pass's process, aimed at one screen: "we need a better
+scoreboard (the tab one)." Read the actual current code first rather than guessing what was wrong
+with it (`Scoreboard.cs`, `ScoreboardItem.cs`), researched what makes a competitive-shooter
+scoreboard and this game's own cited reference (ULTRAKILL's letter-grade/style-rank identity, which
+`StyleScore`'s rank names already borrow) actually work, proposed six concrete changes, got a plain
+"do all of these."
+
+## What was actually wrong
+
+Reading the code rather than assuming: rows were added in Photon join order and never re-sorted -
+no re-sort call existed anywhere. It showed kills/deaths, which stopped being the win condition for
+Deathmatch and Team Deathmatch once the earlier style-score rework landed - the live scoreboard
+never caught up to that. Nothing from `StyleScore`, killstreaks or multikills showed anywhere
+despite all of it already being tracked. Team Deathmatch got individually name-tinted rows with no
+team grouping or team total. And it never went through the HUD's own visual overhaul - still plain
+text while `GameHud.UpdateStandings` (the post-match version of basically the same information)
+had already been reworked twice this project's history.
+
+## A real bug found while wiring the team total
+
+Needed a "current team total" for the new team-header row, which `PlayerColours.TeamScore(int)`
+already computes - except it always summed kills, unconditionally. That's the exact same stat the
+style-score rework was supposed to retire as Team Deathmatch's win condition ("this is now the
+determining factor for winning in deathmatches - anything that isn't gungame honestly"), which
+means `MatchState.FinishMatch` had been deciding Team Deathmatch by kills the whole time that rework
+was live, silently disagreeing with what the individual scoreboard rows were already ranked by.
+`roadmap.md`'s own M3 section still said "more kills" too - stale documentation from before the
+rework, never caught because nothing had gone looking at `TeamScore` specifically until this pass
+needed it for something else. Fixed to read `MatchModeInfo.RanksByStyleScore` like everything else
+switched to this session, so the team total, the scoreboard order and the actual match winner now
+all agree on which stat is real.
+
+## The rebuild
+
+`ScoreboardItem.cs` (one MonoBehaviour per player, three separate `TMP_Text` fields) retired
+outright in favour of the same shape `GameHud.UpdateStandings` already proved out for the post-match
+screen: one pooled `TMP_Text` per row, rebuilt fresh on every refresh rather than tracked per-player.
+That shape is what makes the rest of this cheap - sorting is "build the list in the right order,"
+and a team header is "insert one more row before the block," rather than either needing its own
+bespoke mechanism.
+
+- **Sorted for real** - `RankStat` reads `MatchModeInfo` (style score, kills, or ladder rung with
+  rung-kills as a tiebreak) instead of leaving rows in join order.
+- **1st-3rd medal-coloured** - `RankDisplay.cs`, new, pulled the gold/silver/bronze arrays straight
+  out of `GameHud.UpdateStandings` rather than growing a second copy of them; `UpdateStandings`
+  itself now calls into it too.
+- **A score-based rank name** - `StyleScore.RankForScore(int)`, new, alongside the existing
+  `RankFor(float)`. The live HUD's rank name is driven by the *multiplier* (a fast-decaying combat
+  stat that's never replicated to other clients, on purpose - it's local combat feel, not something
+  worth a property write every frame), so a scoreboard showing *other* players can't reuse it
+  directly. Same five tier names, a new threshold table scaled to the banked, replicated
+  `StyleScoreKey` total instead - anchored against `GameHud.RewardScoreScale` (2500), the one number
+  this game's own economy already treats as "a genuinely good match."
+- **Team grouping with a live total** - two blocks under a coloured team header
+  (`PlayerColours.TeamNames[team]` plus the now-fixed `TeamScore`) in a team mode, found via
+  `MatchModeInfo.UsesTeams` rather than a `MatchMode.TeamDeathmatch` check growing yet another call
+  site.
+- **A best-streak flourish** - `RoomManager.BestStreakKey`, already replicated for the post-match
+  "ON A ROLL" award, shown inline past a 3-streak threshold. Deliberately not the live, current-run
+  `PlayerController.Killstreak`/`Multikill` - both are incremented locally on the killer's own
+  client only (`RewardKill()`), never networked, so reading another player's copy of either would
+  show stale or wrong numbers depending on whose client is asking. Caught by checking how they're
+  set before wiring them in, not after something looked wrong in a screenshot.
+- **Every row tinted the player's own colour** (`PlayerColours.For`) rather than plain white,
+  matching how the kill feed and crosshair-picker swatches already use that same association; the
+  local player's own row is bolded on top of that instead of recoloured, so it's distinguishable
+  even sitting next to a same-coloured teammate.
+- **A real visual pass** - `ScoreboardBuilder.cs`, new (the scoreboard never had a builder before
+  this pass). Same outline-plus-underlay treatment `HudBuilder.Text` gives every HUD label,
+  duplicated rather than shared - extracting `HudBuilder`'s private helpers into something both
+  tools could call would mean restructuring the single most hand-edited, highest-history file in
+  the project for a styling helper, which wasn't worth the risk to a file nothing about this task
+  required touching. Unlike `HudBuilder`, nothing here was hand-styled to protect, so `Run()`
+  rebuilds the whole thing outright rather than needing its own narrower `Repair()`.
+
+`ScoreboardItem.prefab` deleted along with the script; `FontRetarget.cs`'s hardcoded prefab list
+(one more small duplication - a prefab path list a second tool also had to know about) updated to
+stop pointing at it.
+
+## Verified
+
+Compile check, then `SceneCheck` (every wired reference present) and `PlayModeProbe` (builds and
+refreshes without throwing against a real offline-mode spawn) both pass, plus `MatchCheck` since
+`MatchState.cs` and `PlayerColours.cs` both changed. What none of that reaches: offline mode is one
+player, so the actual sort order, the team-header block and the medal colours have only been reasoned
+through and read back as text, never seen rendered with more than one person on the board - flagged
+honestly in `roadmap.md`'s Unverified list rather than claimed as looked-at.
+
+## Reported back: not visible enough
+
+Exactly the gap the Unverified note above admitted to - reported directly as "cheeks," text too
+small, no real backdrop separating it from the game behind it, CS2 named as the reference. Fixed in
+`ScoreboardBuilder.cs`: row text 30pt -> 46pt, and the backdrop rebuilt as an actual bounded card
+(1040x660, opaque, a lighter header bar across its own top) instead of a screen-wide translucent
+wash. The opacity choice specifically isn't a fresh guess - `CrateShopBuilder`'s own backdrop hit
+this exact failure mode in the twenty-sixth pass (95% alpha reporting back as "almost fully
+see-through"), so this one goes straight to fully opaque rather than re-discovering the same lesson
+a second time.
+
+Still can't screenshot it to confirm - `ScoreboardCanvas` is Screen Space Overlay, same as
+`GameHud`'s, and overlay canvases don't render into anything `HudPhotographer`'s camera-to-texture
+technique can capture. Verified what a check can reach (compiles, `SceneCheck` passes, the header
+bar and row column don't overlap by the actual numbers) and no further - a real look in a real
+session is the only way left to confirm this one landed, same as the PSX filter above.
+
+## Reported back again: the text still wasn't on the backdrop, and PSX "does nothing"
+
+Both turned out to be real, and both got a real check built rather than a third guess.
+
+**PSX filter**: not actually broken - `PlayModeProbe`'s new before/after pixel comparison (see
+below) found a genuine 1.55-per-channel average difference at the shipped 0.6 intensity, just too
+small to notice. The intensity-to-colour-depth curve is a straight lerp, so 0.6 only bought 60% of
+the way from "off" toward "strong"; raised to 0.88 and re-checked the same way (now 2.66 average
+difference). Good example of the two failure modes looking identical from the outside - "does
+nothing" and "does something too subtly to see" need different fixes, and only measuring which one
+it actually was stopped this from turning into a third blind guess.
+
+**The scoreboard**: a real, confirmed layout bug, not a rendering-technique dead end. `Scoreboard.
+cs` gained two read-only accessors (`ContainerRect`/`BackdropRect`) and a static `OpenOverride` (the
+same shape `PlayerController.AimInputOverride` already uses for input-less batch tests), and
+`PlayModeProbe` gained `CheckScoreboardLayout` - forces the board open, waits a few real frames, and
+reads `RectTransform.GetWorldCorners()` off both the backdrop and the row column, since an overlay
+canvas can't be screenshotted but its actual laid-out positions can absolutely be read back
+numerically. First run of the check failed immediately and named the exact problem: the row column
+sat entirely *below* the backdrop, not inside it - `Backdrop` and `Rows` had been built as two
+siblings with independently hand-computed offsets that were supposed to land one inside the other
+by arithmetic alone, and something in that arithmetic (never fully isolated - not worth the time
+against just fixing the structure) put them adjacent instead of overlapping. Rebuilt so `Rows` is a
+literal child of `Backdrop`, stretch-anchored to fill it minus margins for the header - "inside the
+backdrop" is now true by construction, not by two numbers agreeing. Re-ran the same check: passes,
+with real corner coordinates confirming the row text sits inside the card this time.
+
+`CheckScoreboardLayout` and the PSX before/after comparison are both permanent additions to
+`PlayModeProbe` now, not one-off diagnostics - the first real, general technique this project has
+for catching an overlay-canvas layout bug without a human looking at it, and worth reaching for
+again the next time a UI panel's "is this actually inside that" claim needs checking rather than
+trusting.
+
+## Reference images landed: real pixelation, real columns, a goofy Bigfoot
+
+Five reference shots followed the previous report - a CS2 scoreboard, and four PS1-era shots (a
+PS1 demake, a period FPS) dominated by something the colour-only PSX pass never touched: real
+internal resolution, not full-resolution colour banding. Superseded the earlier "not too grainy or
+pixelated" brief with what the pictures actually showed rather than defending the old, subtler
+reading of a text description against harder evidence.
+
+**PSX filter**: `PsxFilterRenderer.Render` now renders to a quarter-resolution `RenderTexture`
+(`FilterMode.Point`, the actual pixelation step) and upscales that to the screen, running the
+existing quantize-and-dither shader *during* the downscale so the dither pattern survives into the
+blocky result instead of being blurred back out by a naive shrink. Re-checked with the same
+before/after pixel comparison each step: 1.55 -> 2.66 (raising intensity to 0.88) -> 3.39/4.38
+(adding the resolution pass) average per-channel difference - real, monotonic, measured, not
+asserted.
+
+**The scoreboard**: rebuilt as an actual table - Rank/Name/Primary/Secondary/Streak, five
+fixed-width columns (`ScoreboardBuilder.BuildRow`) instead of one rich-text line, so stats line up
+regardless of name length the way CS2's own Money/K/A/D/Score columns do. Explicitly not a copy -
+adapted to this game's own fields: no money or MVP stars, "Primary" reads style score (with its
+rank name) or gun-game ladder progress depending on the mode, K/D stays visible always since it
+still means something everywhere, still styled in the HUD's own outline-and-underlay language
+rather than CS2's. A column-header row (NAME / SCORE-or-LADDER / K/D / STREAK) is now row zero,
+built by the same pooling path as every other row rather than a separate hand-placed element.
+`Scoreboard.cs`'s row-filling logic and `PlayModeProbe.CheckScoreboardLayout` both updated for the
+new per-column structure; re-run and confirmed still landing inside the backdrop.
+
+**Bigfoot**: "make it goofy" landed as `BigfootSighting.cs` - an occasional (30-75s), brief (4s),
+purely cosmetic cryptid cameo at a distance, built from the game's own `MonkeyRig` tinted dark
+rather than any new art, added mine-only next to `SpeedRush` in `PlayerController.Start` and kept
+local-only the same way several other personal flourishes in this project already are. `GameSettings.
+BelieveInBigfoot`'s doc comment updated - it's the one joke setting that's no longer a joke.
+
+Verified: compile check, `SceneCheck`, and the full `PlayModeProbe` suite including both new
+checks above - all pass.
+
+## The gap wasn't spacing, it was a layout group fighting itself
+
+A real screenshot arrived mid-report this time - the column header sitting near the top, the one
+player row stranded far below it, most of the card empty in between. Reported as "the spacing is a
+bit off," but the actual mechanism was a bug, not a number: each row's own `HorizontalLayoutGroup`
+(arranging its five columns) had `childForceExpandHeight = true`, which also makes the row itself
+report to the *outer* vertical list that it wants to expand - so the list handed each row a share
+of all the leftover vertical space instead of packing them together, and each row's text just sat
+centred inside its own now-oversized rect. Set to `false`, with an explicit `flexibleHeight = 0` on
+each row's own `LayoutElement` so there's no ambiguity left for anything to fall back on. Re-checked
+with `PlayModeProbe.CheckScoreboardLayout`: the first player row now sits directly under the header
+instead of near the bottom of the card.
+
+Found while in there and fixed alongside it: the card was sized for however many rows happened to
+be tested, not the real worst case - a full 8-player Team Deathmatch lobby is the column header
+plus two team headers plus eight player rows, 11 total, which the original height never actually
+had room for. Grown to fit that properly rather than the number that happened to look fine with
+one player in a solo test.
+
+Also this pass: backdrop opacity 1.0 -> 0.9 (some transparency back, nowhere near the 0.72/0.95
+range that's caused "not really visible"/"almost see-through" reports twice already), row and
+column spacing widened a second time now that the layout bug behind the first complaint is actually
+fixed rather than papered over.
+
+**PSX filter now on by default** - `GameSettings.PsxFilter`'s default flipped `false` -> `true`,
+both the property initializer and the `Load()` fallback. Broke an existing check in the process:
+`PlayModeProbe`'s "the preset is the only thing driving the picture" test assumed the Off preset
+meant literally zero post-processing, which stopped being true the moment an independent toggle
+defaulted to on. Not a check to tolerate failing or delete - re-pointed to pin motion blur and the
+PSX filter off specifically while it isolates what the *preset* does, which is what it was actually
+trying to verify all along.
+
+**Bigfoot reverted** - `BigfootSighting.cs` removed, `PlayerController.Start`'s wiring reverted,
+`GameSettings.BelieveInBigfoot`'s doc comment back to describing a deliberately inert joke setting.
+"Remove for now" rather than a rejection of the idea - the implementation is preserved in the
+previous pass's entry above and in git history if it comes back.
+
+Verified: compile check, `SceneCheck`, and the full `PlayModeProbe` suite (including the re-pointed
+preset-isolation check) - all pass.

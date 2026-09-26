@@ -43,6 +43,9 @@ MonoBehaviour:
   - RPC_Attach
   - RPC_Detach
   - RPC_GroundSlamImpact
+  - RPC_AirBrakeImpact
+  - RPC_LedgeHopImpact
+  - RPC_WallSmashImpact
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

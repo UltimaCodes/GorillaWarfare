@@ -104,8 +104,18 @@ public class Launcher : MonoBehaviourPunCallbacks
                              + $"'{PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion}' ({cause}) - "
                              + "falling back to the nearest one, which may mean not seeing your friends' rooms");
 
-            PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = string.Empty;
-            PhotonNetwork.ConnectUsingSettings();
+            // Not PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion directly - that's a
+            // field on the committed PhotonServerSettings.asset, and Unity does not revert
+            // ScriptableObject field writes made in Play Mode the way it reverts scene changes.
+            // Hitting this fallback once during editor testing would permanently wipe the
+            // project's own FixedRegion (deliberately set to "uae" for the actual test group) off
+            // disk. A JSON round-trip clone gets an independent AppSettings to hand the SDK
+            // instead, leaving the real asset untouched.
+            AppSettings fallback = JsonUtility.FromJson<AppSettings>(
+                JsonUtility.ToJson(PhotonNetwork.PhotonServerSettings.AppSettings));
+            fallback.FixedRegion = string.Empty;
+
+            PhotonNetwork.ConnectUsingSettings(fallback);
             return;
         }
 

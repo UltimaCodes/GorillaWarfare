@@ -29,17 +29,16 @@ public static class GameAudio
     /// health you can read off the bar, but the moment the shield goes is the moment the next
     /// shot starts hurting, and by the time you have looked down to check you are dead.
     ///
-    /// Drop a glass break into Resources/Audio/Shield and it plays. With the folder empty it
-    /// falls back to an impact pitched up, which reads as breakage rather than as a hit but is
-    /// no substitute for the real thing.
+    /// Sourced (Kenney's CC0 Impact Sounds pack, impactGlass_medium). The Impact-pitched-up
+    /// fallback below still exists for an empty folder, but this one isn't empty any more.
     /// </summary>
     /// <summary>
     /// Boots scraping along the ground. Its own bank because a slide is not a footstep - it is
     /// one continuous noise rather than a series of taps, and borrowing the footstep bank made
     /// sliding sound like walking very quickly.
     ///
-    /// Drop a scrape into Resources/Audio/Slide and it plays. Empty, it falls back to a footstep
-    /// pitched down, which reads as a scuff and is obviously not the real thing.
+    /// Sourced (stoneDrag). The footstep-pitched-down fallback below still exists for an empty
+    /// folder, but this one isn't empty any more.
     /// </summary>
     public const string Slide = "Slide";
 
@@ -50,8 +49,8 @@ public static class GameAudio
     /// a scrape are opposite shapes of sound, a snap against a sustain, and asking one bank to
     /// be both would have meant tuning it badly for one of the two.
     ///
-    /// Drop something into Resources/Audio/Vine and it plays. Empty, it falls back to a shot
-    /// pitched up, which is at least short and sharp rather than nothing.
+    /// Sourced (swish). The Shoot-pitched-up fallback below still exists for an empty folder,
+    /// but this one isn't empty any more.
     /// </summary>
     public const string Vine = "Vine";
 
@@ -90,11 +89,15 @@ public static class GameAudio
 
     /// <summary>
     /// The movement tech's own banks - air brake, ground slam. Added 2026-08-22 alongside the
-    /// mechanics themselves. None of these have sourced audio yet, so every call site pairs one
-    /// of these with a fallback bank and an explicit pitch shift via `PlayShaped` below, the same
-    /// graceful-empty-folder pattern every other bank in this file already uses (Shield falling
-    /// back to Impact, Slide falling back to Footstep, and so on). Drop real clips into any of
-    /// these folders and they take over with no code change.
+    /// mechanics themselves, sourced 2026-08-29 (Kenney's CC0 packs - AirBrake from Sci-fi
+    /// Sounds' thrusterFire, a short burst rather than a sustained engine loop to match this
+    /// being a one-shot; Slam originally from Impact Sounds' impactSoft_heavy, replaced the same
+    /// day - "sounds like someone hitting their microphone" - with Sci-fi Sounds'
+    /// lowFrequency_explosion, a genuine low-end boom instead of another Foley thud). Every call
+    /// site still pairs
+    /// these with a fallback bank via `PlayShaped`/`PlayAtShaped` below - the same graceful-
+    /// empty-folder pattern every other bank in this file uses - so nothing breaks if either
+    /// folder is ever emptied again, but neither one is empty now.
     ///
     /// WallRun was here too until wall running was removed entirely 2026-08-23 - its replacement,
     /// the ledge hop, is a one-shot rather than a sustained loop and reuses AirBrake's own
@@ -102,6 +105,16 @@ public static class GameAudio
     /// </summary>
     public const string AirBrake = "AirBrake";
     public const string Slam = "Slam";
+
+    /// <summary>
+    /// Momentum meeting a wall. Added alongside the style score's wall-smash penalty - the
+    /// multiplier taking a hit needed something to hear as well as see, or the only feedback
+    /// would be a number quietly changing on the HUD. Sourced 2026-08-29 (impactPlank_medium -
+    /// this game's walls are wooden fencing, not masonry or metal, so a plank thud reads as the
+    /// actual material being hit rather than a generic clang). The Impact-pitched-up fallback
+    /// below still exists for an empty folder, but this one isn't empty any more.
+    /// </summary>
+    public const string WallSmash = "WallSmash";
 
     // One place for how loud everything is, rather than a number at each call site.
     //
@@ -125,6 +138,8 @@ public static class GameAudio
     // Under the guns and over the footsteps. You should hear your own slide clearly and somebody
     // else's only as a hint that they are moving fast nearby.
     public const float SlideVolume = 0.5f;
+
+    public const float WallSmashVolume = 0.6f;
 
     // Above everything. It is the loudest thing that happens and it should be.
     // Was 1.0, which is full scale - the loudest thing the game can produce, louder than the

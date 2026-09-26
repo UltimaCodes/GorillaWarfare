@@ -63,16 +63,43 @@ public class GameHud : MonoBehaviour
     [SerializeField] TMP_Text centreSubtitle;
     [SerializeField] TMP_Text comboText;
 
-    /// The slide chain, rank and all. Filled in at runtime if the scene has not got one.
+    /// The unified style score's rank name. Field name kept from the slide-only combo it used
+    /// to be - see StyleScore.cs and UpdateStyleMeter - rather than renamed, so an already-wired
+    /// scene reference doesn't need re-wiring for what is the same GameObject doing a bigger job.
     [SerializeField] TMP_Text slideCombo;
 
     /// The meter under the rank name - an ULTRAKILL/DMC style bar rather than just a word
-    /// changing four times.
+    /// changing four times. Reads StyleScore.DecayFraction now, same shape it always drew.
     [SerializeField] Image slideMeterFill;
 
-    // Drives the punch on a rank-up. Not serialised - purely runtime state for UpdateSlideCombo.
-    int lastSlideRank;
+    /// The breakdown list under the rank line - "1.35x HEADSHOT", "1.5x NO SCOPE" and so on for
+    /// whichever bonuses actually fired on the last kill. Reported directly: the multiplier's
+    /// contributing factors needed to be visible, not folded into one number with nothing to
+    /// show for it.
+    [SerializeField] RectTransform breakdownContainer;
+    [SerializeField] TMP_Text breakdownTemplate;
+
+    /// The movement-tech combo - MovementCombo.cs, bottom left. A second, separate meter from
+    /// the style score above: grapples, grenade jumps, bhops and slide hops all feed this one
+    /// chain instead of each getting their own counter, and it never affects the score.
+    [SerializeField] TMP_Text movementCombo;
+    [SerializeField] Image movementMeterFill;
+
+    /// The slide-chain exhaustion notice - "you can't slide-hop again yet, here's how long."
+    /// Used to borrow the style meter's own rank text for this (the one piece of the old
+    /// slide-only combo meter worth keeping standalone), but that meant it could only ever show
+    /// up in the one spot the style meter itself occupies and read as part of that system rather
+    /// than its own thing. Reported directly: "add the spent... to the right, not connected to
+    /// either combo bar." Its own element now, independent of both.
+    [SerializeField] TMP_Text spentText;
+
+    // Drives the punch on a rank-up. Not serialised - purely runtime state for UpdateStyleMeter.
+    string lastStyleRank = string.Empty;
     float slidePunchUntil = -99f;
+
+    // Same trick, for the movement combo - see UpdateMovementCombo.
+    string lastComboTech = string.Empty;
+    float comboPunchUntil = -99f;
 
     // Same trick, two more places. UpdateSlideCombo was the only thing on the HUD that punched
     // on a change instead of just snapping to a new value - added 2026-08-22 to the two other
@@ -97,6 +124,75 @@ public class GameHud : MonoBehaviour
     // second of it.
     float titlePunchUntil = -99f;
     const float titlePunchDuration = 0.35f;
+
+    /// The token reward callout on the results screen - "make sure people get tokens at the end
+    /// of each round (and a whole animation plays... with sound effects and vfx etc)". Local and
+    /// personal by design, same reasoning a kill sound only plays for the killer: what you earned
+    /// is your own moment, not a shared spectacle everyone else has to sit through too.
+    [SerializeField] TMP_Text tokenRewardText;
+    [SerializeField] ParticleSystem tokenRewardBurst;
+    bool roundTokensAwarded;
+    float tokenRewardUntil = -99f;
+    float tokenPunchUntil = -99f;
+
+    /// Hard ceiling regardless of how well the round went - "cap it at 50."
+    const int MaxRoundTokenReward = 50;
+
+    /// Where RoundTokensFor's curve reaches the cap - a style score of this many points earns
+    /// the full 50. No real match has been played against this number yet, same first-pass
+    /// caveat every other feel number in this project carries (see roadmap.md's Unverified).
+    const float RewardScoreScale = 2500f;
+
+    int lastRoundTokenReward;
+
+    /// "You can get tokens proportional to how many points you got in that game (but cap it at
+    /// 50 and make sure the token to score ratio is exponential and not linear or logarithmic)."
+    /// Base-2 exponential rather than a power curve - 2^(score/scale) climbs slowly at low scores
+    /// and accelerates into the cap rather than the other way around, which reads as "you have to
+    /// actually be doing well before this ramps up" instead of most of the reward being handed
+    /// out for a merely middling score.
+    static int RoundTokensFor(float score)
+    {
+        float raw = MaxRoundTokenReward * (Mathf.Pow(2f, score / RewardScoreScale) - 1f);
+        return Mathf.Clamp(Mathf.RoundToInt(raw), 0, MaxRoundTokenReward);
+    }
+
+    /// See PlayerWallet.cs - tokens spend on crates (CrateOpeningScreen), which exists
+    /// separately from the HUD and is opened from outside a live match.
+    void AwardRoundTokens()
+    {
+        float score = player != null && player.Style != null ? player.Style.Score : 0f;
+        lastRoundTokenReward = RoundTokensFor(score);
+
+        PlayerWallet.Add(lastRoundTokenReward);
+        tokenRewardUntil = Time.unscaledTime + 3.5f;
+        tokenPunchUntil = Time.unscaledTime + 0.3f;
+
+        // Not tokenRewardBurst?.Play() - a real run threw UnassignedReferenceException from
+        // exactly that. tokenRewardBurst is deliberately left unwired in HudBuilder.cs (an
+        // optional particle flourish, not built yet), and Unity's "missing reference" state on a
+        // SerializeField isn't true C# null - `?.` uses a raw reference check that misses it,
+        // where `!= null` correctly goes through UnityEngine.Object's own overload and catches it.
+        if (tokenRewardBurst != null)
+            tokenRewardBurst.Play();
+
+        GameAudio.Play2D(GameAudio.Kill, GameAudio.KillVolume * 0.8f);
+    }
+
+    void UpdateTokenReward()
+    {
+        if (tokenRewardText == null)
+            return;
+
+        bool active = Time.unscaledTime < tokenRewardUntil;
+        tokenRewardText.gameObject.SetActive(active);
+
+        if (!active)
+            return;
+
+        tokenRewardText.text = $"+{lastRoundTokenReward} TOKENS";
+        tokenRewardText.rectTransform.localScale = Vector3.one * PunchScale(tokenPunchUntil, 0.3f);
+    }
 
     /// <summary>
     /// The shared shape behind every punch on this HUD: fast in, decaying out, on top of a base
@@ -168,6 +264,11 @@ public class GameHud : MonoBehaviour
     [SerializeField] Color killColour = new Color(1f, 0.1f, 0.58f);
     [SerializeField] Color joinColour = new Color(0.38f, 1f, 0.48f);
     [SerializeField] Color leaveColour = new Color(0.6f, 0.6f, 0.68f);
+
+    /// The movement combo's own accent - electric cyan rather than killColour's hot magenta, so
+    /// the two meters (top right for combat, bottom left for traversal) read as two different
+    /// systems at a glance instead of the same bar in two spots.
+    [SerializeField] Color comboColour = new Color(0.25f, 0.85f, 1f);
     [SerializeField] Color dim = new Color(1f, 1f, 1f, 0.58f);
 
     [Header("Feel")]
@@ -202,6 +303,7 @@ public class GameHud : MonoBehaviour
 
     readonly List<TMP_Text> feedRows = new List<TMP_Text>();
     readonly List<TMP_Text> standingsRows = new List<TMP_Text>();
+    readonly List<TMP_Text> breakdownRows = new List<TMP_Text>();
     readonly List<DamageLabel> damageLabels = new List<DamageLabel>();
     readonly List<DamageArrow> damageArrows = new List<DamageArrow>();
 
@@ -478,7 +580,18 @@ public class GameHud : MonoBehaviour
             // Capped low. More than a handful at once is not information any more, it is a ring
             // of orange, and being shot by three people at once already communicates itself.
             if (damageArrows.Count >= 6)
+            {
+                // Oldest by born time, not just index 0 - the same eviction FreeDamageLabel
+                // below uses. Index 0 could be a hit that landed this exact frame, stealing its
+                // slot from under it while a genuinely stale arrow keeps pointing at nothing.
                 arrow = damageArrows[0];
+
+                foreach (DamageArrow candidate in damageArrows)
+                {
+                    if (candidate.born < arrow.born)
+                        arrow = candidate;
+                }
+            }
             else
             {
                 Image made = Instantiate(arrowTemplate, arrowContainer);
@@ -592,7 +705,10 @@ public class GameHud : MonoBehaviour
         UpdateDamageNumbers();
         UpdateDamageArrows();
         UpdateAdrenaline();
-        UpdateSlideCombo();
+        UpdateStyleMeter();
+        UpdateMovementCombo();
+        UpdateSpentIndicator();
+        UpdateTokenReward();
         UpdateSpeedPush();
         UpdateHudShake();
     }
@@ -658,8 +774,11 @@ public class GameHud : MonoBehaviour
     {
         float rush = SpeedRush.Intensity;
 
+        // Further into its own corner at speed, same idea as the ammo push below - health moved
+        // from the bottom left to the top left with the Cruelty Squad rework, so "further into
+        // the corner" flipped from down-left to up-left.
         if (healthGroup != null)
-            healthGroup.anchoredPosition = healthBasePos + new Vector2(-1f, -1f) * speedPushPixels * rush;
+            healthGroup.anchoredPosition = healthBasePos + new Vector2(-1f, 1f) * speedPushPixels * rush;
 
         if (ammoGroup != null)
             ammoGroup.anchoredPosition = ammoBasePos + new Vector2(1f, -1f) * speedPushPixels * rush;
@@ -707,10 +826,9 @@ public class GameHud : MonoBehaviour
         //
         // It used to be scaled to the overshield ceiling, which meant an unshielded player at
         // full health saw a bar that was only seventy percent filled - so the normal state of
-        // the game looked like being hurt, and the number 140 read as low. Overshield now grows
-        // out past the end of the track instead of sharing it, which is what a bonus should look
-        // like: the bar is full, and then there is more of it.
-        float width = healthTrack != null ? healthTrack.rect.width : 0f;
+        // the game looked like being hurt, and the number 140 read as low. Overshield gets its
+        // own separate bar now instead of sharing this one, which is what a bonus should look
+        // like: a second full gauge lighting up, not this one stretching past its own end.
         float fillFraction = Mathf.Min(points, max) / max;
 
         // Inertia - eases down toward a drop rather than snapping with it, and snaps straight
@@ -747,7 +865,7 @@ public class GameHud : MonoBehaviour
             healthFill.color = Color.Lerp(bananaTint, Color.white, flashT * 0.65f);
         }
 
-        // The pale ghost between the husk and the live fill - only ever visible for the sliver
+        // The pale ghost between the peel and the live fill - only ever visible for the sliver
         // it's lagging behind by, which is the whole point: it's showing exactly how much was
         // just lost, not standing in for the bar itself.
         if (healthTrail != null)
@@ -755,15 +873,26 @@ public class GameHud : MonoBehaviour
 
         if (healthShield != null)
         {
-            // Measured in the same units as the track, so sixty points of shield is visibly
-            // less than the hundred and forty beside it rather than an arbitrary stub.
-            float over = player.Overshield / max * width;
+            // Its own vertical gauge now, beside the main bar rather than an extension of it -
+            // fillAmount against the shield's own ceiling, the same shape the main bar already
+            // uses against max health. The empty track around it stays visible either way (see
+            // HudBuilder); this only ever toggles the bright fill inside it.
+            float overshield = player.Overshield;
+            float shieldCeiling = Mathf.Max(1f, player.OvershieldCeiling - max);
+            float shieldFraction = Mathf.Clamp01(overshield / shieldCeiling);
 
-            healthShield.gameObject.SetActive(over > 0.5f);
-            healthShield.rectTransform.anchoredPosition =
-                new Vector2(width, healthShield.rectTransform.anchoredPosition.y);
-            healthShield.rectTransform.sizeDelta =
-                new Vector2(over, healthShield.rectTransform.sizeDelta.y);
+            bool shielded = overshield > 0.5f;
+            healthShield.gameObject.SetActive(shielded);
+            healthShield.fillAmount = shieldFraction;
+
+            // A slow glimmer while it's up - reported directly as wanting an "animated" bar, and
+            // fillAmount alone only ever moves when the shield itself changes, which for most of
+            // a life it doesn't.
+            if (shielded)
+            {
+                float glimmer = 0.85f + Mathf.Sin(Time.unscaledTime * 5f) * 0.15f;
+                healthShield.color = new Color(0.4f, 0.9f, 1f, glimmer);
+            }
         }
 
         if (streakText != null && player.Killstreak > 1)
@@ -1056,7 +1185,7 @@ public class GameHud : MonoBehaviour
         }
 
         if (modeLabel != null)
-            modeLabel.text = MatchState.Mode == MatchMode.GunGame ? "GUN GAME" : "DEATHMATCH";
+            modeLabel.text = MatchModes.Of(MatchState.Mode).DisplayName;
 
         if (comboText != null)
         {
@@ -1075,7 +1204,7 @@ public class GameHud : MonoBehaviour
     /// is the entire tension of the mode.
     void UpdateLadder()
     {
-        bool show = MatchState.Mode == MatchMode.GunGame && MatchState.Phase != MatchPhase.Over;
+        bool show = MatchModes.Of(MatchState.Mode).ShowsLadder && MatchState.Phase != MatchPhase.Over;
 
         if (ladder != null)
             ladder.SetActive(show);
@@ -1137,9 +1266,18 @@ public class GameHud : MonoBehaviour
 
             Show(resultsBackdrop, true);
 
+            // Once per round, not once per frame across the whole 12-second results screen -
+            // "make sure people get tokens at the end of each round." Reset the moment the
+            // results screen itself goes away, below.
+            if (!roundTokensAwarded)
+            {
+                roundTokensAwarded = true;
+                AwardRoundTokens();
+            }
+
             // A team match is won by a side, and saying "someone wins" over the top of that
             // would be answering a question nobody asked.
-            if (MatchState.Mode == MatchMode.TeamDeathmatch)
+            if (MatchModes.Of(MatchState.Mode).UsesTeams)
             {
                 int side = MatchState.WinningTeam;
                 bool yours = side >= 0 && side == PlayerColours.TeamOf(PhotonNetwork.LocalPlayer);
@@ -1177,6 +1315,7 @@ public class GameHud : MonoBehaviour
         centreTitle.rectTransform.localScale = Vector3.one;
         Show(resultsBackdrop, false);
         UpdateStandings(false);
+        roundTokensAwarded = false;
 
         if (RoomManager.AwaitingRespawn)
         {
@@ -1196,7 +1335,7 @@ public class GameHud : MonoBehaviour
             for (int i = 0; i < loadout.Length; i++)
                 carrying[i] = WeaponLoadout.DisplayName(loadout[i]).ToUpper();
 
-            SetCentre(MatchState.Mode == MatchMode.GunGame ? "CLIMB THE LADDER" : "GET READY", hurt,
+            SetCentre(MatchModes.Of(MatchState.Mode).ShowsLadder ? "CLIMB THE LADDER" : "GET READY", hurt,
                       $"{string.Join("   ", carrying)}   -   LIVE IN {Mathf.CeilToInt(left)}");
             return;
         }
@@ -1224,6 +1363,9 @@ public class GameHud : MonoBehaviour
         }
     }
 
+    static int RankStat(Player player, bool byStyle) =>
+        RoomManager.GetStat(player, byStyle ? RoomManager.StyleScoreKey : RoomManager.KillsKey);
+
     void SetCentre(string title, Color colour, string subtitle)
     {
         centreTitle.gameObject.SetActive(true);
@@ -1240,6 +1382,10 @@ public class GameHud : MonoBehaviour
 
     /// Full standings, shown only once the round is over. During a match this is screen you
     /// need to see through; afterwards there's nothing else to look at.
+    /// 1ST/2ND/3RD in gold/silver/bronze, everything past that a plain "NTH" in a neutral
+    /// colour - a real medal ladder rather than every row reading as flatly equal, which was
+    /// most of what made the old leaderboard read as unfinished rather than just plain. The
+    /// place/colour lookup itself moved to RankDisplay.cs so the tab scoreboard could share it.
     void UpdateStandings(bool show)
     {
         if (standingsContainer == null || standingsTemplate == null)
@@ -1249,8 +1395,18 @@ public class GameHud : MonoBehaviour
 
         if (show)
         {
-            foreach (Player person in PhotonNetwork.PlayerList)
+            // Style score is the win condition everywhere except gun game (see
+            // MatchState.LeaderByScore), so the standings are ranked and read by it there
+            // instead of by raw kills - a leaderboard that isn't ordered by the stat that
+            // actually decided the match doesn't read as a leaderboard.
+            bool byStyle = MatchModes.Of(MatchState.Mode).RanksByStyleScore;
+
+            List<Player> ranked = new List<Player>(PhotonNetwork.PlayerList);
+            ranked.Sort((a, b) => RankStat(b, byStyle).CompareTo(RankStat(a, byStyle)));
+
+            for (int i = 0; i < ranked.Count; i++)
             {
+                Player person = ranked[i];
                 TMP_Text row = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
                 row.gameObject.SetActive(true);
 
@@ -1258,24 +1414,36 @@ public class GameHud : MonoBehaviour
                 int team = PlayerColours.TeamOf(person);
                 string side = team >= 0 ? PlayerColours.TeamNames[team] + "  " : string.Empty;
 
-                row.text = $"{side}{MatchState.NameOf(person)}   "
-                           + $"{RoomManager.GetStat(person, RoomManager.KillsKey)} / "
-                           + $"{RoomManager.GetStat(person, RoomManager.DeathsKey)}";
+                string stats = byStyle
+                    ? $"{RoomManager.GetStat(person, RoomManager.StyleScoreKey)} STYLE   "
+                      + $"{RoomManager.GetStat(person, RoomManager.KillsKey)} KILLS"
+                    : $"{RoomManager.GetStat(person, RoomManager.KillsKey)} / "
+                      + $"{RoomManager.GetStat(person, RoomManager.DeathsKey)}";
+
+                string place = RankDisplay.Suffix(i);
+                string placeHex = RankDisplay.ColourHex(i);
+
+                // A rich-text colour tag for just the rank number rather than a second TMP_Text
+                // per row - Row()'s own pooling is built around one text component per item, and
+                // every other list on this HUD (feed, breakdown) already shares it, so this reuses
+                // that instead of giving standings its own bespoke multi-element row structure.
+                row.text = $"<color=#{placeHex}>{place}</color>  {side}{MatchState.NameOf(person).ToUpper()}   {stats}";
 
                 row.color = person == PhotonNetwork.LocalPlayer ? headshotColour
                             : team >= 0 ? PlayerColours.TeamPalette[team] : dim;
                 shown++;
             }
 
-            // A blank line, then what everybody was best at. Cheap to compute, and it gives the
-            // person who lost something to have won.
+            // A real header instead of a blank line - what everybody was best at, cheap to
+            // compute, gives the person who lost something to have won.
             List<MatchState.Award> awards = MatchState.Awards();
 
             if (awards.Count > 0)
             {
-                TMP_Text gap = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
-                gap.gameObject.SetActive(true);
-                gap.text = string.Empty;
+                TMP_Text header = Row(standingsRows, standingsTemplate, standingsContainer, "Standing", shown);
+                header.gameObject.SetActive(true);
+                header.text = "AWARDS";
+                header.color = Fade(dim, 0.7f);
                 shown++;
             }
 
@@ -1411,78 +1579,69 @@ public class GameHud : MonoBehaviour
     }
 
     /// <summary>
-    /// The slide chain, and whether you have burned it out.
+    /// The unified style score: a running total plus a DMC/ULTRAKILL-shaped rank and decay bar
+    /// on top of it - see StyleScore.cs for what actually feeds the multiplier. Reworked
+    /// entirely from a slide-chain-only combo, which was reported directly as the most hated
+    /// thing on the HUD; the chain is now one input among several rather than the whole system.
     ///
-    /// Ranked rather than counted, because a number tells you how many and a rank tells you how
-    /// well - which is the whole appeal of the thing it is copied from. It climbs while you keep
-    /// the rhythm and says so plainly when you have spent it.
+    /// Ranked rather than counted, same reasoning the old version had - a number tells you how
+    /// many, a rank tells you how well. It climbs while you keep the rhythm and bleeds down when
+    /// you don't (or get hit, or hit a wall). No permanent score readout - reported directly
+    /// against an earlier version that kept one on screen at all times: "why is there a permanent
+    /// score on the screen all the time I dont need to see it like that, i Like the ultrakill
+    /// style." The running total (StyleScore.Score) still exists for the post-match standings and
+    /// the MOST STYLISH award; it just isn't a fixture of the live HUD any more.
     ///
-    /// The exhausted state is the important half. Being unable to slide with no explanation is
-    /// the worst possible version of this feature, so it counts down in front of you.
+    /// The exhausted state is the one piece of the old version worth keeping standalone: being
+    /// unable to slide-chain again with no explanation is the worst version of that mechanic, so
+    /// it still borrows the rank line to say so even while the style multiplier itself is idle.
     /// </summary>
-    void UpdateSlideCombo()
+    void UpdateStyleMeter()
     {
         if (slideCombo == null)
             return;
 
-        PlayerMovement mover = player != null ? player.GetComponent<PlayerMovement>() : null;
+        StyleScore style = player != null ? player.Style : null;
 
-        if (mover == null)
+        // Runs unconditionally rather than only while the rank line itself is active - its own
+        // BreakdownDuration timer is independent of the multiplier's decay, and the multiplier
+        // can in principle bleed back down to idle before the breakdown's own window is up.
+        UpdateStyleBreakdown(style);
+
+        bool active = style != null && style.Active;
+
+        slideCombo.gameObject.SetActive(active);
+
+        if (!active)
         {
-            slideCombo.gameObject.SetActive(false);
-            return;
-        }
+            lastStyleRank = string.Empty;
 
-        if (mover.Exhausted)
-        {
-            slideCombo.gameObject.SetActive(true);
-            slideCombo.text = $"SPENT  {mover.ExhaustedFor:F1}";
-
-            // Grey and steady. It is not a rank any more, it is a wait.
-            slideCombo.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
-            slideCombo.rectTransform.localScale = Vector3.one;
-            lastSlideRank = 0;
-
-            // Drained, not draining - there's nothing left to show counting down, only that
-            // it's spent.
             if (slideMeterFill != null)
                 slideMeterFill.fillAmount = 0f;
 
             return;
         }
 
-        int rank = mover.SlideChain;
-
-        slideCombo.gameObject.SetActive(rank > 0);
-
-        if (rank <= 0)
-        {
-            lastSlideRank = 0;
-            return;
-        }
-
-        // The ULTRAKILL/DMC-style meter under the rank name - full the instant a slide lands,
-        // draining toward empty by the time the chain would expire. The rank name says how deep
-        // you are; the bar says how long you've got left to go deeper.
+        // The ULTRAKILL/DMC-style meter under the rank name - full the instant something lands,
+        // draining toward empty by the time the multiplier would start bleeding off. The rank
+        // name says how deep you are; the bar says how long you've got left to go deeper.
         if (slideMeterFill != null)
-            slideMeterFill.fillAmount = mover.ChainWindowFraction;
+            slideMeterFill.fillAmount = style.DecayFraction;
 
-        // Retuned 2026-08-21: reported as too small and not satisfying enough, on top of the
-        // separate movement fix that made the chain worth pursuing at all. Shorter words hit
-        // harder per the HUD's own established rule (see roadmap.md - "type as a weapon"), and
-        // the continuous throb below stayed, but a rank that actually just changed additionally
-        // gets a punch rather than only a slightly different colour - the throb alone read as
-        // decoration, not as a reaction to something you just did.
-        string[] ranks = { "SLIDE", "CHAIN!", "SLICK!!", "BANANAS!!!" };
-        slideCombo.text = ranks[Mathf.Clamp(rank - 1, 0, ranks.Length - 1)];
+        string rank = style.Rank;
+        slideCombo.text = $"{rank}  x{style.Multiplier:F1}";
 
-        if (rank > lastSlideRank)
+        // A rank that actually just changed gets a punch rather than only a slightly different
+        // colour - the throb alone read as decoration, not as a reaction to something you just
+        // did.
+        if (lastStyleRank != string.Empty && rank != lastStyleRank)
             slidePunchUntil = Time.unscaledTime + 0.22f;
 
-        lastSlideRank = rank;
+        lastStyleRank = rank;
 
-        // Hotter and bigger the deeper you are, so the fourth one looks like the fourth one.
-        float heat = (rank - 1) / 3f;
+        // Hotter and bigger the closer the multiplier is to its ceiling, so the top of the
+        // range actually looks like the top of the range.
+        float heat = Mathf.InverseLerp(1f, StyleScore.MaxMultiplier, style.Multiplier);
         slideCombo.color = Color.Lerp(Color.white, killColour, heat);
 
         // The punch decays fast and overshoots on the way in - a snap rather than a fade, per
@@ -1494,6 +1653,99 @@ public class GameHud : MonoBehaviour
         // top of it for the frames right after a rank-up.
         float throb = 1f + heat * 0.25f + Mathf.Sin(Time.unscaledTime * 9f) * 0.03f + punch;
         slideCombo.rectTransform.localScale = Vector3.one * throb;
+    }
+
+    /// <summary>
+    /// The movement-tech combo, bottom left - a separate meter from the style score above it,
+    /// same visual language (a name, a multiplier-shaped chain count, a draining bar, a punch on
+    /// change) but reading MovementCombo instead of StyleScore. Reported directly after the kill
+    /// meter started working: "no slide combo text still which should show up... make new
+    /// movement tech combos and stuff" - grappling, a grenade jump, a bhop chain and a slide-hop
+    /// chain all count here now, not just sliding.
+    /// </summary>
+    void UpdateMovementCombo()
+    {
+        if (movementCombo == null)
+            return;
+
+        MovementCombo combo = player != null ? player.MoveCombo : null;
+        bool active = combo != null && combo.Active;
+
+        movementCombo.gameObject.SetActive(active);
+
+        if (!active)
+        {
+            lastComboTech = string.Empty;
+
+            if (movementMeterFill != null)
+                movementMeterFill.fillAmount = 0f;
+
+            return;
+        }
+
+        if (movementMeterFill != null)
+            movementMeterFill.fillAmount = combo.DecayFraction;
+
+        string tech = combo.LastTech;
+        movementCombo.text = $"{tech}  x{combo.Chain}";
+
+        if (lastComboTech != string.Empty && tech != lastComboTech)
+            comboPunchUntil = Time.unscaledTime + 0.22f;
+
+        lastComboTech = tech;
+
+        float heat = Mathf.InverseLerp(1f, MovementCombo.HeatChain, combo.Chain);
+        movementCombo.color = Color.Lerp(Color.white, comboColour, heat);
+
+        float punchT = Mathf.Clamp01((comboPunchUntil - Time.unscaledTime) / 0.22f);
+        float punch = punchT * punchT * 0.5f;
+        float throb = 1f + heat * 0.2f + Mathf.Sin(Time.unscaledTime * 9f) * 0.03f + punch;
+        movementCombo.rectTransform.localScale = Vector3.one * throb;
+    }
+
+    /// <summary>
+    /// "You can't slide-hop again yet" - its own element now, independent of both combo bars
+    /// (see spentText's own field comment). Grey and steady rather than throbbing like the two
+    /// combo readouts above - it isn't a rank climbing, it's a wait counting down.
+    /// </summary>
+    void UpdateSpentIndicator()
+    {
+        if (spentText == null)
+            return;
+
+        PlayerMovement mover = player != null ? player.GetComponent<PlayerMovement>() : null;
+        bool exhausted = mover != null && mover.Exhausted;
+
+        spentText.gameObject.SetActive(exhausted);
+
+        if (exhausted)
+            spentText.text = $"SPENT  {mover.ExhaustedFor:F1}";
+    }
+
+    /// The list of what actually fired on the last kill - "1.35x HEADSHOT" and so on, in
+    /// descending order (StyleScore.RegisterKill already sorts it). Shows for
+    /// StyleScore.BreakdownDuration then clears itself, the same shape the kill feed's own lines
+    /// already fade on.
+    void UpdateStyleBreakdown(StyleScore style)
+    {
+        if (breakdownContainer == null || breakdownTemplate == null)
+            return;
+
+        int shown = 0;
+
+        if (style != null && style.BreakdownActive)
+        {
+            foreach (StyleScore.BreakdownEntry entry in style.LastBreakdown)
+            {
+                TMP_Text row = Row(breakdownRows, breakdownTemplate, breakdownContainer, "Breakdown", shown);
+                row.gameObject.SetActive(true);
+                row.text = $"{entry.shownMultiplier:F2}x {entry.label}";
+                shown++;
+            }
+        }
+
+        for (int i = shown; i < breakdownRows.Count; i++)
+            breakdownRows[i].gameObject.SetActive(false);
     }
 
     static Color Fade(Color colour, float alpha) =>

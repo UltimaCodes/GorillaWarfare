@@ -655,6 +655,12 @@ public class PlayerMovement : MonoBehaviour
                 chain = Time.time < chainExpires ? chain + 1 : 1;
                 chainExpires = Time.time + chainWindow;
 
+                // The HUD's own movement combo, separate from this chain's speed math - see
+                // MovementCombo.cs. Every slide entry counts as a trick, chained or not, same as
+                // StyleScore.RegisterKill already reads SlideChain the moment it goes above zero
+                // rather than waiting for a second link.
+                GetComponent<MovementCombo>()?.Register("SLIDE HOP");
+
                 // Past the ceiling you are spent. Ten seconds of no sliding at all, which is
                 // long enough to be a real cost and short enough that it is not a punishment -
                 // and it is the thing that stops the chain being infinite speed.
@@ -1054,14 +1060,16 @@ public class PlayerMovement : MonoBehaviour
     void AirBrakeEffects(Vector3 backward)
     {
         Juice.Shake(0.3f);
-        MovementBurst(transform.position, -backward, Color.white, "star", 6, 40f, 1.5f, 3f,
-                     0.03f, 0.06f, 0.16f, 0.3f);
 
-        // Footstep, not Slide - reported as sounding the same as an actual slide, which this
-        // shouldn't, being the opposite of one (a hard stop rather than a sustained scrape).
-        // Pitched sharply up and treated as a single hit rather than the looping scrape SpeedRush
-        // owns, so it reads as a skid rather than a slide.
-        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 1.6f, GameAudio.Footstep, 1.8f);
+        // Same "local only, make it global" fix as WallSmash above - this only ever ran on the
+        // owner's own client, so the star burst and the skid sound were invisible and inaudible
+        // to anyone nearby. Shared over an RPC now; the sound moves from PlayShaped (flat, 2D,
+        // only ever meant for a solo listener) to PlayAtShaped (positional) as part of that,
+        // since everyone hearing it now needs to hear it coming from where it happened.
+        if (owner != null)
+            owner.ReportAirBrake(transform.position, -backward);
+        else
+            PlayerController.BuildAirBrakeImpact(transform.position, -backward);
     }
 
     void GroundSlamStartEffects()
@@ -1071,6 +1079,13 @@ public class PlayerMovement : MonoBehaviour
 
     void SlamLandingEffects()
     {
+        // Captured before anything else this frame can touch it - reported directly: "make
+        // ground pound damage scale with speed." GroundSlam() only ever sets a fixed initial
+        // velocity.y (-groundSlamSpeed); the actual impact speed is whatever that grew to under
+        // gravity by the time you actually land, which is exactly what a slam triggered from
+        // higher up should reward.
+        float impactSpeed = Mathf.Max(groundSlamSpeed, -velocity.y);
+
         // Hitstop/shake/shader-pulse (via Juice.Hit -> ShaderStack.Pulse) stay local only - it's
         // your own landing, not something a bystander's camera should shake for.
         Juice.Hit(0.7f);
@@ -1095,7 +1110,7 @@ public class PlayerMovement : MonoBehaviour
         else
             PlayerController.BuildGroundSlamImpact(feet);
 
-        DealSlamDamage(feet);
+        DealSlamDamage(feet, impactSpeed);
     }
 
     /// <summary>
@@ -1108,13 +1123,18 @@ public class PlayerMovement : MonoBehaviour
     /// own copy, so there is no IsMine check to make: if this is running at all, it's already the
     /// one client allowed to decide it happened.
     /// </summary>
-    void DealSlamDamage(Vector3 at)
+    void DealSlamDamage(Vector3 at, float impactSpeed)
     {
         Collider[] caught = Physics.OverlapSphere(at, groundSlamRadius,
             1 << LayerMask.NameToLayer(Hitbox.LayerName), QueryTriggerInteraction.Ignore);
 
         HashSet<PlayerController> hitPlayers = new HashSet<PlayerController>();
         HashSet<IDamageable> hitOthers = new HashSet<IDamageable>();
+
+        // 1x at the baseline trigger speed, up to 2.5x for a slam triggered from well above the
+        // ground - capped so a lucky slam off the map's tallest point can't one-shot through full
+        // health and shield in a single hit.
+        float speedScale = Mathf.Clamp(impactSpeed / groundSlamSpeed, 1f, 2.5f);
 
         foreach (Collider collider in caught)
         {
@@ -1139,10 +1159,33 @@ public class PlayerMovement : MonoBehaviour
         {
             float distance = Vector3.Distance(hitPlayer.transform.position, at);
             float strength = Mathf.Clamp01(1f - distance / groundSlamRadius);
-            float damage = groundSlamDamage * strength;
+
+            // Squared rather than linear - reported directly as wanting a harsh falloff to
+            // balance the AOE existing at all. Knockback keeps the linear curve; only the
+            // damage needed to bite less generously toward the edge of the radius. speedScale
+            // is the separate "how hard did you actually hit the ground" multiplier.
+            float damage = groundSlamDamage * strength * strength * speedScale;
 
             if (damage > 0.5f)
+            {
                 hitPlayer.TakeDamage(damage, "Ground Pound", false);
+
+                // Always non-fatal from this call (PlayerController.TakeDamage never returns
+                // true - a real kill only confirms later over RPC_Died), so this is always a
+                // "landed but didn't finish them" credit, same as every other weapon's hit path.
+                owner?.Style?.RegisterHitLanded();
+
+                // Confirmation the slam actually landed - reported directly as missing
+                // ("ground pound damage does not give hitmarker"). Same feedback shape
+                // Projectile.Explode already gives its own AOE hits.
+                if (owner != null && owner.Hud != null)
+                {
+                    owner.Hud.ShowHit(false);
+                    owner.Hud.ShowDamage(hitPlayer.transform.position + Vector3.up, damage, false);
+                    PlayerController.PlayHitConfirm(owner);
+                    Juice.Hit(0.6f);
+                }
+            }
 
             // Thrown outward and up, the same "displaced by the impact" read the shockwave
             // itself already sells visually - only their own client can move their body, the
@@ -1161,10 +1204,27 @@ public class PlayerMovement : MonoBehaviour
             Transform otherTransform = ((Component)other).transform;
             float distance = Vector3.Distance(otherTransform.position, at);
             float strength = Mathf.Clamp01(1f - distance / groundSlamRadius);
-            float damage = groundSlamDamage * strength;
+            float damage = groundSlamDamage * strength * strength * speedScale;
 
             if (damage > 0.5f)
-                other.TakeDamage(damage, "Ground Pound", false);
+            {
+                bool fatal = other.TakeDamage(damage, "Ground Pound", false);
+
+                // Same reasoning as SingleShotGun's own dummy branch - this never reaches
+                // RegisterKill's RPC-mediated path, so it has to credit the style score directly.
+                if (fatal)
+                    owner?.Style?.RegisterDummyKill("Ground Pound", false, false, false);
+                else
+                    owner?.Style?.RegisterHitLanded();
+
+                if (owner != null && owner.Hud != null)
+                {
+                    owner.Hud.ShowHit(false);
+                    owner.Hud.ShowDamage(otherTransform.position + Vector3.up, damage, false);
+                    PlayerController.PlayHitConfirm(owner);
+                    Juice.Hit(0.6f);
+                }
+            }
         }
     }
 
@@ -1177,9 +1237,12 @@ public class PlayerMovement : MonoBehaviour
     void LedgeHopEffects(Vector3 at)
     {
         Juice.Shake(0.25f);
-        MovementBurst(at, transform.up, DustTint, "spark", 8, 45f, 1f, 2.5f,
-                     0.03f, 0.07f, 0.18f, 0.4f);
-        GameAudio.PlayShaped(GameAudio.AirBrake, 0.5f, 0.85f, GameAudio.Footstep, 1.3f);
+
+        // Same "local only, make it global" fix again.
+        if (owner != null)
+            owner.ReportLedgeHop(at, transform.up);
+        else
+            PlayerController.BuildLedgeHopImpact(at, transform.up);
     }
 
     void ApplyFriction(float dt)
@@ -1253,6 +1316,66 @@ public class PlayerMovement : MonoBehaviour
         float into = Vector3.Dot(velocity, hit.normal);
 
         if (into < 0f)
+        {
+            // Hurts the style score, and gets its own effect to sell it - reported directly:
+            // smashing into a wall should hurt the multiplier, with an effect for the moment.
+            // Judged off how much speed the wall is about to remove, not the speed you were
+            // carrying, so a shallow graze along a wall barely clips `into` and never counts
+            // even at top speed, while a square hit at a much lower speed still can.
+            if (-into > wallSmashSpeed)
+                WallSmash(hit.point, hit.normal, -into);
+
             velocity -= hit.normal * into;
+        }
+    }
+
+    // Guessed once, from the gap between a normal sprint (well under this) and what a slide
+    // chain or a rocket jump can carry (well over it) - retune from feedback like everything
+    // else tuned by feel in this file.
+    [SerializeField] float wallSmashSpeed = 14f;
+
+    // Public - PlayerController.BuildWallSmashImpact needs these too, now that the effect is
+    // shared over an RPC instead of built locally (see WallSmash below).
+    public static readonly Color WallSmashTint = new Color(1f, 0.22f, 0.14f);
+    public static readonly Color WallSmashDust = new Color(0.55f, 0.5f, 0.48f);
+
+    /// <summary>
+    /// Retuned entirely 2026-08-29 - reported directly as "negligible... just a small sound
+    /// effect without particles or any depth", both the visual and the audio. Rebuilt on the
+    /// ground slam's own proven shape (BuildGroundSlamImpact) rather than guessed again: two
+    /// particle layers instead of one (a wide debris cone plus a tight spark burst), a real
+    /// screen pulse on top of the shake (the "depth" that was missing), and a second, lower sound
+    /// layered a beat behind the crack the same way an explosion's body layer works - one bang
+    /// alone reads as a tap, a bang plus a low thump under it reads as a hit with actual mass to
+    /// it.
+    /// </summary>
+    void WallSmash(Vector3 point, Vector3 normal, float speed)
+    {
+        GetComponent<StyleScore>()?.RegisterWallSmash();
+
+        // Crashing into something costs the movement combo too, same "you paid for it" reasoning
+        // as the kill multiplier above it - reported directly: "make this be affected by you
+        // crashing into something."
+        GetComponent<MovementCombo>()?.Break();
+
+        float strength = Mathf.Clamp01(speed / 30f);
+
+        // Reported directly: "the movement tech effect being local only, make it global." This
+        // whole method only ever runs on the owner's own client (OnControllerColliderHit is a
+        // local CharacterController callback, same as every other movement-tech trigger in this
+        // file) - so the dust, the spark and both layers of sound used to be entirely invisible
+        // and inaudible to anyone standing nearby when someone else smashed into a wall, the
+        // exact same bug PlayerController.ReportGroundSlam already fixed for the ground pound.
+        // Same fix, same shape: the shared visual/audio half moves to a static method reached
+        // over an RPC; hitstop/shake/the shader pulse stay below, local-only, same reasoning
+        // BuildGroundSlamImpact's own doc comment gives - it's your own impact, not something a
+        // bystander's camera should shake for.
+        if (owner != null)
+            owner.ReportWallSmash(point, normal, strength);
+        else
+            PlayerController.BuildWallSmashImpact(point, normal, strength);
+
+        Juice.Shake(Mathf.Max(0.4f, strength));
+        ShaderStack.Pulse(strength);
     }
 }

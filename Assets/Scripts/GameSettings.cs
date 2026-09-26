@@ -41,6 +41,11 @@ public static class GameSettings
     /// </summary>
     public static float AdsSensitivity { get; private set; } = 1f;
 
+    /// Press-to-latch instead of hold-to-aim. A motor-accessibility option (holding a button for
+    /// the length of every engagement isn't free for everyone) as much as a preference some
+    /// players just have.
+    public static bool AimToggle { get; private set; }
+
     // ---------------------------------------------------------------- audio
 
     public static float MasterVolume { get; private set; } = 0.8f;
@@ -88,6 +93,27 @@ public static class GameSettings
     /// powerful their machine is.
     public static bool MotionBlur { get; private set; }
 
+    /// Same reasoning as motion blur: a vibe, not a quality tier, so it sits outside the preset
+    /// ladder rather than as a fifth entry in it. Colour-depth-and-dither only - see
+    /// PsxFilter.shader for why vertex snapping and affine texture warping aren't part of this.
+    /// On by default - "REALLY like the psx filter," reported directly, once it was actually
+    /// strong enough to see. Everyone still gets the toggle to turn it back off.
+    public static bool PsxFilter { get; private set; } = true;
+
+    // ---------------------------------------------------------------- joke settings
+    //
+    // "Add some joke settings too." Real PlayerPrefs-backed entries, same as everything else on
+    // this screen, not fake controls wired to nothing.
+
+    /// Deliberately inert - "a setting that's exactly as real as the rest of the menu right up
+    /// until you ask what it actually changes." Briefly wired to a goofy cryptid-sighting effect
+    /// (BigfootSighting.cs) and then pulled back out at direct request - "remove for now" - so
+    /// this is back to being the joke it started as rather than a half-finished feature.
+    public static bool BelieveInBigfoot { get; private set; }
+
+    /// The other deliberately inert joke setting - a slider with nothing behind it.
+    public static float MonkeyBusinessLevel { get; private set; } = 50f;
+
     // ---------------------------------------------------------------- crosshair
 
     public static float CrosshairSize { get; private set; } = 14f;
@@ -120,6 +146,7 @@ public static class GameSettings
         Sensitivity = Get(nameof(Sensitivity), 3f);
         AdsSensitivity = Get(nameof(AdsSensitivity), 1f);
         InvertY = Get(nameof(InvertY), false);
+        AimToggle = Get(nameof(AimToggle), false);
 
         MasterVolume = Get(nameof(MasterVolume), 0.8f);
         SfxVolume = Get(nameof(SfxVolume), 1f);
@@ -133,6 +160,10 @@ public static class GameSettings
 
         Shaders = (ShaderPreset)Get(nameof(Shaders), (int)ShaderPreset.Full);
         MotionBlur = Get(nameof(MotionBlur), false);
+        PsxFilter = Get(nameof(PsxFilter), true);
+
+        BelieveInBigfoot = Get(nameof(BelieveInBigfoot), false);
+        MonkeyBusinessLevel = Get(nameof(MonkeyBusinessLevel), 50f);
 
         CrosshairSize = Get(nameof(CrosshairSize), 14f);
         CrosshairThickness = Get(nameof(CrosshairThickness), 3f);
@@ -188,6 +219,13 @@ public static class GameSettings
     {
         InvertY = value;
         Put(nameof(InvertY), value);
+        Announce();
+    }
+
+    public static void SetAimToggle(bool value)
+    {
+        AimToggle = value;
+        Put(nameof(AimToggle), value);
         Announce();
     }
 
@@ -258,6 +296,27 @@ public static class GameSettings
     {
         MotionBlur = value;
         Put(nameof(MotionBlur), value);
+        Announce();
+    }
+
+    public static void SetPsxFilter(bool value)
+    {
+        PsxFilter = value;
+        Put(nameof(PsxFilter), value);
+        Announce();
+    }
+
+    public static void SetBelieveInBigfoot(bool value)
+    {
+        BelieveInBigfoot = value;
+        Put(nameof(BelieveInBigfoot), value);
+        Announce();
+    }
+
+    public static void SetMonkeyBusinessLevel(float value)
+    {
+        MonkeyBusinessLevel = value;
+        Put(nameof(MonkeyBusinessLevel), value);
         Announce();
     }
 
@@ -349,27 +408,54 @@ public static class GameSettings
             PlayerController.LocalCamera.fieldOfView = Fov;
     }
 
+    // ---------------------------------------------------------------- reset, per page and all
+
+    static readonly string[] AimKeys = { nameof(Sensitivity), nameof(AdsSensitivity), nameof(InvertY) };
+    static readonly string[] AudioKeys = { nameof(MasterVolume), nameof(SfxVolume), nameof(MusicVolume) };
+
+    static readonly string[] VideoKeys =
+    {
+        nameof(Fov), nameof(Fullscreen), nameof(ScreenWidth), nameof(ScreenHeight),
+        nameof(QualityLevel), nameof(Shaders), nameof(MotionBlur), nameof(PsxFilter),
+        nameof(BelieveInBigfoot), nameof(MonkeyBusinessLevel),
+    };
+
+    static readonly string[] CrosshairKeys =
+    {
+        nameof(CrosshairSize), nameof(CrosshairThickness), nameof(CrosshairGap),
+        nameof(CrosshairDot), nameof(CrosshairOutline), nameof(CrosshairDynamic),
+        nameof(CrosshairOverride), "CrosshairR", "CrosshairG", "CrosshairB",
+    };
+
+    static void DeleteKeys(string[] keys)
+    {
+        foreach (string key in keys)
+            PlayerPrefs.DeleteKey(Prefix + key);
+    }
+
+    /// <summary>
+    /// Per-page resets. "Reset to default (page specific)" - the settings screen used to have
+    /// exactly one reset button and it always took everything, aim and keybinds included, which
+    /// is a strange price to pay for wanting your crosshair colour back. Each of these only
+    /// touches the keys that page itself can change, then reloads through <see cref="Load"/>
+    /// rather than duplicating what each property's default is a second time.
+    /// </summary>
+    public static void ResetAim() { DeleteKeys(AimKeys); Load(); Announce(); }
+    public static void ResetAudio() { DeleteKeys(AudioKeys); Load(); Announce(); }
+    public static void ResetVideo() { DeleteKeys(VideoKeys); Load(); ApplyFov(); Announce(); }
+    public static void ResetCrosshair() { DeleteKeys(CrosshairKeys); Load(); Announce(); }
+    public static void ResetKeys() { KeyBinds.ResetAll(); Announce(); }
+
     /// <summary>
     /// Back to the defaults, for when somebody has made the game unplayable and can't remember
-    /// which slider did it.
+    /// which slider did it. The one case that still wants everything at once.
     /// </summary>
     public static void ResetAll()
     {
-        foreach (string key in new[]
-        {
-            nameof(Sensitivity), nameof(AdsSensitivity), nameof(InvertY),
-            nameof(MasterVolume), nameof(SfxVolume), nameof(MusicVolume),
-            nameof(Fov), nameof(Fullscreen), nameof(ScreenWidth), nameof(ScreenHeight),
-            nameof(QualityLevel), nameof(Shaders), nameof(MotionBlur),
-            nameof(CrosshairSize), nameof(CrosshairThickness), nameof(CrosshairGap),
-            nameof(CrosshairDot), nameof(CrosshairOutline), nameof(CrosshairDynamic),
-            nameof(CrosshairOverride),
-            "CrosshairR", "CrosshairG", "CrosshairB",
-        })
-        {
-            PlayerPrefs.DeleteKey(Prefix + key);
-        }
-
+        DeleteKeys(AimKeys);
+        DeleteKeys(AudioKeys);
+        DeleteKeys(VideoKeys);
+        DeleteKeys(CrosshairKeys);
         KeyBinds.ResetAll();
         Load();
         ApplyFov();

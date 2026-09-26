@@ -200,9 +200,14 @@ below. Corrected 2026-08-22.
 **Team deathmatch**
 - [x] Same weapon roll as free-for-all deathmatch, scored by side instead of by player
 - [x] Sides assigned through `PlayerColours.AssignTeams`, red against blue
-- [x] Winner is whichever side has more kills when the clock runs out, tied scores draw
+- [x] Winner is whichever side has the higher total when the clock runs out, tied totals draw
       (`WinningTeamKey`, separate from the free-for-all `WinnerKey` so a team result never gets
-      misread as a single player's)
+      misread as a single player's). Read as kills specifically until 2026-09-03: this line was
+      never updated when the style-score rework made style score decide free-for-all deathmatch,
+      so `PlayerColours.TeamScore` was quietly still summing kills for the team version of the
+      exact same mode the whole time that rework was live. Now reads `MatchModeInfo.
+      RanksByStyleScore` like everything else this pass switched to, so the team total, the
+      scoreboard order and the actual match winner all agree.
 
 Everything about a match lives in room custom properties rather than in fields, which is what
 makes late joins and host migration fall out for free instead of each needing its own catch-up
@@ -379,6 +384,31 @@ two feeds would either overlap or need a third thing to arbitrate.
          from Jersey 10's readouts. Every label's outline widened again (0.38 to 0.55) and picked
          up a soft dark underlay on top of it - "genuinely blends in with everything else" was
          still true of a hard outline alone against a bright, busy background.
+      7. Two more direct reworks, 2026-08-29 - see `bug-log.md`'s eleventh pass for the full
+         account:
+         - **The health bar rebuilt for real** - "style it like the cruelty squad healthbar,"
+           named directly, with a list of specifics: top left instead of bottom left, vertical
+           and depleting downward instead of horizontal, the peel and the banana as distinct
+           layers rather than one shape doing both jobs, a backshadow/outline so "how much you
+           lost" and "how much there should be on full" read as a comparison, and a separate
+           animated overshield bar beside it tilted like ULTRAKILL's own HUD. `BananaLayer` fills
+           `Vertical`/`OriginVertical.Bottom` now instead of `Horizontal`/`Left`. No second sprite
+           was sourced for the peel - both layers reuse the one already-credited `BananaHealth.png`
+           (see its own CREDIT.txt), tinted differently: the outer layer sits at full size
+           permanently, coloured like a peel, and the inner layer is what depletes - which reads as
+           "eaten down to the skin" as you take damage, a better fit for the metaphor than an
+           unrelated second asset would have given anyway. The overshield got its own vertical
+           gauge (`OvershieldMeter`, -25° tilt) rather than sharing the main bar's track, with a
+           slow idle glimmer while it's up so it reads as animated even between fills.
+         - **The slide-only combo meter unified into a full style score** - "I hate the bar the
+           most honestly," with DMC and ULTRAKILL named as the actual reference. See "Style score
+           and the combo/scoring rework" below for the mechanic; this entry is the HUD half. The
+           rank text (`slideCombo`, kept its field name across the rework) moved from roughly
+           screen-centre-right up to the true top right corner, now reads `"RANK  xMULTIPLIER"`
+           instead of a bare rank word, and a new always-on `styleScoreText` sits above it as the
+           big number - the ammo/health rule ("the number you actually read is the big one")
+           applied to the new system. The kill feed moved down to the middle right to make room,
+           per direct instruction.
 - [x] **Settings**, with:
   - [x] Crosshair — size, thickness, gap, colour, dot, outline, plus a dynamic/override toggle
   - [x] Graphics — resolution, fullscreen, quality level, FOV, shader stack preset, motion blur
@@ -387,12 +417,167 @@ two feeds would either overlap or need a third thing to arbitrate.
   - [x] Keybinds — full rebinding, read live so nothing else has to poll a stale key
 - [x] Settings persist and apply live, not on restart — every setter in `GameSettings` writes the
       preference immediately, nothing waits on an apply button
+- [x] **Reset to default, per page** — 2026-09-03, from a full-codebase review's settings-UX
+      research. The one reset button used to always call `GameSettings.ResetAll()`, taking
+      keybinds and every tab with it. `ResetAim`/`ResetAudio`/`ResetVideo`/`ResetCrosshair`/
+      `ResetKeys` now exist alongside it, and the screen's reset button calls whichever matches
+      the open tab, relabelling itself to say which. `ResetAll` still exists for the "everything
+      is broken" case.
+- [x] **Press-to-aim as a toggle**, alongside hold-to-aim — `GameSettings.AimToggle`, read in
+      `PlayerController.Update`. Motor-accessibility research turned this up as the single most
+      commonly requested toggle-vs-hold option in the genre. Toggle-to-crouch/slide was considered
+      and deliberately skipped — that key shares a long, specific bug history with the slide
+      buffer and air brake, and touching it for an option nobody directly asked for wasn't worth
+      the risk.
+- [x] **An optional PSX filter** — `PsxFilter.cs`/`PsxFilter.shader`, a real PostProcessing v2
+      custom effect, its own toggle outside the preset ladder like motion blur. Colour-depth
+      quantization plus an ordered dither, fixed at a tasteful intensity rather than exposed as a
+      slider. Deliberately no vertex snapping or affine texture warping — both need touching every
+      shader already in the project to do safely, not something a single post-process pass can
+      add. See `bug-log.md`'s twenty-ninth pass for the full account, including the first attempt
+      at the PPv2 API that didn't compile.
+- [x] **The tab scoreboard, rebuilt** — 2026-09-03. Reported directly as looking "pretty bad" and
+      never actually ranking anyone (rows were join-order, never re-sorted). `ScoreboardItem.cs`
+      (one MonoBehaviour per player) retired in favour of the same pooled-`TMP_Text`-row shape
+      `GameHud.UpdateStandings` already uses — sorted by whatever `MatchModeInfo` says the mode is
+      actually decided by, 1st-3rd medal-coloured via the newly-shared `RankDisplay.cs`, a live
+      team-total header in a team mode, a best-streak flourish, and a real visual pass
+      (`ScoreboardBuilder.cs`, new — the scoreboard never had a builder before this) matching the
+      rest of the HUD's outline-plus-underlay treatment. Surfaced a real bug along the way: see
+      the Team deathmatch section above for `PlayerColours.TeamScore` having quietly kept deciding
+      team matches by kills after the style-score rework.
 
 Corrected 2026-08-22 — this whole section read as unbuilt (`[ ]` throughout) and wasn't; found
 while answering an unrelated question about what's left before Steam. `GameSettings`,
 `SettingsMenu` (five tabs: Aim, Audio, Video, Crosshair, Keys) and `Sandbox` are all in and
 working. The previous reverted attempt this note used to point at is superseded — nothing left
 worth cherry-picking out of `ba4405e`.
+
+---
+
+## Style score and the combo/scoring rework
+
+Built 2026-08-29 - "I hate the bananas!!! style meter... I hate the bar the most honestly," with
+DMC's and ULTRAKILL's own style meters named directly as the reference, and an explicit
+constraint on the result: has to feel like that shape of mechanic without reading as a copy of
+either. See `bug-log.md`'s eleventh pass for the full build account and "The in-game HUD's visual
+language" above for the display half.
+
+- [x] `StyleScore.cs` - one component, added mine-only the same way `PlayerMovement`/`SpeedRush`
+      are. Tracks a multiplier (climbs on a kill, decays over four seconds of quiet, cut hard by
+      a hit taken or a wall smash) and a running score (`multiplier x 100` per kill, banked
+      permanently). Rank name is banana/gorilla-themed on purpose - PEELING, RIPE, GOING BANANAS,
+      FULL SILVERBACK, RAMPAGE - specifically so the mechanic doesn't read as a lettered ULTRAKILL
+      rank wearing a different font.
+- [x] **Combines skill and movement combos** - a kill lands its base value, then a headshot, a
+      no-scope (a `canAim` weapon's kill landed while not aiming), a point-blank finish (under
+      3.5m), switching weapons since the last kill, and an active `PlayerMovement.SlideChain` all
+      add to the multiplier gain on top of each other. No-scope and point-blank are classified on
+      the *shooter's* own client at the moment of the shot (`SingleShotGun.FirePellet` calls
+      `StyleScore.RecordShot`, stashing weapon/aim-state/distance per target actor) rather than
+      reconstructed later, since by the time a kill is confirmed over the RPC round trip that
+      context is already gone.
+- [x] **Getting hit or hitting a wall hurts it**, per direct request to balance the mechanic
+      rather than let it only ever climb. A hit taken cuts the multiplier to 75% of itself
+      (`PlayerController.RPC_TakeDamage`); a wall smash - `OnControllerColliderHit` judging the
+      speed the wall is about to remove, not the speed you were carrying, so a shallow graze at
+      top speed never counts but a square hit at a much lower one still can - cuts it to 40% and
+      resets the decay clock, with its own effect: a red/orange particle burst
+      (`PlayerMovement.WallSmash`, reusing the same `MovementBurst` helper the ground slam's dust
+      already uses), a camera shake scaled to impact speed, and `GameAudio.WallSmash` (no sourced
+      clip yet, falls back to `Impact` pitched up - same graceful-empty-folder convention as every
+      other bank in `GameAudio.cs`).
+- [x] **The score decides deathmatch now, not kills** - "your score will show up on the
+      leaderboard and this is now the determining factor for winning in deathmatches (anything
+      that isnt gungame honestly)." `MatchState`'s end-of-match winner check now branches on mode:
+      gun game keeps deciding on kills at its own timeout (the ladder is already gun game's
+      progression system), everything else uses the new `RoomManager.StyleScoreKey` custom
+      property instead. Written by each client into its own property directly rather than by the
+      master the way kills are - the classification a kill earns only ever exists on the killer's
+      own client, and unlike kills (where two different killers can race over one victim's death
+      count) nothing else ever writes this specific player's own score, so there's no race to
+      arbitrate. The post-match standings screen sorts by it and shows it alongside kills outside
+      gun game, and a new "MOST STYLISH" award joins TOP BANANA/HEADHUNTER/ON A ROLL/CRASH TEST
+      DUMMY.
+- [x] **Fleshed out well past the original five bonuses**, reported directly as "only a few
+      combos and its not that fun at all": long range (point blank's opposite), airborne, a
+      blade-finish bonus for the signature melee weapon, a killstreak bonus, and a named multikill
+      callout (DOUBLE PEEL/BUNCH KILL/GORILLA WARFARE/GOING FERAL). Full account in `bug-log.md`'s
+      twenty-fifth pass.
+- [x] **The multiplier starts on damage, banks on the kill.** "Your multiplier starts when you
+      damage someone and do stuff but when you kill someone you actually get the points" - new
+      `StyleScore.RegisterHitLanded()` grows the multiplier (small, cooldown-gated) the moment any
+      hit connects; `score` itself still only ever changes at the kill, unchanged from before.
+- [x] **Dummy kills now feed the meter.** Reported 2026-08-29 as "STILL does not work" after the
+      previous pass's sweep had already checked every bug it could find *inside* `StyleScore`
+      itself - the actual cause was outside it: a training dummy's death never goes through
+      `PlayerController.RPC_Died`, which is the only place `RegisterKill` ever fires from, so
+      every kill the sandbox could actually produce was invisible to the system. `IDamageable.
+      TakeDamage` now returns whether that specific call was fatal; `TrainingDummy` answers `true`
+      exactly once per death, `PlayerController` always answers `false` (a real kill still only
+      ever credits via the RPC, same as before). New `StyleScore.RegisterDummyKill` shares its
+      actual scoring math with `RegisterKill` through an extracted `ApplyKillGain` rather than
+      duplicating it, and is wired into every place a shot can land a fatal blow on something
+      that isn't a player. Full account in `bug-log.md`'s twenty-third pass.
+- [ ] Tuning. Every number above - the per-cause bonuses, the hit/wall-smash penalties, the decay
+      rate and window, the wall-smash speed threshold, the tier breakpoints - is a first pass, the
+      same way every other feel number in this project has needed a person playing it before it
+      could be trusted. See Unverified.
+
+---
+
+## Movement-tech combo
+
+Built 2026-08-29, same day as the dummy-crediting fix above - "no slide combo text still which
+should show up... make new movement tech combos and stuff... this includes grappling, grenade
+jumping, bhopping, slide hopping, etc and make this be affected by you crashing into something."
+A second, separate meter from the style score: traversal instead of combat, bottom left instead of
+top right, and it never touches the score or the win condition. Full account in `bug-log.md`'s
+twenty-fourth pass.
+
+- [x] `MovementCombo.cs` - one component, mine-only, added by `PlayerController.Start` the same
+      way `StyleScore` is. `Register(tech)` extends a chain and remembers the tech name;
+      `Break()` (called from `PlayerMovement.WallSmash`, same trigger `StyleScore.
+      RegisterWallSmash` already answers to) zeroes it outright.
+- [x] **Four techs feed one chain** rather than each getting its own counter, so switching
+      between them mid-run reads as one continuous run: a slide-hop entry, a jump landed inside
+      `bhopGrace` of the last touchdown, a grapple attach (`VineGrapple.RPC_Attach`), and a
+      self-knockback grenade jump strong enough to matter (`strength > 0.3f`, so grazing the edge
+      of your own blast doesn't count).
+- [x] Bottom-left HUD block, built to mirror the style meter's own shape (name + chain count,
+      tilted, a draining bar) deliberately rather than inventing a second visual language - tilted
+      the *other* way so the two corners lean inward symmetrically, with the meter bar sitting
+      *above* the text since this cluster is near the bottom of the screen already.
+- [ ] Tuning - the 3-second window, the bhop/grenade-jump qualifying thresholds, none of it played
+      against yet. See Unverified.
+
+---
+
+## Tokens and the crate opening system
+
+Built 2026-08-29 - "add the gambling crate stuff... make sure this is the BEST crate opening
+feature ever." No actual rewards yet, by explicit request - this is the whole ceremony (earn
+tokens, spend them, watch a carousel decide what you got) built and working end to end, with real
+items left for later. Full account, including the design research behind it, in `bug-log.md`'s
+twenty-sixth pass.
+
+- [x] `PlayerWallet.cs` - tokens, persisted locally (`PlayerPrefs`, survives between sessions
+      unlike anything Photon-networked would). Every player starts with 100.
+- [x] **Reworked same day**: round-end reward is now exponential in that match's style score
+      (`GameHud.RoundTokensFor`, base-2, capped at 50) rather than a flat amount - see
+      `bug-log.md`'s twenty-seventh pass.
+- [x] Five rarities (SCRAP/SPROUT/PRIMAL/MYTHIC/APEX, gray/green/blue/purple/gold) and three
+      crates (Rotten/Ripe/Holy, 10/50/100 tokens - cut roughly 10x from the first pass the same
+      day, to actually be reachable against the round-end reward), odds scaling with price.
+- [x] The opening screen itself - a real carousel (masked viewport, eased deceleration, a tick
+      sound tied to what's actually on screen), an escalating reveal scaled by rarity, built as a
+      prefab (`CrateShopBuilder.cs`) the same way the settings menu is, so it's reachable from
+      wherever a button ends up living.
+- [x] **A title menu button**, next to Settings - answers "how do I access the crates."
+- [ ] Real rewards. Every rarity currently resolves to "you got an APEX" and nothing else -
+      that's the next real piece of work here, whenever there's actual loot to hand out.
+- [ ] Tuning - the odds, the token amount, the spin duration, the reward curve's own 2500-score
+      scale, none of it played against yet. See Unverified.
 
 ---
 
@@ -432,8 +617,18 @@ how many clusters) - not played yet, see Unverified.
 
 ## Later polish
 
-- [ ] Bananas could bruise and spot rather than just tint, and the eat-and-swap on reload wants
-      an actual animation instead of the model simply changing colour
+- [x] The eat-and-swap on reload got its actual animation, 2026-08-29 - the old symmetric dip
+      (down, hold, back up) was reported as unsatisfying at any speed tried. `SingleShotGun.
+      UpdateReloadFlip` now plays three distinct beats instead of one shape held the whole time:
+      a fast, hard drop out of view (down the hatch), a held moment fully retracted (the eating),
+      then a sharp pull back that overshoots past rest on an `EaseOutBack` curve and settles - the
+      flourish that reads as pulling a fresh one out rather than a mechanism sliding into place.
+      Reload sound is per-weapon now too (`Resources/Audio/Reload/<WeaponName>`, same graceful
+      fallback `Shoot/<WeaponName>` already uses) and pitched by the weapon's own `Weight` in the
+      meantime - every weapon still shares the one sourced clip, nothing fruit-specific has been
+      recorded yet, so the pitch shift is what keeps the pistol and the shotgun from sounding
+      identical until real per-weapon audio exists. Bananas bruising and spotting rather than just
+      tinting is still open, unrelated to either of these.
 - [ ] Ammo pickups, now that magazines are finite and a weapon can genuinely run dry
 
 ## M7 — Art and shaders
@@ -621,6 +816,47 @@ Previously listed here and corrected 2026-08-22: "anything that needs a second c
 was verified on 3-4 real clients 2026-08-16 (`working-notes.md`), including remote weapon
 switching, replicated aim and the kill feed firing on a client that didn't do the killing. That
 entry sat here for over a week after it stopped being true.
+
+- **The whole style score system, added 2026-08-29.** `PlayModeProbe` confirms a kill lands, the
+  local player's own custom property updates and the standings screen reads it back correctly,
+  and a same-day fix closed the specific gap that made it look completely dead in solo sandbox
+  testing (dummy kills now credit it - see the "Dummy kills now feed the meter" item above), but
+  every actual *number* in it (how much a headshot/no-scope/point-blank/weapon-swap/movement
+  chain should add, how hard a hit or a wall smash should cut it, the decay rate, the tier
+  breakpoints, the wall-smash speed threshold) is still a first guess nobody has played against
+  yet - see the "Style score and the combo/scoring rework" section above. The dummy-crediting
+  wiring itself is reviewed, not test-covered - `PlayModeProbe` has no dummy-kill check yet.
+- **The crate opening system, added 2026-08-29.** Verified standalone with real screenshots (two
+  real bugs caught and fixed that way - see bug-log.md), but nobody has watched a real spin
+  decelerate and land in motion, only the forced end state. Not wired to a button in any scene
+  yet either, so nobody has opened one starting from an actual round's earned tokens.
+- **The movement-tech combo, added 2026-08-29.** `HudPhotographer` confirms the bottom-left block
+  renders and doesn't collide with anything else on screen, but which techs qualify (the bhop
+  timing window, the grenade-jump strength threshold) and how the chain feels to actually build
+  are first guesses nobody has played against - see the "Movement-tech combo" section above.
+- **Training dummies ragdolling, added 2026-08-29.** Reuses `Corpse.Spawn` verbatim rather than a
+  new code path, and the full `PlayModeProbe` suite passes with it wired in, but nothing has
+  screenshotted or watched a dummy actually die - `HudPhotographer` doesn't spawn a sandbox or a
+  dummy. Confidence here is code reuse plus a passing regression suite, not a render.
+- **The rebuilt health bar's actual placement and readability**, same reasoning the HUD's own
+  entry above has always carried - verified to say the right numbers, not looked at by a person.
+  Vertical, top left, split peel/banana layers, the diagonal overshield bar - all built from the
+  Cruelty Squad/ULTRAKILL description given, none of it eyeballed in a real match yet.
+- **The gorilla model and hitboxes now baked onto the player prefab**
+  (`Tools/Gorilla Warfare/Bake the player rig`, `PlayerRigBaker.cs`), so they're real, editable
+  prefab content rather than only existing once `Start()` has run - direct request. `PlayModeProbe`
+  confirms spawning and respawning both reuse the baked content rather than duplicating it (the
+  hitbox-coverage and scale checks it already ran are unchanged), but nobody has actually opened
+  the prefab and hand-adjusted anything on it yet, which was the entire point of building this.
+- **The PSX filter, added 2026-09-03.** Compiles clean, passes the full suite, and follows PPv2's
+  own documented custom-effect pattern - but nobody has turned the toggle on in a real session and
+  looked at it. "Not too grainy or pixelated" was the brief; whether the fixed 0.6 intensity
+  actually lands there is a taste call a render settles, not a compile check.
+- **The rebuilt tab scoreboard, added 2026-09-03.** `PlayModeProbe` confirms it builds and refreshes
+  without throwing against a real (single-player, offline-mode) spawn, and `SceneCheck` confirms
+  every serialized reference is wired. What that can't reach: offline mode is one player, so the
+  actual sort order, the team-grouped header, and the medal colours have never been seen against a
+  real multi-player scoreboard - only reasoned through and read back as text, not rendered.
 
 ## Known limitations
 

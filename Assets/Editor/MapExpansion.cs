@@ -170,7 +170,9 @@ public static class MapExpansion
     /// the one below rather than stacked dead-centre, so it reads as a rock formation instead of
     /// a tower of crates - capped with a cliff_top_rock for a flat, standable summit, and given a
     /// cliff_blockSlope_rock ramp up one face so there is always an easy way up alongside the
-    /// harder, faster one (wall-run or vault straight up the blunt faces).
+    /// harder, faster one (a ground-slam-and-ledge-hop climb straight up the blunt faces - wall
+    /// run and vault, the two techs this comment used to name here, were both cut; see this
+    /// file's own top-of-file note and roadmap.md's Movement tuning section).
     /// </summary>
     static int BuildCliffClusters(Transform parent, Bounds floor, List<Vector3> keepOut)
     {
