@@ -2979,3 +2979,29 @@ which allocate and free when the commands actually execute. No check can reprodu
 on demand; the existing pixel check confirms the output didn't change (4.60 average difference,
 against 4.10 on the run before - it moves with where the player spawns) and a probe screenshot with
 PSX on still shows the blocky, dithered image.
+
+## The PSX filter skipped the gun
+
+The gun is drawn by `ViewModelCamera`'s second camera after the world camera's post stack has
+already run, so PSX pixelated the world and left the weapon perfectly smooth - obvious every second
+you hold a gun, once PSX defaulted on. That camera only clears depth, so a post pass on it sees the
+composited frame: PSX now runs there, on its own volume layer (`PostProcessingViewModel`, layer 13,
+added through the new `ProjectLayers` tool rather than by hand-editing `TagManager.asset` - Unity
+also bumped that file's own format to `serializedVersion: 3` while saving it, which is 6.2's current
+format, not a change made on purpose). Only PSX moved: AO needs the world camera's own depth, and
+putting bloom/grading on the gun too would change how it looks, which is a taste call.
+
+Caught before it shipped, not in a screenshot afterward: the death camera `RoomManager` hands
+`LocalCamera` to has no gun camera, so "PSX lives on the gun camera" alone would have switched it off
+for every respawn. It lives on the gun camera when there is one and in the world profile otherwise,
+re-decided every time the camera changes. Also caught reading the code first: `SuppressAuthoredVolumes`
+disables every volume that isn't the world one, which would have switched the new gun-camera volume
+off on every respawn - it skips that one now too.
+
+The probe's PSX check now renders the composited frame and the gun camera alone. The gun-alone
+comparison read 0.00 before this change and 0.69-0.92 after; both composite shots were saved and
+looked at, zoomed in on the banana - blocky and dithered like the world now. Two new checks in the
+death-and-respawn check: while dead PSX is in the world profile, after respawning it's back on the
+gun camera. One visible side effect, flagged in `roadmap.md` rather than decided here: PSX now runs
+after the world camera's outline pass, so world outlines pixelate too, while the gun's own outline
+(drawn by the gun camera after its post pass) stays crisp.

@@ -848,10 +848,12 @@ entry sat here for over a week after it stopped being true.
   confirms spawning and respawning both reuse the baked content rather than duplicating it (the
   hitbox-coverage and scale checks it already ran are unchanged), but nobody has actually opened
   the prefab and hand-adjusted anything on it yet, which was the entire point of building this.
-- **The PSX filter, added 2026-09-03.** Compiles clean, passes the full suite, and follows PPv2's
-  own documented custom-effect pattern - but nobody has turned the toggle on in a real session and
-  looked at it. "Not too grainy or pixelated" was the brief; whether the fixed 0.6 intensity
-  actually lands there is a taste call a render settles, not a compile check.
+- **The PSX filter, added 2026-09-03, on the gun too since 2026-09-26.** Default on; 0.88 intensity
+  at quarter resolution. `PlayModeProbe` renders the composited frame (world plus gun camera) with
+  it off and on and saves both (`Logs/probe-shots/psx-composite-on.png`), and those have been looked
+  at: the world and the gun body are both blocky and dithered. Two look details still yours to sign
+  off: the world's outlines are now pixelated with everything else (PSX runs after them now), while
+  the gun's own outline stays crisp (the gun camera draws it after its post pass).
 - **The rebuilt tab scoreboard, added 2026-09-03.** `PlayModeProbe` confirms it builds and refreshes
   without throwing against a real (single-player, offline-mode) spawn, and `SceneCheck` confirms
   every serialized reference is wired. What that can't reach: offline mode is one player, so the

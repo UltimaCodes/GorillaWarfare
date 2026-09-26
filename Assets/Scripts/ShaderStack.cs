@@ -25,10 +25,27 @@ public class ShaderStack : MonoBehaviour
     /// Already in the project's layer list from the original setup.
     const string VolumeLayerName = "PostProcessing";
 
+    /// The layer the PSX-only volume lives on, watched only by the weapon camera. Its own layer,
+    /// so the weapon camera's PostProcessLayer doesn't also pick up the world profile (AO, bloom)
+    /// and apply it a second time.
+    public const string ViewModelVolumeLayerName = "PostProcessingViewModel";
+
     PostProcessVolume volume;
     PostProcessProfile profile;
     Camera attached;
     int volumeLayer;
+
+    int viewModelLayer = -1;
+    PostProcessVolume viewModelVolume;
+    PostProcessProfile viewModelProfile;
+    Camera attachedWeapon;
+
+    // On the weapon camera whenever there's one to put it on, on the world camera otherwise. The
+    // death camera RoomManager hands LocalCamera to has no weapon camera, and PSX shouldn't vanish
+    // for the length of every respawn. A missing layer also falls back to the world camera,
+    // rather than dropping the effect.
+    bool PsxOnWeapon => GameSettings.PsxFilter && viewModelLayer >= 0 && attachedWeapon != null;
+    bool builtPsxOnWeapon;
 
     // ---- pulse ----
     //
@@ -97,6 +114,13 @@ public class ShaderStack : MonoBehaviour
             return;
         }
 
+        viewModelLayer = LayerMask.NameToLayer(ViewModelVolumeLayerName);
+
+        if (viewModelLayer < 0)
+            Debug.LogWarning($"[shaders] no '{ViewModelVolumeLayerName}' layer - the PSX pass stays on "
+                             + "the world camera and won't reach the gun. Run Tools/Gorilla Warfare/"
+                             + "Add the project's named layers");
+
         GameSettings.Changed += OnSettingsChanged;
         UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
 
@@ -130,7 +154,7 @@ public class ShaderStack : MonoBehaviour
     {
         foreach (PostProcessVolume other in FindObjectsByType<PostProcessVolume>(FindObjectsSortMode.None))
         {
-            if (other == volume || !other.enabled)
+            if (other == volume || other == viewModelVolume || !other.enabled)
                 continue;
 
             Debug.Log($"[shaders] disabling the authored volume on {other.name} - "
@@ -152,6 +176,9 @@ public class ShaderStack : MonoBehaviour
         // it. Rebuilding on every settings change without this leaks one per change.
         if (profile != null)
             Destroy(profile);
+
+        if (viewModelProfile != null)
+            Destroy(viewModelProfile);
     }
 
     // Late, so it runs after PlayerController has finished building this frame's camera.
@@ -164,6 +191,49 @@ public class ShaderStack : MonoBehaviour
 
         attached = camera;
         Attach(camera);
+
+        // Explicit null checks, not ?. - GetComponent can return Unity's fake null in the Editor.
+        ViewModelCamera viewModel = camera.GetComponent<ViewModelCamera>();
+        attachedWeapon = viewModel != null ? viewModel.WeaponCamera : null;
+
+        if (attachedWeapon != null)
+            AttachWeapon(attachedWeapon);
+
+        // Dying hands LocalCamera to a camera with no weapon camera and respawning hands it back,
+        // so where PSX belongs - and with it, what the world profile contains - moves with them.
+        if (PsxOnWeapon != builtPsxOnWeapon)
+            Rebuild();
+    }
+
+    /// <summary>
+    /// The gun is drawn by a second camera after the world's post stack has already run, so a
+    /// PSX pass on the world camera never touched it - world pixelated, gun sharp. This camera
+    /// only clears depth, so its own post pass sees the composited frame, and running PSX here
+    /// covers world and gun at once.
+    /// </summary>
+    void AttachWeapon(Camera weapon)
+    {
+        if (viewModelLayer < 0)
+            return;
+
+        PostProcessLayer layer = weapon.GetComponent<PostProcessLayer>();
+
+        if (layer == null)
+            layer = weapon.gameObject.AddComponent<PostProcessLayer>();
+
+        PostProcessResources resources = ShaderResources.Load();
+
+        if (resources == null)
+        {
+            layer.enabled = false;
+            return;
+        }
+
+        layer.Init(resources);
+        layer.volumeLayer = 1 << viewModelLayer;
+        layer.volumeTrigger = weapon.transform;
+        layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
+        layer.enabled = PsxOnWeapon;
     }
 
     void Attach(Camera camera)
@@ -248,13 +318,26 @@ public class ShaderStack : MonoBehaviour
         fringeRef = null;
         pulseAmount = 0f;
 
-        if (GameSettings.Shaders == GameSettings.ShaderPreset.Off && !GameSettings.MotionBlur
-            && !GameSettings.PsxFilter)
+        bool psxOnWeapon = PsxOnWeapon;
+        builtPsxOnWeapon = psxOnWeapon;
+        RebuildViewModelVolume(psxOnWeapon);
+
+        if (attachedWeapon != null)
+        {
+            PostProcessLayer weaponLayer = attachedWeapon.GetComponent<PostProcessLayer>();
+            if (weaponLayer != null)
+                weaponLayer.enabled = psxOnWeapon;
+        }
+
+        // PSX only goes in the world profile when there's no weapon camera to put it on.
+        bool psxOnWorld = GameSettings.PsxFilter && !psxOnWeapon;
+
+        if (GameSettings.Shaders == GameSettings.ShaderPreset.Off && !GameSettings.MotionBlur && !psxOnWorld)
             return;
 
         profile = ScriptableObject.CreateInstance<PostProcessProfile>();
 
-        BuildInto(profile, GameSettings.Shaders, GameSettings.MotionBlur, GameSettings.PsxFilter);
+        BuildInto(profile, GameSettings.Shaders, GameSettings.MotionBlur, psxOnWorld);
 
         GameObject host = new GameObject("~ShaderVolume") { layer = volumeLayer };
         host.transform.SetParent(transform, false);
@@ -279,6 +362,32 @@ public class ShaderStack : MonoBehaviour
             fringeRef = fringe;
             baseFringe = fringe.intensity.value;
         }
+    }
+
+    void RebuildViewModelVolume(bool wanted)
+    {
+        if (viewModelVolume != null)
+            Destroy(viewModelVolume.gameObject);
+
+        if (viewModelProfile != null)
+            Destroy(viewModelProfile);
+
+        viewModelVolume = null;
+        viewModelProfile = null;
+
+        if (!wanted)
+            return;
+
+        viewModelProfile = ScriptableObject.CreateInstance<PostProcessProfile>();
+        AddPsx(viewModelProfile);
+
+        GameObject host = new GameObject("~ViewModelShaderVolume") { layer = viewModelLayer };
+        host.transform.SetParent(transform, false);
+
+        viewModelVolume = host.AddComponent<PostProcessVolume>();
+        viewModelVolume.isGlobal = true;
+        viewModelVolume.priority = 100f;
+        viewModelVolume.profile = viewModelProfile;
     }
 
     /// <summary>
@@ -385,17 +494,25 @@ public class ShaderStack : MonoBehaviour
             blur.sampleCount.Override(8);
         }
 
-        // Also its own toggle, also outside the presets - see PsxFilter.cs. Reported directly as
-        // "does nothing" at the original 0.6 - PlayModeProbe's own before/after pixel check
-        // confirmed the effect was real but small (the intensity-to-level-count curve is a lerp,
-        // so 0.6 only bought 60% of the way toward a strong effect), not actually broken. Raised
-        // to 0.88, re-checked the same way - "not too grainy or pixelated" is a ceiling on how far
-        // to push this, not a request for a slider nobody asked for, so it's still a fixed value.
+        // Also its own toggle, also outside the presets - see PsxFilter.cs and AddPsx. In practice
+        // this only puts it on the world camera when there's no weapon camera (the death camera);
+        // otherwise Rebuild puts it on the weapon camera's own volume instead.
         if (psxFilter)
-        {
-            PsxFilter psx = profile.AddSettings<PsxFilter>();
-            psx.enabled.Override(true);
-            psx.intensity.Override(0.88f);
-        }
+            AddPsx(profile);
+    }
+
+    /// <summary>
+    /// The PSX pass itself. Reported directly as "does nothing" at the original 0.6 -
+    /// PlayModeProbe's own before/after pixel check confirmed the effect was real but small (the
+    /// intensity-to-level-count curve is a lerp, so 0.6 only bought 60% of the way toward a
+    /// strong effect), not actually broken. Raised to 0.88, re-checked the same way - "not too
+    /// grainy or pixelated" is a ceiling on how far to push this, not a request for a slider
+    /// nobody asked for, so it's still a fixed value.
+    /// </summary>
+    public static void AddPsx(PostProcessProfile profile)
+    {
+        PsxFilter psx = profile.AddSettings<PsxFilter>();
+        psx.enabled.Override(true);
+        psx.intensity.Override(0.88f);
     }
 }

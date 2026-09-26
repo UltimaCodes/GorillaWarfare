@@ -36,6 +36,10 @@ public class ViewModelCamera : MonoBehaviour
     Camera weapon;
     int layer;
 
+    /// The second camera that draws the gun. ShaderStack puts the PSX pass here - it's the last
+    /// camera in the frame, so its post pass sees the world and the gun together.
+    public Camera WeaponCamera => weapon;
+
     void Awake()
     {
         layer = LayerMask.NameToLayer(LayerName);

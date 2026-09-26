@@ -982,6 +982,14 @@ public class ProbeRunner : MonoBehaviour
 
         Check(LocalPlayer() == null, "the controller is gone while dead", "destroyed");
 
+        // PSX normally runs on the gun camera, and the death camera doesn't have one - so while
+        // dead it has to fall back to the world profile, or the look vanishes every respawn.
+        yield return null;
+        yield return null;
+
+        Check(!GameSettings.PsxFilter || PsxWhere() == "world", "psx stays on while you're dead",
+              $"psx {(GameSettings.PsxFilter ? "on" : "off")}, running on: {PsxWhere()}");
+
         yield return Until(() => LocalPlayer() != null, "respawn");
 
         PlayerController respawned = LocalPlayer();
@@ -990,6 +998,9 @@ public class ProbeRunner : MonoBehaviour
 
         yield return null;
         yield return null;
+
+        Check(!GameSettings.PsxFilter || PsxWhere() == "gun camera", "psx moves back onto the gun after respawning",
+              $"running on: {PsxWhere()}");
 
         if (respawned != null)
         {
@@ -1464,6 +1475,25 @@ public class ProbeRunner : MonoBehaviour
         yield return null;
     }
 
+    /// Which of ShaderStack's volumes the PSX pass is in right now: "world", "gun camera", both,
+    /// or "nowhere".
+    static string PsxWhere()
+    {
+        bool world = VolumeHasPsx("~ShaderVolume");
+        bool gun = VolumeHasPsx("~ViewModelShaderVolume");
+
+        return world && gun ? "both" : world ? "world" : gun ? "gun camera" : "nowhere";
+    }
+
+    static bool VolumeHasPsx(string name)
+    {
+        GameObject host = GameObject.Find(name);
+        UnityEngine.Rendering.PostProcessing.PostProcessVolume volume =
+            host != null ? host.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>() : null;
+
+        return volume != null && volume.enabled && volume.profile != null && volume.profile.HasSettings<PsxFilter>();
+    }
+
     static string LiveVolumes()
     {
         List<string> names = new List<string>();
@@ -1905,14 +1935,22 @@ public class ProbeRunner : MonoBehaviour
     /// the same render-to-texture technique OutlinePlayCheck already proved out for ScreenOutline
     /// works here too - a real before/after pixel comparison rather than trusting that "it
     /// compiled and the profile has the setting in it" means the picture actually changed.
+    ///
+    /// Renders the composited frame (world camera, then the gun camera on top, the way a real
+    /// frame is built) and the gun camera alone. The gun is drawn by ViewModelCamera's second
+    /// camera after the world's post stack has already run, so a PSX pass on the world camera
+    /// never reached it - the frame changed, the gun didn't.
     /// </summary>
     IEnumerator CheckPsxFilterVisiblyChangesTheImage()
     {
-        Camera camera = PlayerController.LocalCamera;
+        Camera world = PlayerController.LocalCamera;
+        ViewModelCamera viewModel = world != null ? world.GetComponent<ViewModelCamera>() : null;
+        Camera weapon = viewModel != null ? viewModel.WeaponCamera : null;
 
-        if (camera == null || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+        if (world == null || weapon == null
+            || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
         {
-            Check(false, "psx filter changes the render", "no camera or no graphics device to check with");
+            Check(false, "psx filter changes the render", "no world camera, weapon camera or graphics device");
             yield break;
         }
 
@@ -1923,51 +1961,80 @@ public class ProbeRunner : MonoBehaviour
         yield return null;
         yield return null;
 
-        Color32[] off = ReadPixels(camera);
+        Color32[] offFrame = ReadPixels(world, weapon);
+        Color32[] offGun = ReadPixels(weapon);
 
         GameSettings.SetPsxFilter(true);
         yield return null;
         yield return null;
 
-        Color32[] on = ReadPixels(camera);
+        Color32[] onFrame = ReadPixels(world, weapon);
+        Color32[] onGun = ReadPixels(weapon);
 
-        long diff = 0;
+        SavePixels(offFrame, "psx-composite-off.png");
+        SavePixels(onFrame, "psx-composite-on.png");
 
-        for (int i = 0; i < off.Length; i++)
+        // The gun-alone comparison means nothing if there's no gun in frame to compare.
+        int litGunPixels = 0;
+        foreach (Color32 p in offGun)
         {
-            diff += System.Math.Abs(off[i].r - on[i].r)
-                  + System.Math.Abs(off[i].g - on[i].g)
-                  + System.Math.Abs(off[i].b - on[i].b);
+            if (p.r + p.g + p.b > 24)
+                litGunPixels++;
         }
 
-        double averagePerChannel = diff / (double)(off.Length * 3);
+        Check(litGunPixels > offGun.Length / 100, "the gun is in frame for the psx check",
+              $"{litGunPixels} lit pixels of {offGun.Length}");
 
         // A real quantize-and-dither pass moves plenty of pixels by several levels each: this is
         // a low bar (any of them meaningfully move at all), not a claim about how strong the
         // effect looks - that's still a taste call for a real render, not this check.
-        Check(averagePerChannel > 0.5, "the psx filter visibly changes the render",
-              $"average per-channel difference {averagePerChannel:F2} across {off.Length} pixels");
+        double frameDiff = AverageDifference(offFrame, onFrame);
+        Check(frameDiff > 0.5, "the psx filter visibly changes the render",
+              $"average per-channel difference {frameDiff:F2} across the finished frame");
+
+        double gunDiff = AverageDifference(offGun, onGun);
+        Check(gunDiff > 0.5, "the psx filter reaches the gun too",
+              $"average per-channel difference {gunDiff:F2} on the gun camera alone");
 
         GameSettings.SetPsxFilter(psxBefore);
         GameSettings.SetShaders(presetBefore);
     }
 
-    static Color32[] ReadPixels(Camera camera)
-    {
-        const int width = 480;
-        const int height = 270;
+    const int ReadWidth = 480;
+    const int ReadHeight = 270;
 
-        RenderTexture target = new RenderTexture(width, height, 24);
-        RenderTexture previousTarget = camera.targetTexture;
+    static double AverageDifference(Color32[] a, Color32[] b)
+    {
+        long diff = 0;
+
+        for (int i = 0; i < a.Length; i++)
+            diff += System.Math.Abs(a[i].r - b[i].r) + System.Math.Abs(a[i].g - b[i].g) + System.Math.Abs(a[i].b - b[i].b);
+
+        return diff / (double)(a.Length * 3);
+    }
+
+    /// Renders each camera in order into one black-cleared target - world first, then the gun
+    /// camera on top of it, the same way a real frame is composited.
+    static Color32[] ReadPixels(params Camera[] cameras)
+    {
+        RenderTexture target = new RenderTexture(ReadWidth, ReadHeight, 24);
         RenderTexture previousActive = RenderTexture.active;
 
-        camera.targetTexture = target;
-        camera.Render();
-        camera.targetTexture = previousTarget;
+        RenderTexture.active = target;
+        GL.Clear(true, true, Color.black);
+        RenderTexture.active = previousActive;
+
+        foreach (Camera camera in cameras)
+        {
+            RenderTexture previousTarget = camera.targetTexture;
+            camera.targetTexture = target;
+            camera.Render();
+            camera.targetTexture = previousTarget;
+        }
 
         RenderTexture.active = target;
-        Texture2D shot = new Texture2D(width, height, TextureFormat.RGB24, false);
-        shot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        Texture2D shot = new Texture2D(ReadWidth, ReadHeight, TextureFormat.RGB24, false);
+        shot.ReadPixels(new Rect(0, 0, ReadWidth, ReadHeight), 0, 0);
         shot.Apply();
         RenderTexture.active = previousActive;
 
@@ -1978,6 +2045,16 @@ public class ProbeRunner : MonoBehaviour
         Object.DestroyImmediate(target);
 
         return pixels;
+    }
+
+    static void SavePixels(Color32[] pixels, string name)
+    {
+        Texture2D shot = new Texture2D(ReadWidth, ReadHeight, TextureFormat.RGB24, false);
+        shot.SetPixels32(pixels);
+        shot.Apply();
+        System.IO.Directory.CreateDirectory(ShotFolder);
+        System.IO.File.WriteAllBytes(System.IO.Path.Combine(ShotFolder, name), shot.EncodeToPNG());
+        Object.DestroyImmediate(shot);
     }
 
     // Renders whatever the player is looking at to a PNG next to the log.
