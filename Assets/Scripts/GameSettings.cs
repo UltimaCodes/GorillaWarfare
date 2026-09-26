@@ -425,7 +425,8 @@ public static class GameSettings
 
     // ---------------------------------------------------------------- reset, per page and all
 
-    static readonly string[] AimKeys = { nameof(Sensitivity), nameof(AdsSensitivity), nameof(InvertY) };
+    // AimToggle was missing here for as long as it existed - saved and loaded, never reset.
+    static readonly string[] AimKeys = { nameof(Sensitivity), nameof(AdsSensitivity), nameof(InvertY), nameof(AimToggle) };
     static readonly string[] AudioKeys = { nameof(MasterVolume), nameof(SfxVolume), nameof(MusicVolume) };
 
     static readonly string[] VideoKeys =

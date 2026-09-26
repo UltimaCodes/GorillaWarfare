@@ -1334,6 +1334,16 @@ public class ProbeRunner : MonoBehaviour
 
         GameSettings.SetSensitivity(sensitivity);
 
+        // ---- the aim page's reset covers everything on the aim page ----
+        // AimToggle was saved and loaded but missing from the reset list, so "reset aim" and
+        // "reset all" both left press-to-aim switched on.
+        GameSettings.SetAimToggle(true);
+        GameSettings.ResetAim();
+        AudioListener.volume = 0f;
+
+        Check(!GameSettings.AimToggle, "resetting aim turns press-to-aim back off",
+              GameSettings.AimToggle ? "still on" : "off");
+
         // ---- the field of view reaches the camera ----
         if (camera != null)
         {

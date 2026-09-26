@@ -2949,3 +2949,10 @@ run changed nothing but Unity's own session counters.
 
 Same root, separate bug: `ResetAll()` reloads settings and reloading applies the master volume,
 which un-muted the probe for the rest of its run. Re-muted straight after.
+
+## "Reset aim" never reset press-to-aim
+
+Found reading `GameSettings` for the fix above: `AimToggle` is saved and loaded like every other
+aim setting but was never added to `AimKeys`, the list the aim page's reset (and "reset all")
+deletes - so both left press-to-aim switched on. Added. New probe check: switch it on, reset the
+aim page, it has to read off - "still on" before, "off" after.
