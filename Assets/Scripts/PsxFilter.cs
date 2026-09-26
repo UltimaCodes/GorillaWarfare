@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
 
 /// <summary>
@@ -16,6 +17,8 @@ public sealed class PsxFilter : PostProcessEffectSettings
 
 public sealed class PsxFilterRenderer : PostProcessEffectRenderer<PsxFilter>
 {
+    static readonly int LowResId = Shader.PropertyToID("_PsxLowRes");
+
     Shader shader;
 
     public override void Init()
@@ -44,12 +47,17 @@ public sealed class PsxFilterRenderer : PostProcessEffectRenderer<PsxFilter>
         int lowWidth = Mathf.Max(4, context.camera.pixelWidth / scale);
         int lowHeight = Mathf.Max(4, context.camera.pixelHeight / scale);
 
-        RenderTexture lowRes = RenderTexture.GetTemporary(lowWidth, lowHeight, 0);
+        CommandBuffer cmd = context.command;
 
-        // Point, not the RenderTexture default (bilinear) - this is the actual pixelation step.
-        // Sampling this texture at full screen size with no interpolation between its texels is
-        // what turns "rendered small" into "blocky," rather than just a soft, blurry downscale.
-        lowRes.filterMode = FilterMode.Point;
+        // Allocated and released through the command buffer, not RenderTexture.GetTemporary:
+        // Render() only records commands, which run later in the frame. A texture handed back to
+        // the pool here, before those commands had run, was free for anything else to grab in
+        // between - it only ever worked because nothing happened to.
+        //
+        // Point, not the default (bilinear) - this is the actual pixelation step. Sampling this
+        // texture at full screen size with no interpolation between its texels is what turns
+        // "rendered small" into "blocky," rather than just a soft, blurry downscale.
+        cmd.GetTemporaryRT(LowResId, lowWidth, lowHeight, 0, FilterMode.Point);
 
         // PropertySheet rather than a hand-managed Material - PPv2's own factory owns the
         // instance and its lifetime (including across a settings hot-reload), which is what
@@ -59,10 +67,9 @@ public sealed class PsxFilterRenderer : PostProcessEffectRenderer<PsxFilter>
         // dither pattern straight back out.
         PropertySheet sheet = context.propertySheets.Get(shader);
         sheet.properties.SetFloat("_Intensity", settings.intensity);
-        context.command.BlitFullscreenTriangle(context.source, lowRes, sheet, 0);
+        cmd.BlitFullscreenTriangle(context.source, LowResId, sheet, 0);
 
-        context.command.Blit(lowRes, context.destination);
-
-        RenderTexture.ReleaseTemporary(lowRes);
+        cmd.Blit(LowResId, context.destination);
+        cmd.ReleaseTemporaryRT(LowResId);
     }
 }

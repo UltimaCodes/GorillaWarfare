@@ -2968,3 +2968,14 @@ after. The check waits two frames before it starts, because the PSX check ahead 
 stack on its way out, and a `Find` straight after that can return the old volume mid-`Destroy`
 (its first run reported "no volume to compare against" for exactly that reason, which would have
 passed or failed for the wrong reason either way).
+
+## The PSX pass released its texture before using it
+
+`PsxFilterRenderer` took a `RenderTexture.GetTemporary` and released it at the end of `Render()` -
+but a PPv2 effect's `Render()` only records commands, which run later in the frame, so the texture
+was back in the pool before anything had drawn into it. Nothing else happened to grab it in
+between, which is the only reason it worked. Now `cmd.GetTemporaryRT`/`cmd.ReleaseTemporaryRT`,
+which allocate and free when the commands actually execute. No check can reproduce a race like this
+on demand; the existing pixel check confirms the output didn't change (4.60 average difference,
+against 4.10 on the run before - it moves with where the player spawns) and a probe screenshot with
+PSX on still shows the blocky, dithered image.

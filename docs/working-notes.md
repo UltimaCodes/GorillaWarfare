@@ -65,6 +65,11 @@ sheet.properties.SetFloat(...); cmd.BlitFullscreenTriangle(source, dest, sheet, 
 own factory owns the Material's lifetime through the sheet, which is also one less thing for a
 custom effect to manage by hand.
 
+**A PPv2 custom effect records commands, it doesn't draw.** Anything temporary it needs has to be
+allocated and released through the command buffer (`cmd.GetTemporaryRT`/`cmd.ReleaseTemporaryRT`),
+never `RenderTexture.GetTemporary` — the effect's `Render()` returns long before the GPU work
+runs, so a texture released there is back in the pool before anything has drawn into it.
+
 **A bare `-` (no trailing space) for an empty YAML list entry is not the same as `- ` to Unity's
 own parser**, even though both look like "nothing here" to a person reading the file.
 `ProjectSettings/TagManager.asset` had one blank layer slot missing the trailing space every other
