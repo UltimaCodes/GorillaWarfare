@@ -34,10 +34,29 @@ public static class MatchCheck
         WinnerNeedsAScore();
         RungLoadoutIsASingleWeapon();
         SpawnsAvoidTheLiving();
+        NamesAreCleaned();
 
         Debug.Log("[match] rules\n" + Log);
         Debug.Log(failures == 0 ? "[match] ===== ALL PASS =====" : $"[match] {failures} FAILURES");
         EditorApplication.Exit(failures == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// Player names were dropped straight into rich-text labels and had no length limit - a name
+    /// like "&lt;size=200&gt;" restyled everyone's scoreboard, and a long one ran into the next column.
+    /// </summary>
+    static void NamesAreCleaned()
+    {
+        Check(PlayerNames.Clean("<size=200>BIG") == "BIG", "rich-text tags are stripped from names",
+              PlayerNames.Clean("<size=200>BIG"));
+        Check(PlayerNames.Clean("<color=red>Bob</color>") == "Bob", "a tagged name keeps only its text",
+              PlayerNames.Clean("<color=red>Bob</color>"));
+        Check(PlayerNames.Clean("x<y") == "xy", "a stray bracket is dropped", PlayerNames.Clean("x<y"));
+        Check(PlayerNames.Clean(new string('A', 30)).Length == PlayerNames.MaxLength, "names are capped",
+              PlayerNames.Clean(new string('A', 30)).Length.ToString());
+        Check(PlayerNames.Clean("  Jahil 0042  ") == "Jahil 0042", "names are trimmed",
+              $"'{PlayerNames.Clean("  Jahil 0042  ")}'");
+        Check(PlayerNames.Clean("   ") == string.Empty, "a blank name stays blank", $"'{PlayerNames.Clean("   ")}'");
     }
 
     /// <summary>

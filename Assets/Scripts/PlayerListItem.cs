@@ -55,8 +55,9 @@ public class PlayerListItem : MonoBehaviourPunCallbacks
         if (text == null || player == null)
             return;
 
-        string nick = player.NickName;
-        string name = string.IsNullOrWhiteSpace(nick) ? $"Player {player.ActorNumber}" : nick;
+        // Through NameOf, not NickName - this label is rich text (the host mark), and a name is
+        // whatever another client typed. See PlayerNames.
+        string name = MatchState.NameOf(player);
 
         text.text = (player.IsMasterClient ? HostMark() : string.Empty) + name;
 

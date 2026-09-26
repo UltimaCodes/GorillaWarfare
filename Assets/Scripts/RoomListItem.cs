@@ -24,7 +24,10 @@ public class RoomListItem : MonoBehaviour
         }
 
         string count = info.MaxPlayers > 0 ? $"{info.PlayerCount}/{info.MaxPlayers}" : info.PlayerCount.ToString();
-        text.text = $"{info.Name}  [{mode}]  ({count})";
+        // Cleaned on display too - another build's client, or anything that skipped the input
+        // field, can publish any name at all. See PlayerNames.
+        string name = PlayerNames.Clean(info.Name, PlayerNames.MaxRoomNameLength);
+        text.text = $"{name}  [{mode}]  ({count})";
     }
 
     public void OnClick()

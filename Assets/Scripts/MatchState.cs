@@ -947,7 +947,10 @@ public class MatchState : MonoBehaviourPunCallbacks
         if (player == null)
             return "someone";
 
-        return string.IsNullOrWhiteSpace(player.NickName) ? $"Player {player.ActorNumber}" : player.NickName;
+        // Cleaned here, where every name on screen comes from - names arrive from other clients as
+        // whatever they typed. See PlayerNames.
+        string name = PlayerNames.Clean(player.NickName);
+        return string.IsNullOrWhiteSpace(name) ? $"Player {player.ActorNumber}" : name;
     }
 
     /// How far up the ladder a player is, for the HUD. Reads the replicated value so it works

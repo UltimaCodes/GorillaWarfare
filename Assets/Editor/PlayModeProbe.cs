@@ -1833,6 +1833,13 @@ public class ProbeRunner : MonoBehaviour
 
         if (firstRowName != null)
         {
+            Check(!firstRowName.richText && firstRowName.overflowMode == TextOverflowModes.Ellipsis,
+                  "names aren't parsed as rich text and cut off cleanly",
+                  $"richText={firstRowName.richText} overflow={firstRowName.overflowMode}");
+        }
+
+        if (firstRowName != null)
+        {
             RectTransform rowRect = (RectTransform)firstRowName.transform.parent;
             Vector3[] rowCorners = new Vector3[4];
             rowRect.GetWorldCorners(rowCorners);

@@ -55,6 +55,13 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        // Room names land in everybody's room browser as typed - same rule as player names.
+        if (roomNameInputField != null)
+        {
+            roomNameInputField.characterLimit = PlayerNames.MaxRoomNameLength;
+            roomNameInputField.onValidateInput += PlayerNames.RejectAngleBrackets;
+        }
+
         PhotonNetwork.ConnectUsingSettings();
     }
 
@@ -131,7 +138,9 @@ public class Launcher : MonoBehaviourPunCallbacks
     {
         GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
 
-        string roomName = roomNameInputField != null ? roomNameInputField.text.Trim() : string.Empty;
+        string roomName = roomNameInputField != null
+            ? PlayerNames.Clean(roomNameInputField.text, PlayerNames.MaxRoomNameLength)
+            : string.Empty;
         if (string.IsNullOrEmpty(roomName))
         {
             ShowError("Enter a room name.");
@@ -171,7 +180,7 @@ public class Launcher : MonoBehaviourPunCallbacks
         OpenMenu("room");
 
         if (roomNameText != null)
-            roomNameText.text = PhotonNetwork.CurrentRoom.Name;
+            roomNameText.text = PlayerNames.Clean(PhotonNetwork.CurrentRoom.Name, PlayerNames.MaxRoomNameLength);
 
         ClearList(playerListItems);
 

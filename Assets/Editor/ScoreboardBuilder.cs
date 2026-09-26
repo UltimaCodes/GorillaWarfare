@@ -181,7 +181,12 @@ public static class ScoreboardBuilder
         rowElement.flexibleHeight = 0f;
 
         Text(row.transform, "Rank", font, 40f, TextAlignmentOptions.Center, new Vector2(RankWidth, RowHeight));
-        Text(row.transform, "Name", font, 40f, TextAlignmentOptions.Left, new Vector2(NameWidth, RowHeight));
+        TMP_Text nameText = Text(row.transform, "Name", font, 40f, TextAlignmentOptions.Left, new Vector2(NameWidth, RowHeight));
+
+        // Player-typed, so never parsed as rich text, and cut off with an ellipsis rather than
+        // running into the Score column. PlayerNames.Clean caps names too - this is the backstop.
+        nameText.richText = false;
+        nameText.overflowMode = TextOverflowModes.Ellipsis;
         Text(row.transform, "Primary", font, 40f, TextAlignmentOptions.Left, new Vector2(PrimaryWidth, RowHeight));
         Text(row.transform, "Secondary", font, 40f, TextAlignmentOptions.Center, new Vector2(SecondaryWidth, RowHeight));
         Text(row.transform, "Streak", font, 34f, TextAlignmentOptions.Center, new Vector2(StreakWidth, RowHeight));

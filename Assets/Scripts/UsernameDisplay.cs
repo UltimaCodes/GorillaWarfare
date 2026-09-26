@@ -33,8 +33,7 @@ public class UsernameDisplay : MonoBehaviour
         if (playerPV.Owner == null)
             return false;
 
-        string nick = playerPV.Owner.NickName;
-        text.text = string.IsNullOrWhiteSpace(nick) ? $"Player {playerPV.Owner.ActorNumber}" : nick;
+        text.text = MatchState.NameOf(playerPV.Owner);
         return true;
     }
 

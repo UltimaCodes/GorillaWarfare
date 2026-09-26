@@ -3005,3 +3005,18 @@ death-and-respawn check: while dead PSX is in the world profile, after respawnin
 gun camera. One visible side effect, flagged in `roadmap.md` rather than decided here: PSX now runs
 after the world camera's outline pass, so world outlines pixelate too, while the gun's own outline
 (drawn by the gun camera after its post pass) stays crisp.
+
+## Names could restyle everyone's screen
+
+Player names went straight into rich-text labels - a name like `<size=200>` restyled everybody's
+scoreboard, kill feed and standings (flagged in the twenty-seventh pass, never fixed) - and neither
+menu name field had a character limit. Room names had the same problem in everyone's room browser,
+found while fixing this. `PlayerNames.Clean` (strip tags and brackets, drop control characters,
+trim, cap at 16 for players and 24 for rooms) now runs when a name is typed (`PlayerNameManager`,
+`Launcher`, which also set each field's limit and reject `<`/`>` as you type) and whenever one is
+displayed (`MatchState.NameOf`, which the lobby list and the overhead name tag now go through
+instead of reading `NickName` raw; `RoomListItem` and the room header for room names). The
+scoreboard's Name column is plain text with an ellipsis as a backstop (`ScoreboardBuilder` re-run;
+the Name cell only ever holds plain text, so nothing there relied on rich text). Six new
+`MatchCheck` cases, a compile failure before `PlayerNames` existed and all passing after, plus a
+probe check on the Name column's settings.
