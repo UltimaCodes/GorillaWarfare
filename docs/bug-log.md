@@ -2956,3 +2956,15 @@ Found reading `GameSettings` for the fix above: `AimToggle` is saved and loaded 
 aim setting but was never added to `AimKeys`, the list the aim page's reset (and "reset all")
 deletes - so both left press-to-aim switched on. Added. New probe check: switch it on, reset the
 aim page, it has to read off - "still on" before, "off" after.
+
+## Every settings change rebuilt post-processing
+
+`ShaderStack` rebuilt on `GameSettings.Changed`, which fires on every setter - so every tick of a
+sensitivity, volume or crosshair slider drag destroyed and recreated the post-process volume and
+its profile, mid-match included. It now remembers what the profile was built from (preset, motion
+blur, PSX) and only rebuilds when one of those actually changed. New probe check: a sensitivity
+change has to leave the same `~ShaderVolume` in place - "volume was rebuilt" before, "same volume"
+after. The check waits two frames before it starts, because the PSX check ahead of it rebuilds the
+stack on its way out, and a `Find` straight after that can return the old volume mid-`Destroy`
+(its first run reported "no volume to compare against" for exactly that reason, which would have
+passed or failed for the wrong reason either way).

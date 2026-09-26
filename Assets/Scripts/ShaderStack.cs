@@ -68,6 +68,23 @@ public class ShaderStack : MonoBehaviour
             fringeRef.intensity.value = baseFringe + pulseAmount * 0.7f;
     }
 
+    // What the current profile was built from. GameSettings.Changed fires on every setter, so
+    // rebuilding on all of them meant dragging the sensitivity or volume slider destroyed and
+    // recreated the whole post stack on every tick of the drag.
+    GameSettings.ShaderPreset builtPreset;
+    bool builtMotionBlur;
+    bool builtPsx;
+    bool hasBuilt;
+
+    void OnSettingsChanged()
+    {
+        if (hasBuilt && builtPreset == GameSettings.Shaders
+            && builtMotionBlur == GameSettings.MotionBlur && builtPsx == GameSettings.PsxFilter)
+            return;
+
+        Rebuild();
+    }
+
     void Awake()
     {
         Instance = this;
@@ -80,7 +97,7 @@ public class ShaderStack : MonoBehaviour
             return;
         }
 
-        GameSettings.Changed += Rebuild;
+        GameSettings.Changed += OnSettingsChanged;
         UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
 
         SuppressAuthoredVolumes();
@@ -125,7 +142,7 @@ public class ShaderStack : MonoBehaviour
 
     void OnDestroy()
     {
-        GameSettings.Changed -= Rebuild;
+        GameSettings.Changed -= OnSettingsChanged;
         UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
 
         if (Instance == this)
@@ -209,6 +226,11 @@ public class ShaderStack : MonoBehaviour
     /// </summary>
     public void Rebuild()
     {
+        hasBuilt = true;
+        builtPreset = GameSettings.Shaders;
+        builtMotionBlur = GameSettings.MotionBlur;
+        builtPsx = GameSettings.PsxFilter;
+
         if (volume != null)
             Destroy(volume.gameObject);
 

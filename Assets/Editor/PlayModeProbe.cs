@@ -207,6 +207,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- the PSX filter actually changes the picture ----
         yield return CheckPsxFilterVisiblyChangesTheImage();
 
+        // ---- unrelated settings don't rebuild post-processing ----
+        yield return CheckUnrelatedSettingsDontRebuildShaders();
+
         // ---- joining mid match ----
         yield return CheckLateJoinGetsWeapons(player);
 
@@ -1427,6 +1430,37 @@ public class ProbeRunner : MonoBehaviour
         // ResetAll reloads, and reloading applies the master volume - re-mute, or the rest of
         // the probe plays out loud, the exact thing Start's mute exists to stop.
         AudioListener.volume = 0f;
+        yield return null;
+    }
+
+    /// <summary>
+    /// An unrelated setting must not rebuild post-processing. GameSettings.Changed fires on
+    /// every setter, and rebuilding on each meant every tick of a slider drag threw the whole
+    /// post stack away and made it again.
+    /// </summary>
+    IEnumerator CheckUnrelatedSettingsDontRebuildShaders()
+    {
+        // Settle first - the check before this one rebuilds the stack on its way out, and Find
+        // can hand back the old volume while its Destroy is still pending, which then reads as
+        // null a frame later whatever this check is actually testing.
+        yield return null;
+        yield return null;
+
+        GameObject before = GameObject.Find("~ShaderVolume");
+        bool hadVolume = before != null;
+        float sensitivity = GameSettings.Sensitivity;
+
+        GameSettings.SetSensitivity(sensitivity + 0.5f);
+        yield return null;
+        yield return null;
+
+        GameObject after = GameObject.Find("~ShaderVolume");
+        bool same = hadVolume && before != null && before == after;
+
+        Check(same, "a sensitivity change leaves the post stack alone",
+              !hadVolume ? "no volume to compare against" : same ? "same volume" : "volume was rebuilt");
+
+        GameSettings.SetSensitivity(sensitivity);
         yield return null;
     }
 
