@@ -72,6 +72,11 @@ public static class HudPhotographer
         {
             DontDestroyOnLoad(gameObject);
 
+            // Same isolation PlayModeProbe uses - this ends a match too, which pays tokens.
+            GameSettings.UsePrefsNamespace("gw_probe_");
+            KeyBinds.UsePrefsNamespace("gw_probe_bind_");
+            PlayerWallet.UsePrefsNamespace("gw_probe_wallet_");
+
             // -nographics suppresses rendering but not audio - without this, every gunshot,
             // death cry and hit sound this session's real play mode triggers comes out of
             // whatever speakers are actually attached, which is exactly what was reported:

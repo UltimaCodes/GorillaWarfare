@@ -2924,3 +2924,28 @@ previous pass's entry above and in git history if it comes back.
 
 Verified: compile check, `SceneCheck`, and the full `PlayModeProbe` suite (including the re-pointed
 preset-isolation check) - all pass.
+
+---
+
+# Thirty-first pass — the 2026-09-26 sweep's fixes, 2026-09-26
+
+A read-only sweep of the whole repo ("do a repo bug, optimization, and improvement sweep - dont
+change or do anything without my confirmation") turned into a written plan of eighteen tasks, and
+"start" ran it. Each fix below landed with a check that failed before it and passes after.
+
+## The probe was resetting your real settings
+
+Batch mode shares the Editor's own PlayerPrefs, so every `PlayModeProbe` run's settings checks, and
+the `ResetAll()` calls at their end, overwrote the sensitivity, keybinds and every slider used in
+normal Play Mode, and any match that ended mid-probe paid real tokens into the Editor's wallet.
+Measured rather than assumed: the Editor's prefs had 11 values left, no `gw_` settings among them
+at all, and this pass's own red run deleted the Monkey Business level that had survived until then
+(restored from a registry export taken before the run). `GameSettings`, `KeyBinds` and
+`PlayerWallet` can now point at a separate prefs prefix (`UsePrefsNamespace`); the probe and
+`HudPhotographer` switch to one before anything else runs, and the probe deletes its own keys on
+the way out. New check: after the probe writes sensitivity 9.5, the real `gw_Sensitivity` must not
+be 9.5 - it read 9.50 before the fix and -1 (never written) after. A registry diff across the green
+run changed nothing but Unity's own session counters.
+
+Same root, separate bug: `ResetAll()` reloads settings and reloading applies the master volume,
+which un-muted the probe for the rest of its run. Re-muted straight after.

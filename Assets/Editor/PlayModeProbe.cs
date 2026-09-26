@@ -57,6 +57,10 @@ public class ProbeRunner : MonoBehaviour
 {
     const float StepTimeout = 20f;
 
+    const string ProbePrefsPrefix = "gw_probe_";
+    const string ProbeBindsPrefix = "gw_probe_bind_";
+    const string ProbeWalletPrefix = "gw_probe_wallet_";
+
     readonly StringBuilder log = new StringBuilder();
     int failures;
     float startedAt;
@@ -81,6 +85,14 @@ public class ProbeRunner : MonoBehaviour
     {
         DontDestroyOnLoad(gameObject);
 
+        // First, before anything reads or writes a setting. Batch mode shares the Editor's
+        // own PlayerPrefs; without this, every run's settings checks - and the ResetAll at
+        // their end - overwrote the settings, keybinds and token balance used in Play Mode.
+        // Before the mute, too: switching reloads settings, and reloading applies volume.
+        GameSettings.UsePrefsNamespace(ProbePrefsPrefix);
+        KeyBinds.UsePrefsNamespace(ProbeBindsPrefix);
+        PlayerWallet.UsePrefsNamespace(ProbeWalletPrefix);
+
         // -nographics suppresses rendering but not audio - without this, a probe run (gunfire,
         // deaths, hitmarkers, a full match's worth of sound) plays out loud on whatever speakers
         // are actually attached. Reported directly: "the game just runs in the background with
@@ -91,6 +103,11 @@ public class ProbeRunner : MonoBehaviour
         startedAt = Time.realtimeSinceStartup;
 
         yield return RunProbe();
+
+        // Leaves no probe keys behind. Every reset here only ever touches the probe namespace.
+        GameSettings.ResetAll();
+        PlayerPrefs.DeleteKey(ProbeWalletPrefix + "Tokens");
+        PlayerPrefs.Save();
 
         Debug.Log("[play] probe\n" + log);
         Debug.Log(failures == 0 ? "[play] ===== ALL PASS =====" : $"[play] {failures} FAILURES");
@@ -1300,6 +1317,12 @@ public class ProbeRunner : MonoBehaviour
         float sensitivity = GameSettings.Sensitivity;
         GameSettings.SetSensitivity(9.5f);
 
+        // Read the real key directly - it must not have moved. Before the probe used its own
+        // prefs namespace, this exact write landed on the prefs normal Play Mode uses.
+        float realSensitivity = PlayerPrefs.GetFloat("gw_Sensitivity", -1f);
+        Check(!Mathf.Approximately(realSensitivity, 9.5f), "probe writes stay out of your real settings",
+              $"real gw_Sensitivity = {realSensitivity:F2}");
+
         Check(Mathf.Approximately(GameSettings.Sensitivity, 9.5f), "sensitivity takes a new value",
               GameSettings.Sensitivity.ToString("F2"));
 
@@ -1390,6 +1413,10 @@ public class ProbeRunner : MonoBehaviour
         }
 
         GameSettings.ResetAll();
+
+        // ResetAll reloads, and reloading applies the master volume - re-mute, or the rest of
+        // the probe plays out loud, the exact thing Start's mute exists to stop.
+        AudioListener.volume = 0f;
         yield return null;
     }
 

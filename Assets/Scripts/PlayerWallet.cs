@@ -14,8 +14,18 @@ using UnityEngine;
 /// </summary>
 public static class PlayerWallet
 {
-    const string Prefix = "GW_Wallet_";
-    const string TokensKey = Prefix + "Tokens";
+    const string DefaultPrefix = "GW_Wallet_";
+
+    // Not const - a probe run ends matches, and every ended match paid real tokens into the
+    // Editor's own wallet. See GameSettings.UsePrefsNamespace.
+    static string TokensKey = DefaultPrefix + "Tokens";
+
+    /// For batch-mode tests only - see GameSettings.UsePrefsNamespace.
+    public static void UsePrefsNamespace(string prefix)
+    {
+        TokensKey = (string.IsNullOrEmpty(prefix) ? DefaultPrefix : prefix) + "Tokens";
+        Changed?.Invoke();
+    }
 
     /// "Give every player 100 tokens from the start." The PlayerPrefs fallback value doubles as
     /// the starting grant - a fresh install with no key written yet reads 100 rather than 0, and

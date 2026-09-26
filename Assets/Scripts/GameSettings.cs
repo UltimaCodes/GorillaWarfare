@@ -138,7 +138,22 @@ public static class GameSettings
 
     // ---------------------------------------------------------------- storage
 
-    const string Prefix = "gw_";
+    const string DefaultPrefix = "gw_";
+
+    // Not const: PlayModeProbe points it somewhere else for the length of a run. Batch mode
+    // shares the Editor's own PlayerPrefs, so writing through the real prefix meant every probe
+    // run wiped the settings used in normal Play Mode.
+    static string Prefix = DefaultPrefix;
+
+    /// <summary>
+    /// Reads and writes every setting under a different PlayerPrefs prefix, then reloads from
+    /// it. For batch-mode tests only. Null or empty goes back to the real prefix.
+    /// </summary>
+    public static void UsePrefsNamespace(string prefix)
+    {
+        Prefix = string.IsNullOrEmpty(prefix) ? DefaultPrefix : prefix;
+        Load();
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     public static void Load()

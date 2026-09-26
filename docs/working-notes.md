@@ -74,6 +74,12 @@ layers still resolved fine) rather than failing anything, which is exactly how i
 for so long. If a `.asset`/`.unity` file logs a parse warning, check for exactly this before
 assuming it's benign noise.
 
+**Batch-mode tests share the Editor's PlayerPrefs.** Anything a probe writes through the real
+prefix lands on the settings used in normal Play Mode — for months, every `PlayModeProbe` run
+quietly reset the sensitivity, keybinds and sliders. Probes switch `GameSettings`, `KeyBinds` and
+`PlayerWallet` to their own prefix (`UsePrefsNamespace`) before touching anything; any new
+PlayerPrefs-backed system needs the same switch, or the probes will overwrite it too.
+
 ---
 
 ## Conventions

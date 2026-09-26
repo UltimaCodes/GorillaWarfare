@@ -87,7 +87,17 @@ public static class KeyBinds
 
     static readonly KeyCode[] bound = (KeyCode[])Defaults.Clone();
 
-    const string Prefix = "gw_bind_";
+    const string DefaultPrefix = "gw_bind_";
+
+    // Not const - same reason as GameSettings.UsePrefsNamespace.
+    static string Prefix = DefaultPrefix;
+
+    /// For batch-mode tests only - see GameSettings.UsePrefsNamespace.
+    public static void UsePrefsNamespace(string prefix)
+    {
+        Prefix = string.IsNullOrEmpty(prefix) ? DefaultPrefix : prefix;
+        Load();
+    }
 
     /// <summary>
     /// Which actions refuse to be unbound.
