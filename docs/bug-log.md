@@ -3086,3 +3086,33 @@ as the cause of a dark band in the first pass). `SceneCheck` checks the wiring. 
 same run: the PSX gun check averaged over the whole frame, so it mostly measured how much screen
 the gun covered (0.92 one run, 0.42 the next, same effect) - it averages over the gun's own pixels
 now (7.05).
+
+## The view stayed down after a slide
+
+Reported: "camera being permanently down after sliding and never going back up so your guns are at
+the top of your screen instead the middle and youre looking up at the other players."
+
+Two scripts wrote the camera's own local position, each from its own idea of "rest": `SpeedRush`
+(a 0.95 m slide dip and a lean, every Update) and `Juice` (the screen shake, every LateUpdate - so
+it always won). `Juice` is only created by the first shot or hit of a session, and on its first
+frame it remembered the camera's current position as rest. Mid-slide, that's the dipped one - and
+from then on it wrote the camera back there every frame, for the rest of that life. The gun hangs
+off the camera holder, not the camera, so the camera sinking inside the holder is exactly "gun at
+the top of the screen". Reproduced in `PlayModeProbe` before touching anything (slide, destroy
+`~Juice`, shake so it's recreated mid-slide, stand up): camera stuck 0.34 m low, holder fine.
+
+Fixed at the root rather than the rest position: `CameraPose`, new, is now the only writer of the
+camera's local pose, with its rest taken in Awake when the camera is built. `Juice` publishes
+`ShakeOffset`/`ShakeRotation` and `SpeedRush` publishes `ViewRoll`; neither touches the camera.
+Same check afterwards: +0.00 m. Its waits are real-time and wait for the shake to settle - the
+first fixed run read +0.02 because batch mode runs frames unthrottled, and ninety frames was under
+a tenth of a second of shake decay.
+
+`SpeedRush`'s 0.95 m dip is gone rather than rerouted: it lowered the camera inside the holder, so
+even working as designed it pushed the gun up the screen on every slide. In practice it was
+already invisible most of the time - `Juice` overwrote it every frame once it existed. The slide's
+drop you actually see is `PlayerController`'s, which lowers the whole holder with the capsule
+(0.35 m, camera and gun together); that's unchanged. The lean stays, now composed with the shake
+instead of fighting it. Also new for the probe: `KeyBinds.HeldOverride` (hold an action with no
+keyboard) and `FinalPoseRecorder` (reads a pose after every LateUpdate - `WaitForEndOfFrame`
+never resumes in batch mode, which wedged the check's first version for the full three minutes).

@@ -53,6 +53,25 @@ public static class PlayModeProbe
     }
 }
 
+/// Records a transform's local pose after every other LateUpdate has run - the pose that gets
+/// drawn. WaitForEndOfFrame would be the obvious way, but it never resumes in batch mode.
+[DefaultExecutionOrder(32000)]
+public class FinalPoseRecorder : MonoBehaviour
+{
+    public Transform target;
+    public Vector3 localPosition;
+    public Vector3 parentLocalPosition;
+
+    void LateUpdate()
+    {
+        if (target == null)
+            return;
+
+        localPosition = target.localPosition;
+        parentLocalPosition = target.parent != null ? target.parent.localPosition : Vector3.zero;
+    }
+}
+
 public class ProbeRunner : MonoBehaviour
 {
     const float StepTimeout = 20f;
@@ -212,6 +231,9 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- the grass grows, draws, and knows where you're standing ----
         yield return CheckGrass();
+
+        // ---- the view comes back up after a slide ----
+        yield return CheckCameraRecoversFromSlide();
 
         // ---- joining mid match ----
         yield return CheckLateJoinGetsWeapons(player);
@@ -1546,6 +1568,82 @@ public class ProbeRunner : MonoBehaviour
             GameSettings.SetPsxFilter(psx);
             yield return null;
         }
+    }
+
+    /// <summary>
+    /// Reported: after a slide the camera stayed down for good - gun at the top of the screen,
+    /// looking up at everyone. Juice (the screen shake) is only created on the first shot or hit
+    /// of a session, and it remembered whatever the camera's position was that frame as "rest" -
+    /// mid-slide, that's the dipped one, and it put the camera back there every frame afterwards.
+    ///
+    /// Reproduced here by slide-then-first-shake: the ~Juice object is thrown away mid-slide so
+    /// the next shake creates it again at exactly that moment. Measured at the end of the frame,
+    /// after every LateUpdate, which is what actually gets drawn.
+    /// </summary>
+    IEnumerator CheckCameraRecoversFromSlide()
+    {
+        PlayerController player = LocalPlayer();
+        PlayerMovement movement = player != null ? player.GetComponent<PlayerMovement>() : null;
+        Camera camera = PlayerController.LocalCamera;
+
+        if (movement == null || camera == null)
+        {
+            Check(false, "the view comes back up after a slide", "no local player, movement or camera");
+            yield break;
+        }
+
+        // Not WaitForEndOfFrame - it never resumes in batch mode (no game view to finish drawing),
+        // which wedged the first version of this check. A recorder that runs after every other
+        // LateUpdate sees the pose that actually gets drawn.
+        FinalPoseRecorder recorder = gameObject.AddComponent<FinalPoseRecorder>();
+        recorder.target = camera.transform;
+
+        // Settled first - a shake left over from an earlier check would be baked into "rest".
+        // Real time and the shake itself rather than a frame count: batch mode runs frames
+        // unthrottled, so ninety of them can be under a tenth of a second.
+        yield return Until(() => Juice.Amount < 0.001f, "let any earlier shake settle");
+        yield return new WaitForSecondsRealtime(0.3f);
+
+        Vector3 rest = recorder.localPosition;
+        Transform holder = camera.transform.parent;
+        Vector3 holderRest = recorder.parentLocalPosition;
+
+        // Real speed, then the slide key held - the same path a player takes into a slide.
+        movement.AddImpulse(player.transform.forward * 11f);
+        KeyBinds.HeldOverride.Add(KeyBinds.Action.Walk);
+
+        yield return Until(() => movement.Sliding, "start a slide");
+
+        yield return new WaitForSecondsRealtime(0.15f);
+
+        // The first shake of a session, landing mid-slide.
+        GameObject juice = GameObject.Find("~Juice");
+        if (juice != null)
+            Object.Destroy(juice);
+        yield return null;
+        Juice.Shake(0.5f);
+
+        yield return null;
+        yield return null;
+
+        KeyBinds.HeldOverride.Remove(KeyBinds.Action.Walk);
+        movement.ResetVelocity();
+
+        yield return Until(() => !movement.Sliding && !movement.Crouching, "stand back up");
+
+        // Long enough for every ease (stance, shake, lean) to settle several times over.
+        yield return Until(() => Juice.Amount < 0.001f, "let the shake settle");
+        yield return new WaitForSecondsRealtime(1.5f);
+
+        Vector3 after = recorder.localPosition;
+        Vector3 holderAfter = recorder.parentLocalPosition;
+        Destroy(recorder);
+
+        Check(holder != null && (after - rest).magnitude < 0.02f, "the view comes back up after a slide",
+              $"camera {(after.y - rest.y):+0.00;-0.00} m from where it started");
+
+        Check(holder != null && (holderAfter - holderRest).magnitude < 0.02f, "and so does the camera holder",
+              $"holder {(holderAfter.y - holderRest.y):+0.00;-0.00} m from where it started");
     }
 
     /// Which of ShaderStack's volumes the PSX pass is in right now: "world", "gun camera", both,

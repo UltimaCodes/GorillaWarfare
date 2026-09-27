@@ -79,6 +79,16 @@ layers still resolved fine) rather than failing anything, which is exactly how i
 for so long. If a `.asset`/`.unity` file logs a parse warning, check for exactly this before
 assuming it's benign noise.
 
+**One writer per transform.** Two scripts each writing a transform's absolute pose from their own
+remembered "rest" is a bug waiting for the wrong frame: whichever captures its rest while the
+other has it displaced pins it there. The player camera's local pose belongs to `CameraPose`
+alone; shake and slide lean publish offsets to it. Anything new that wants to move the camera
+publishes an offset too.
+
+**`WaitForEndOfFrame` never resumes in batch mode.** No game view means no end of frame - a probe
+coroutine waiting on it hangs until the three-minute watchdog. Read final poses with a
+late-execution-order component instead (`FinalPoseRecorder` in `PlayModeProbe`).
+
 **Batch-mode tests share the Editor's PlayerPrefs.** Anything a probe writes through the real
 prefix lands on the settings used in normal Play Mode — for months, every `PlayModeProbe` run
 quietly reset the sensitivity, keybinds and sliders. Probes switch `GameSettings`, `KeyBinds` and

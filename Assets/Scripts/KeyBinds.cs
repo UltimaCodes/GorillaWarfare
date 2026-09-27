@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -169,8 +170,15 @@ public static class KeyBinds
     // KeyCode.None is a legitimate binding - it means the action is switched off - and asking
     // Input about it every frame is a waste, so all three short circuit.
 
+    /// Actions held down with no keyboard - batch mode has none, so PlayModeProbe holds the slide
+    /// key through this. Same idea as PlayerController.AimInputOverride. Empty in play.
+    public static readonly HashSet<Action> HeldOverride = new HashSet<Action>();
+
     public static bool Held(Action action)
     {
+        if (HeldOverride.Count > 0 && HeldOverride.Contains(action))
+            return true;
+
         KeyCode key = bound[(int)action];
         return key != KeyCode.None && Input.GetKey(key);
     }

@@ -434,6 +434,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 if (LocalCamera.GetComponent<ScreenOutline>() == null)
                     LocalCamera.gameObject.AddComponent<ScreenOutline>();
 
+                // The only writer of the camera's own local pose - screen shake and slide lean
+                // go through it, onto a rest taken right now, while the camera is still untouched.
+                if (LocalCamera.GetComponent<CameraPose>() == null)
+                    LocalCamera.gameObject.AddComponent<CameraPose>();
+
                 // The camera is built fresh on every respawn and arrives holding whatever the
                 // prefab was authored with, so the saved field of view has to be reapplied
                 // rather than read once at startup.

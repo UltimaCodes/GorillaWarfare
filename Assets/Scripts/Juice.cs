@@ -64,9 +64,9 @@ public class Juice : MonoBehaviour
     /// </summary>
     public static float Amount => instance != null ? Mathf.Clamp01(instance.shake / maxShake) : 0f;
 
-    Camera held;
-    Vector3 restPosition;
-    Quaternion restRotation;
+    /// This frame's shake, applied to the camera by CameraPose. Zero when nothing's shaking.
+    public static Vector3 ShakeOffset { get; private set; }
+    public static Quaternion ShakeRotation { get; private set; } = Quaternion.identity;
 
     static Juice Instance
     {
@@ -127,31 +127,20 @@ public class Juice : MonoBehaviour
         ApplyShake();
     }
 
+    /// <summary>
+    /// Works out this frame's shake and publishes it for CameraPose to apply, rather than writing
+    /// the camera itself. It used to write it, on top of a rest position it remembered the first
+    /// frame it ran - and this object only exists from the first shot or hit of a session, so when
+    /// that landed mid-slide the "rest" it remembered was SpeedRush's dipped camera, and it put the
+    /// camera back there every frame afterwards: the view stuck low for the rest of that life, gun
+    /// at the top of the screen. See CameraPose.
+    /// </summary>
     void ApplyShake()
     {
-        Camera camera = PlayerController.LocalCamera;
-
-        // Respawning builds a new camera, so the rest position has to be picked up again.
-        if (camera != held)
-        {
-            if (held != null)
-            {
-                held.transform.localPosition = restPosition;
-                held.transform.localRotation = restRotation;
-            }
-
-            held = camera;
-            restPosition = camera != null ? camera.transform.localPosition : Vector3.zero;
-            restRotation = camera != null ? camera.transform.localRotation : Quaternion.identity;
-        }
-
-        if (camera == null)
-            return;
-
         if (shake <= 0.0001f)
         {
-            camera.transform.localPosition = restPosition;
-            camera.transform.localRotation = restRotation;
+            ShakeOffset = Vector3.zero;
+            ShakeRotation = Quaternion.identity;
             return;
         }
 
@@ -159,12 +148,10 @@ public class Juice : MonoBehaviour
         // static, and static reads as a broken renderer instead of a punch.
         float time = Time.unscaledTime * shakeSpeed;
 
-        Vector3 offset = new Vector3(
+        ShakeOffset = new Vector3(
             (Mathf.PerlinNoise(seed, time) - 0.5f) * 2f,
             (Mathf.PerlinNoise(seed + 11f, time) - 0.5f) * 2f,
             0f) * shake;
-
-        camera.transform.localPosition = restPosition + offset;
 
         // A separate pair of noise channels so the roll and pitch don't move in lockstep with
         // the position and end up reading as one wobble instead of a knock. Normalised against
@@ -174,7 +161,7 @@ public class Juice : MonoBehaviour
         float roll = (Mathf.PerlinNoise(seed + 23f, time) - 0.5f) * 2f * normalised * maxShakeDegrees;
         float pitch = (Mathf.PerlinNoise(seed + 37f, time) - 0.5f) * 2f * normalised * maxShakeDegrees * 0.6f;
 
-        camera.transform.localRotation = restRotation * Quaternion.Euler(pitch, 0f, roll);
+        ShakeRotation = Quaternion.Euler(pitch, 0f, roll);
 
         // Unscaled again: during hitstop, scaled time is barely advancing, and a shake that
         // decays on scaled time would hang there for the whole freeze.
@@ -186,6 +173,10 @@ public class Juice : MonoBehaviour
         // Never leave the game stopped because this object went away mid-freeze.
         Time.timeScale = 1f;
         Time.fixedDeltaTime = 0.02f;
+
+        // Nor the camera knocked sideways.
+        ShakeOffset = Vector3.zero;
+        ShakeRotation = Quaternion.identity;
 
         if (instance == this)
             instance = null;

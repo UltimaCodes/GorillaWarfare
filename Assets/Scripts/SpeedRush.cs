@@ -61,19 +61,12 @@ public class SpeedRush : MonoBehaviour
         wobbleSeed = Random.Range(0f, 100f);
     }
 
-    void Start()
-    {
-        // Remembered once, because the lean writes localPosition every frame and needs
-        // something to return to that is not wherever it last left it.
-        if (PlayerController.LocalCamera != null)
-            baseCameraLocal = PlayerController.LocalCamera.transform.localPosition;
-    }
-
     void OnDestroy()
     {
         // The player is destroyed on death and rebuilt on respawn. Leaving this behind means the
         // music stays ducked while you are staring at a killcam.
         Intensity = 0f;
+        ViewRoll = 0f;
     }
 
     void Update()
@@ -190,33 +183,32 @@ public class SpeedRush : MonoBehaviour
         float depth = sliding ? 1f + Mathf.Min(movement.SlideChain, 4) * 0.16f : 0f;
 
         slideRoll = Mathf.Lerp(slideRoll, sideways * slideLean * depth, Time.deltaTime * slideEase);
-        slideDrop = Mathf.Lerp(slideDrop, sliding ? -slideDip : 0f, Time.deltaTime * slideEase);
+
+        // Published, not written - CameraPose is the one thing that moves the camera. This used
+        // to write the camera's local transform itself, and so did Juice, each from its own idea
+        // of where "rest" was; see CameraPose for how that stuck the view low after a slide.
+        ViewRoll = slideRoll;
 
         // Dust off the floor while sliding, thrown backwards along the direction of travel. This
         // and the sound are what make it read as scraping the ground rather than as gliding.
         if (sliding)
             ThrowDust();
-
-        // Applied to the camera's local transform, on top of whatever the look angles did. The
-        // holder carries the pitch; this only ever adds roll and a small drop.
-        camera.transform.localRotation = Quaternion.Euler(0f, 0f, slideRoll);
-        camera.transform.localPosition = baseCameraLocal + Vector3.up * slideDrop;
     }
+
+    /// The slide's lean, in degrees about the view axis, for CameraPose. Zero when not sliding.
+    ///
+    /// There used to be a 0.95 m camera dip here too. It dropped the camera *inside* its holder -
+    /// and the weapons hang off the holder, not the camera, so every slide pushed the gun towards
+    /// the top of the screen, the same symptom as the stuck-camera bug. The slide's real drop is
+    /// PlayerController's, which lowers the whole holder with the capsule (camera and gun together).
+    public static float ViewRoll { get; private set; }
 
     [Tooltip("Degrees the view rolls at full sideways speed in a slide.")]
     [SerializeField] float slideLean = 9f;
 
-    [Tooltip("Metres the camera drops during a slide. Large on purpose - the capsule shrinking "
-             + "does not move the camera at all, because the camera hangs off a fixed holder "
-             + "rather than off the controller's centre. This is the entire drop, and at 0.18 it "
-             + "read as ducking your head rather than as hitting the deck.")]
-    [SerializeField] float slideDip = 0.95f;
-
     [SerializeField] float slideEase = 9f;
 
     float slideRoll;
-    float slideDrop;
-    Vector3 baseCameraLocal;
 
     /// <summary>
     /// Grit kicked up behind a slide.
