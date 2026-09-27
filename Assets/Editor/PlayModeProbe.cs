@@ -249,6 +249,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- the view comes back up after a slide ----
         yield return CheckCameraRecoversFromSlide();
 
+        // ---- the vine swings off a branch rather than pulling you to it ----
+        yield return CheckVineSwings();
+
         // ---- joining mid match ----
         yield return CheckLateJoinGetsWeapons(player);
 
@@ -280,7 +283,7 @@ public class ProbeRunner : MonoBehaviour
         yield return CheckDeathAndRespawn();
 
         // ---- the match has something to say about how it went ----
-        List<MatchState.Award> awards = MatchState.Awards();
+        List<MatchState.Award> awards = awardsAfterDeath ?? new List<MatchState.Award>();
 
         // A kill has definitely happened by now - the death check made one - so at least the top
         // scorer award has to have a name on it. An empty list here means the stats never
@@ -663,6 +666,11 @@ public class ProbeRunner : MonoBehaviour
     // mouse and this is the only way to see whether any of it moves.
     IEnumerator CheckAimingDownSights(PlayerController player)
     {
+        // A new warmup hands out a fresh random weapon, and the probe's matches last six seconds -
+        // so the sniper this check hands itself could be swapped for something that can't aim
+        // before the check had finished, depending only on where in the match it landed.
+        yield return LiveWithTimeLeft(4f);
+
         PlayerController.PublishLoadout(new[] { "Sniper" });
         yield return null;
         yield return null;
@@ -985,6 +993,8 @@ public class ProbeRunner : MonoBehaviour
         return null;
     }
 
+    List<MatchState.Award> awardsAfterDeath;
+
     IEnumerator CheckDeathAndRespawn()
     {
         PlayerController player = LocalPlayer();
@@ -996,10 +1006,18 @@ public class ProbeRunner : MonoBehaviour
 
         int feedBefore = MatchState.Feed.Count;
 
+        // Only a live match scores a death, and the probe's matches last six seconds - so this
+        // waits for one with time left rather than dying into a warmup that wipes the stats. The
+        // awards check below used to pass or fail on exactly that timing.
+        yield return LiveWithTimeLeft(2.5f);
+
         // Straight through the interface a bullet uses, so this exercises the real path.
         player.TakeDamage(500f, "Pistol", true);
 
         yield return Until(() => RoomManager.AwaitingRespawn, "register the death");
+
+        // Read now, before the match can roll over and reset them.
+        awardsAfterDeath = MatchState.Awards();
         Check(RoomManager.AwaitingRespawn, "dying starts a respawn timer",
               $"{RoomManager.RespawnAt - Time.time:F1}s");
 
@@ -1690,6 +1708,124 @@ public class ProbeRunner : MonoBehaviour
               $"holder {(holderAfter.y - holderRest.y):+0.00;-0.00} m from where it started");
     }
 
+    /// <summary>
+    /// Reported by players: "the grappling is fun but it makes you just go towards your grapple
+    /// point, you dont swing like an actual gorilla". A branch 9m up and 6m ahead, fired at from
+    /// the ground with the key held: the swing has to lift you off the floor, carry you on past
+    /// the point under the branch rather than stopping at the branch, never stretch the rope, and
+    /// let you go with the speed the swing had.
+    /// </summary>
+    IEnumerator CheckVineSwings()
+    {
+        PlayerController player = LocalPlayer();
+        PlayerMovement movement = player != null ? player.GetComponent<PlayerMovement>() : null;
+        VineGrapple vine = player != null ? player.GetComponent<VineGrapple>() : null;
+        Camera camera = PlayerController.LocalCamera;
+
+        if (movement == null || vine == null || camera == null)
+        {
+            Check(false, "the vine swings", "no local player, movement, vine or camera");
+            yield break;
+        }
+
+        movement.ResetVelocity();
+        yield return Until(() => movement.Grounded, "stand on the ground");
+
+        // The clearest of four directions, so a tree in the way doesn't decide the result.
+        Vector3 start = player.transform.position;
+        Vector3 ahead = player.transform.forward;
+        float bestClear = -1f;
+
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 dir = Quaternion.Euler(0f, 90f * i, 0f) * player.transform.forward;
+            float clear = Physics.SphereCast(start + Vector3.up * 2f, 0.8f, dir, out RaycastHit block, 16f,
+                                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore) ? block.distance : 16f;
+            if (clear > bestClear)
+            {
+                bestClear = clear;
+                ahead = dir;
+            }
+        }
+
+        GameObject branch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        branch.name = "~ProbeBranch";
+        branch.transform.position = start + ahead * 6f + Vector3.up * 9f;
+        branch.transform.localScale = new Vector3(1.2f, 0.4f, 1.2f);
+        Physics.SyncTransforms();
+
+        // Aimed straight at it for the cast, the way a player lines up the crosshair.
+        camera.transform.rotation = Quaternion.LookRotation(branch.transform.position - camera.transform.position);
+        KeyBinds.HeldOverride.Add(KeyBinds.Action.Grapple);
+        typeof(VineGrapple).GetMethod("TryAttach", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(vine, null);
+
+        Check(vine.Attached, "the vine catches a branch", $"clear run {bestClear:F1}m");
+
+        // Where the rope actually caught - a point on the branch's surface, not its centre.
+        FieldInfo anchorField = typeof(VineGrapple).GetField("anchorWorldPoint", BindingFlags.NonPublic | BindingFlags.Instance);
+        Vector3 anchor = anchorField != null ? (Vector3)anchorField.GetValue(vine) : branch.transform.position;
+
+        Vector3 anchorFlat = new Vector3(anchor.x, 0f, anchor.z);
+        float highest = start.y;
+        float furthestPast = float.MinValue;
+        float worstStretch = 0f;
+        float closest = float.MaxValue;
+        float until = Time.realtimeSinceStartup + 2.5f;
+
+        FieldInfo lengthField = typeof(VineGrapple).GetField("ropeLength", BindingFlags.NonPublic | BindingFlags.Instance);
+        FieldInfo swingingField = typeof(VineGrapple).GetField("swinging", BindingFlags.NonPublic | BindingFlags.Instance);
+        bool swung = swingingField != null && (bool)swingingField.GetValue(vine);
+
+        float PastTheBranch() => Vector3.Dot(new Vector3(player.transform.position.x, 0f, player.transform.position.z)
+                                             - anchorFlat, ahead);
+
+        // Held until the swing has carried you just past the point under the branch - the bottom
+        // of the arc, fastest, where a player lets go to fling forward.
+        while (vine.Attached && Time.realtimeSinceStartup < until && PastTheBranch() < 0.5f)
+        {
+            yield return null;
+
+            Vector3 at = player.transform.position;
+            Vector3 pivot = anchor - Vector3.up * 1.3f;
+
+            highest = Mathf.Max(highest, at.y);
+            closest = Mathf.Min(closest, Vector3.Distance(at, anchor));
+            furthestPast = Mathf.Max(furthestPast, PastTheBranch());
+
+            if (lengthField != null)
+                worstStretch = Mathf.Max(worstStretch, Vector3.Distance(at, pivot) - (float)lengthField.GetValue(vine));
+        }
+
+        Vector3 swingVelocity = movement.Velocity;
+
+        KeyBinds.HeldOverride.Remove(KeyBinds.Action.Grapple);
+        yield return null;
+        yield return null;
+
+        float releaseSpeed = movement.Velocity.magnitude;
+
+        // Then the flight: let go at the bottom and you keep going.
+        float flightUntil = Time.realtimeSinceStartup + 0.5f;
+        while (Time.realtimeSinceStartup < flightUntil && !movement.Grounded)
+        {
+            furthestPast = Mathf.Max(furthestPast, PastTheBranch());
+            yield return null;
+        }
+
+        Check(swung, "a branch with room under it is a swing, not a pull", swung ? "swing" : "pull");
+        Check(highest - start.y > 1f, "the swing lifts you off the ground", $"{highest - start.y:F2}m up");
+        Check(furthestPast > 1.5f, "the swing carries you past the point under the branch",
+              $"{furthestPast:F2}m past it (a pull stops short of it)");
+        Check(closest > 2f, "you swing under the branch, not into it", $"closest {closest:F2}m");
+        Check(worstStretch < 0.05f, "the rope never stretches", $"worst {worstStretch:F3}m over its length");
+        Check(!vine.Attached && releaseSpeed > 3f, "letting go keeps the swing's speed",
+              $"{swingVelocity.magnitude:F1} m/s swinging, {releaseSpeed:F1} m/s after release");
+
+        Object.Destroy(branch);
+        movement.ResetVelocity();
+        yield return Until(() => movement.Grounded, "land again");
+    }
+
     /// Which of ShaderStack's volumes the PSX pass is in right now: "world", "gun camera", both,
     /// or "nowhere".
     static string PsxWhere()
@@ -2333,6 +2469,14 @@ public class ProbeRunner : MonoBehaviour
 
     static string ShotFolder =>
         System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Application.dataPath), "Logs", "probe-shots");
+
+    /// The probe's matches are six seconds long and roll over on their own, and a rollover
+    /// resets stats and reissues loadouts. Anything that needs the match to hold still waits here.
+    IEnumerator LiveWithTimeLeft(float seconds)
+    {
+        yield return Until(() => MatchState.Phase == MatchPhase.Live && MatchState.TimeLeft > seconds,
+                           $"a live match with {seconds:F1}s left");
+    }
 
     IEnumerator Until(System.Func<bool> condition, string what)
     {

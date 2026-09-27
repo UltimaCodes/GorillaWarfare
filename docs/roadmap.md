@@ -82,8 +82,11 @@ The first round of feedback from people playing it. Worked through in this order
       and a new probe check shows its picture changing when PSX turns on (average difference 6.2).
       The death-camera fallback shipped with the "PSX covers the gun" change, so a build older than
       that would show exactly this. Needs a look in a fresh build.
-- [ ] **Swing on the vine, don't just get pulled to the point.** A rope with a pendulum, and a kick
-      off the ground so a grapple from standing gets you airborne. Grappling a player stays a pull.
+- [x] **Swing on the vine, don't just get pulled to the point.** Anything with room under it is now a
+      pendulum rope (length capped to clear the ground, a reel-in first if it caught far out); a
+      kick off the ground; letting go keeps the swing's speed. People, dummies and ledge-tops stay a
+      pull. Probe-checked (bug-log.md, thirty-sixth pass). **The feel is unplayed** - kick 8 m/s,
+      reel 16 m/s, steer 9 m/s², clearance 1.3m are all first guesses, on `VineGrapple`'s inspector.
 - [x] **Buttons that don't work, especially in the crate section.** `MenuButtonAudit` clicked all
       222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
       listener saved into the prefab. Fixed. At 4:3 a few controls fall off the right edge (menu

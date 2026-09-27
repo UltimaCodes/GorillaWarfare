@@ -2,7 +2,9 @@ using UnityEngine;
 using Photon.Pun;
 
 /// <summary>
-/// The vine grapple: latch onto a vantage point or an enemy and get pulled there fast.
+/// The vine grapple: latch onto a branch and swing from it, or onto an enemy and get pulled
+/// into them. (It used to pull you to every anchor; players asked to swing like a gorilla would -
+/// see PlanRope.)
 ///
 /// Planned in ideas.md as closer to Attack on Titan's omnidirectional mobility gear than
 /// the original world-geometry-only version of that entry. Built 2026-08-21.
@@ -62,6 +64,45 @@ public class VineGrapple : MonoBehaviour
     [Tooltip("Safety cutoff, in seconds. Covers an anchor that's technically still reachable but "
              + "never actually gets any closer - circling around geometry, for instance.")]
     [SerializeField] float maxDuration = 3.5f;
+
+    [Header("Swing")]
+    [Tooltip("Upward speed, in metres per second, given when a swing starts from the ground. "
+             + "Without it a grapple fired standing up just hangs you where you already were - "
+             + "reported by players: 'they should get some starting airtime so they can then "
+             + "swing further from branch to branch'. 8 against gravity's 20.3 is about 1.6m of "
+             + "lift before the rope takes over.")]
+    [SerializeField] float swingKick = 8f;
+
+    [Tooltip("How fast the rope reels in, in metres per second, when it latched further out than it "
+             + "can swing from. A far grapple pulls you in at this rate, then swings.")]
+    [SerializeField] float swingReelSpeed = 16f;
+
+    [Tooltip("Metres per second squared of steering while swinging - enough to pump the arc or bend "
+             + "its line, nowhere near enough to fly.")]
+    [SerializeField] float swingSteer = 9f;
+
+    [Tooltip("Speed ceiling while swinging, in metres per second.")]
+    [SerializeField] float maxSwingSpeed = 30f;
+
+    [Tooltip("The shortest rope worth swinging on. An anchor too low to hang this far under it - "
+             + "the top of a rock, a ledge - is pulled to instead, the way the vine always worked.")]
+    [SerializeField] float minSwingLength = 2.5f;
+
+    [Tooltip("Safety cutoff for a swing, in seconds - longer than the pull's, since a swing is "
+             + "meant to be ridden.")]
+    [SerializeField] float swingMaxDuration = 10f;
+
+    // Where the rope meets the body, above the capsule's centre - the raised hand, and where the
+    // line has always been drawn from.
+    const float HandHeight = 1.3f;
+
+    // How far the body's centre has to stay off the ground at the bottom of an arc: half the
+    // capsule and a little room, so a full swing clears the floor instead of scraping it.
+    const float SwingClearance = 1.3f;
+
+    bool swinging;
+    float ropeLength;
+    float ropeTarget;
 
     [Header("Damage")]
     [Tooltip("Base damage on contact with an enemy, before the same speed scaling every "
@@ -139,7 +180,7 @@ public class VineGrapple : MonoBehaviour
             return;
         }
 
-        if (Time.time - attachedAt > maxDuration)
+        if (Time.time - attachedAt > (swinging ? swingMaxDuration : maxDuration))
         {
             Detach();
             return;
@@ -150,6 +191,31 @@ public class VineGrapple : MonoBehaviour
         if (!valid)
         {
             Detach();
+            return;
+        }
+
+        // PlayerMovement only exists on the owner's own copy, and is rebuilt on every respawn -
+        // fetched live rather than cached, the same way PlayerController.Launch already does for
+        // exactly the same reason.
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+
+        if (swinging)
+        {
+            if (movement == null)
+                return;
+
+            movement.Grappling = true;
+            ropeLength = Mathf.MoveTowards(ropeLength, ropeTarget, swingReelSpeed * Time.deltaTime);
+
+            bool landed = movement.Swing(anchor - Vector3.up * HandHeight, ropeLength, swingSteer,
+                                         maxSwingSpeed, Time.deltaTime);
+
+            // Touching down ends it - you've landed, and a rope dragging you round in a circle
+            // along the floor is nobody's idea of a swing. Not in the first moments, while the
+            // kick is still lifting you off the spot you fired from.
+            if (landed && Time.time - attachedAt > 0.4f)
+                Detach();
+
             return;
         }
 
@@ -171,16 +237,44 @@ public class VineGrapple : MonoBehaviour
             return;
         }
 
-        // PlayerMovement only exists on the owner's own copy, and is rebuilt on every respawn -
-        // fetched live rather than cached, the same way PlayerController.Launch already does for
-        // exactly the same reason.
-        PlayerMovement movement = GetComponent<PlayerMovement>();
-
         if (movement != null)
         {
             movement.Grappling = true;
             movement.Grapple(anchor, pullAccel, maxPullSpeed, Time.deltaTime);
         }
+    }
+
+    /// <summary>
+    /// Swing or pull, decided once when the rope catches.
+    ///
+    /// People and dummies are always a pull - the vine's hit is arriving at them. Anything else is
+    /// a swing if there's room under it: the rope is shortened to what keeps the bottom of the arc
+    /// off the ground beneath the anchor, so a grapple into a tall tree from far away reels you in
+    /// hard (the old pull, for as long as it takes) and then swings, and one from right underneath
+    /// just swings. An anchor with no room under it - the top of a rock, the lip of a ledge - stays
+    /// a pull, which is what climbing onto things needs.
+    /// </summary>
+    void PlanRope(RaycastHit hit, bool atSomeone)
+    {
+        swinging = false;
+
+        if (atSomeone)
+            return;
+
+        float floor = transform.position.y - 1f;
+
+        if (Physics.Raycast(hit.point + hit.normal * 0.25f, Vector3.down, out RaycastHit below, 200f,
+                            Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            floor = below.point.y;
+
+        float longest = (hit.point.y - HandHeight) - (floor + SwingClearance);
+
+        if (longest < minSwingLength)
+            return;
+
+        swinging = true;
+        ropeLength = Vector3.Distance(transform.position + Vector3.up * HandHeight, hit.point);
+        ropeTarget = Mathf.Min(ropeLength, longest);
     }
 
     /// <summary>
@@ -251,6 +345,14 @@ public class VineGrapple : MonoBehaviour
         // the RPC, since the sandbox is always a one-person room and nobody else ever needs to
         // know about it.
         anchorDummy = target == null ? hit.collider.GetComponentInParent<TrainingDummy>() : null;
+
+        PlanRope(hit, target != null || anchorDummy != null);
+
+        // Off the ground, so there's an arc to ride rather than a rope to stand under.
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+
+        if (swinging && movement != null && movement.Grounded)
+            movement.AddImpulse(Vector3.up * Mathf.Max(0f, swingKick - movement.Velocity.y));
 
         Begin(targetViewID, hit.point);
     }

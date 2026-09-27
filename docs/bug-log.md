@@ -3325,3 +3325,53 @@ Mechanically everything else works. What the audit can't judge is whether a butt
 player expects - and in the crate shop the honest answer is that opening a crate wins nothing yet
 (a rarity name on a purple screen), which is the rework the same feedback asks for.
 
+---
+
+# Thirty-sixth pass — the vine swings, 2026-09-27
+
+"The grappling is fun but it makes you just go towards your grapple point, you dont swing like an
+actual gorilla or monkey like it should work... make the grappling ropes physics based and actually
+let the player properly swing (should however give the player a boost since if they grapple from
+the ground theyll just stay there)." Grappling onto a player was to stay the exception.
+
+## How it works now
+
+`VineGrapple.PlanRope` decides once, when the rope catches:
+
+- **A person or a training dummy: the old pull**, unchanged - the vine's hit is arriving at them.
+- **Anything with room under it: a swing.** The rope is a length, not a force
+  (`PlayerMovement.Swing`): gravity stays on, a taut rope takes away only the speed pointing out
+  along it, and what you carry sideways becomes an arc under the anchor and up the far side. Letting
+  go keeps the swing's velocity, so releasing at the bottom of an arc flings you on to the next tree.
+  WASD pushes a little along the ground (9 m/s²) - enough to pump a swing or bend its line.
+- **The rope is never longer than the ground allows.** A ray down from the anchor finds the floor
+  under it, and the rope is capped so the bottom of the arc clears it. A grapple into a tall tree from
+  far away reels in at 16 m/s until it fits - the old pull, for as long as that takes - then swings.
+- **From the ground, a kick up** (8 m/s, about 1.6m of lift) so there's an arc to ride.
+- **No room under it - the top of a rock, the lip of a ledge - stays a pull**, which is what climbing
+  onto things needs.
+- Touching down ends a swing (after the first 0.4s, while the kick is still lifting you); the safety
+  cutoff is 10s for a swing against 3.5s for a pull.
+
+## Bugs found building it
+
+- **The reel carried on after it stopped.** The first `Swing` kept the frame's whole displacement as
+  velocity, reel included - so the 16 m/s reel-in kept going once the rope reached length, the rope
+  went slack, and you flew up into the branch exactly like the old pull. The new probe check caught
+  it (1.7m from the anchor). A shortening rope now moves you without adding speed.
+- **Two old probe checks only ever passed on timing.** The probe runs six-second matches that roll
+  over on their own, and a rollover resets stats and hands out a fresh random weapon. The awards
+  check (reading stats after the death check) and the aim-down-sights check (holding a sniper it gave
+  itself) both failed once the vine check made the run a few seconds longer. Both now wait for a live
+  match with time left (`LiveWithTimeLeft`), and the awards are read straight after the death.
+
+## Verified
+
+New probe check, a branch 9m up and 6m ahead, fired at from the ground with the key held: a swing,
+not a pull; 2.6m off the ground; carried past the point under the branch; never closer than 7.7m to
+the anchor (a pull ends 1.6m from it); the rope never over its length (0.000m); let go under the
+branch at 8.8 m/s and still doing 8.8 after. Full suite passes.
+
+**Not verified: how it feels.** Every number here is a first pass - kick, reel speed, steering,
+clearance - and none of them has been played by a person yet.
+

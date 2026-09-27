@@ -246,6 +246,57 @@ public class PlayerMovement : MonoBehaviour
         controller.Move(velocity * dt);
     }
 
+    /// <summary>
+    /// Hangs the player off a rope and lets them swing. Called by VineGrapple for anything that
+    /// isn't a person - "you dont swing like an actual gorilla or monkey like it should work",
+    /// reported by players about the pull above.
+    ///
+    /// A pendulum rather than a pull: gravity stays on, and the rope is a length, not a force. It
+    /// can go slack; when it's taut it takes away only the speed pointing out along it, so what you
+    /// carry sideways turns into an arc under the anchor and up the far side, and letting go at the
+    /// top of an arc flings you the way the swing was going - that's what gets you from one branch
+    /// to the next.
+    ///
+    /// A rope that's shortening (VineGrapple reels a far grapple in) moves you without adding
+    /// speed. The first version kept whatever the frame's displacement came to, reel included - so
+    /// the reel's 16 m/s inward carried on after it stopped, the rope went slack, and you flew up
+    /// into the branch exactly the way the old pull did. The probe measured it: 1.7m from the anchor.
+    ///
+    /// Steering pushes a little along the ground plane, enough to pump a swing higher or bend its
+    /// line, the way a real swing is driven by shifting your weight.
+    ///
+    /// `pivot` is where the rope ends, already offset for where the rope meets the body. Returns
+    /// true once the body is on the ground, which ends the swing.
+    /// </summary>
+    public bool Swing(Vector3 pivot, float ropeLength, float steer, float maxSpeed, float dt)
+    {
+        velocity.y -= gravity * dt;
+        velocity += WishDirection() * steer * dt;
+
+        Vector3 from = transform.position;
+        Vector3 next = from + velocity * dt;
+        Vector3 fromPivot = next - pivot;
+        float distance = fromPivot.magnitude;
+
+        if (distance > ropeLength && distance > 0.001f)
+        {
+            Vector3 along = fromPivot / distance;
+            next = pivot + along * ropeLength;
+
+            float outward = Vector3.Dot(velocity, along);
+            if (outward > 0f)
+                velocity -= along * outward;
+        }
+
+        if (velocity.sqrMagnitude > maxSpeed * maxSpeed)
+            velocity = velocity.normalized * maxSpeed;
+
+        grounded = false;
+        controller.Move(next - from);
+
+        return controller.isGrounded;
+    }
+
     [Header("Slide and crouch")]
     [Tooltip("Speed you must already be carrying for the slide key to slide rather than crouch. "
              + "Below it you simply go down.")]

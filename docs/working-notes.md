@@ -231,6 +231,12 @@ killing, host migration — all reasoned about, none observed.
 
 ## Lessons about the checks themselves
 
+**The probe's matches roll over under you.** It shortens a deathmatch to six seconds, so a run goes
+through several warmups, and each one resets stats and hands out fresh random weapons. A check that
+gives itself a weapon or reads stats has to `yield return LiveWithTimeLeft(n)` first - two checks
+passed for months on where in the match they happened to land, and failed the day the run got a few
+seconds longer.
+
 **A check written from the same wrong assumption as the code will pass.** The gun audio onset
 counter used a threshold that couldn't see rapid fire, the extractor used the same logic, and a
 clip containing a whole magazine was certified as one shot. Printing the envelope as ASCII
