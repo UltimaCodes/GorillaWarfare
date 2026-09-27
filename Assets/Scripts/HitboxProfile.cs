@@ -12,9 +12,9 @@ using UnityEngine;
 /// radius, wider than the torso. That's not a fitting bug, it's the source data.
 ///
 /// A number typed in by a person who can see the result is more reliable than a formula run
-/// against data that turned out not to be trustworthy. Tune these here, then check them with
-/// Tools/Gorilla Warfare/Photograph the hitboxes - it overlays exactly these values on the actual
-/// mesh so a change can be seen before it's played.
+/// against data that turned out not to be trustworthy. Tune these here, then check them against
+/// the actual mesh before playing - the overlay tool that did that (HitboxPhotographer.cs) is in
+/// git history if it's needed again.
 /// </summary>
 [CreateAssetMenu(menuName = "FPS/Hitbox Profile")]
 public class HitboxProfile : ScriptableObject

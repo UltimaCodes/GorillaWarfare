@@ -3193,3 +3193,49 @@ bolted old pieces onto the new menu.
 mode with the live backdrop, at 1920x1080 - `Logs/menu-shots/*.png`, all looked at. `SceneCheck`
 now also checks the six screens are each listed exactly once, `Launcher` is fully wired, and every
 menu button has a click target (13). Full suite passes.
+
+---
+
+# Thirty-fourth pass — the repo sweep, 2026-09-27
+
+"Do a sweep of the repo and delete EVERYTHING that isnt useful now, old helper scripts, old
+documentation, etc." Everything removed is in git history.
+
+## Removed
+
+- **Nineteen one-off editor tools** whose work is already baked into the assets: `AssetFixups`,
+  `FontAssetBuilder`, `FontRetarget` (it targeted Chomsky, also removed), `HitboxPhotographer`,
+  `HitboxProfileSeed`, `JungleImport`, `MapDressing`, `OutlineCheck`, `OutlinePlayCheck`,
+  `ParticleImport`, `PeelPhotographer`, `PineappleBuilder`, `ProjectCleanup`, `ShieldSoundPick`,
+  `SkyboxPhotographer`, `StripRoomManagerView`, `TwoHandedPhotographer`, `WeaponNaming`, and
+  `RegionCheck` - which was also a hazard: running it wrote a blank `FixedRegion` into the committed
+  PhotonServerSettings.
+- **Unused assets:** `Assets/Images`, `Assets/Audio` (superseded by `Resources/Audio`), the old
+  monkey/chimpanzee model sources, `Materials/Generated`, the particle source PNGs (the ones in use
+  live in `Resources/Particles`, and the Kenney licence moved there with them), the Chomsky, The
+  Wildeast and Bring Me A Helicopter fonts (unused, and two of them weren't licensed for a release),
+  TextMesh Pro's and Photon's bundled documentation, and `tools/*.py`.
+- **Stale references** to all of the above in comments, check messages, audio READMEs, CREDITS.md
+  and the docs. CREDITS.md was also out of date on its own: it credited the old monkey model, listed
+  four sound banks as empty that have been filled for weeks, and didn't mention Anton, Jersey 10 or
+  the grass.
+
+## Nearly removed, and restored
+
+- `ShaderStackBuilder` and `BananaAssetSetup` - still named as the fix by a live error
+  (`ShaderResources.Load` and `HudBuilder`), and the first also re-checks that every shader preset
+  builds.
+- `Art/Jungle/Materials` - `grass.mat` is the map floor's material. The first reference scan missed
+  it; `SceneCheck` caught the floor rendering magenta, in both the arena and the menu backdrop.
+- `3DModels/chimpanzee/textures/SKINM.jpeg` - the build's app icon is set to it in ProjectSettings.
+  It's a skin texture, not an icon; the game needs a real one before release.
+
+A final scan of every tracked text file for the GUIDs of every deleted asset finds nothing.
+
+## Found on the way
+
+- **The vine rope would have lost its outline in a build.** `Custom/UnlitVertexColor` is only ever
+  reached through `Shader.Find`, so nothing kept it in a player build, and VineGrapple would fall
+  back to `Sprites/Default` - transparent, so it drops out of the toon outline. Added to
+  `AlwaysIncludeShaders` and applied.
+- `AudioCheck` had the vine check's doc comment sitting on top of the wind check.

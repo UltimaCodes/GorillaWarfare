@@ -2,8 +2,8 @@
 // layered noise, and a glowing sun with a soft halo, all rendered in visible chunky blocks with a
 // reduced colour palette rather than smooth continuous shading. Replaced the flat-banded jungle-
 // canopy sky entirely 2026-08-23, direct request against a reference screenshot - kept the
-// file/shader name so nothing that already points at "Skybox/JungleSky" (SkyboxPhotographer.cs,
-// the JungleSky.mat asset) needed to change.
+// file/shader name so nothing that already points at "Skybox/JungleSky" (the JungleSky.mat
+// asset) needed to change.
 //
 // First pass at this (same day) rendered the gradient/clouds/sun smooth and continuous - correct
 // shapes, wrong texture entirely, reported back as missing the reference's actual pixelated

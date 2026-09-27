@@ -278,8 +278,8 @@ public class MonkeyRig : MonoBehaviour
             r.shadowCastingMode = mode;
 
         // No per-object outline applied here. First attempt (Custom/ToonOutline, an inverted
-        // mesh hull) read as a broken, gappy line specifically on this model - checked with
-        // Tools/Gorilla Warfare/Photograph the outlines, not assumed - because it depends on
+        // mesh hull) read as a broken, gappy line specifically on this model - checked with a
+        // render, not assumed - because it depends on
         // per-vertex normals and this mesh's overlapping low-poly geometry (the arm crossing the
         // torso, fingers, joints) makes adjacent pushed-out faces fight each other at nearly
         // equal depth. ScreenOutline on the local camera replaced it: same visual goal, reads

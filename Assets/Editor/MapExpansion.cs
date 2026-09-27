@@ -14,8 +14,7 @@ using UnityEngine.SceneManagement;
 // this was written; the cliffs themselves didn't need to change.
 //
 // Re-runnable: everything this places lives under one "~MapExpansion" group, deleted and rebuilt
-// from scratch every run rather than accumulating - the same convention MapDressing already
-// established for exactly this reason. Every piece gets an explicit MeshCollider, matching how
+// from scratch every run rather than accumulating. Every piece gets an explicit MeshCollider, matching how
 // the map's existing decoration already works (confirmed by DecalMeshCheck's investigation into
 // the bullet-impact report) rather than relying on FBX import settings this script doesn't own.
 public static class MapExpansion
@@ -74,9 +73,8 @@ public static class MapExpansion
                     continue;
 
                 // The Floor object itself typically carries only a Transform - its mesh sits on
-                // a child, the same reason MapDressing.Paint() searches children rather than the
-                // named object directly. Encapsulate every renderer found under it rather than
-                // trusting there's exactly one.
+                // a child. Encapsulate every renderer found under it rather than trusting there's
+                // exactly one.
                 Bounds found = default;
                 bool started = false;
 

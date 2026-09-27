@@ -429,8 +429,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
                 // pineapple and tore on the gorilla's own complex,
                 // overlapping low-poly geometry, because it depends on per-vertex mesh topology.
                 // This reads the camera's own depth and normal buffers instead, so it can't tear
-                // the same way - verified against the gorilla specifically with
-                // Tools/Gorilla Warfare/Photograph the screen outline (play mode).
+                // the same way - verified against the gorilla specifically with a play-mode
+                // render.
                 if (LocalCamera.GetComponent<ScreenOutline>() == null)
                     LocalCamera.gameObject.AddComponent<ScreenOutline>();
 
@@ -803,7 +803,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     // world position, regardless of what the child's own scale is. `weaponHandOffset` is a small,
     // real-world offset (2cm/6cm) that was never adjusted for that - parented under a 100x bone,
     // it placed the weapon one to six *metres* off the hand instead of centimetres. Confirmed by
-    // measuring it directly (`Tools/Gorilla Warfare/Photograph the grip`): hand.lossyScale reads
+    // measuring it directly: hand.lossyScale reads
     // (100, 100, 100) on this rig today, not a leftover from the old one the "same 100x bone
     // scale" comment above used to refer to.
     void AttachWeaponsToHand()

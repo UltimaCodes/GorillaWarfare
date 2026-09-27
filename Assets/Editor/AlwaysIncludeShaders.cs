@@ -3,10 +3,11 @@ using UnityEngine;
 
 /// <summary>
 /// Registers this project's own runtime-looked-up shaders ("Custom/ScreenOutline",
-/// "Hidden/Gorilla Warfare/PSX Filter") in Graphics Settings' Always Included Shaders list.
+/// "Hidden/Gorilla Warfare/PSX Filter", and the vine's "Custom/UnlitVertexColor") in Graphics
+/// Settings' Always Included Shaders list.
 ///
-/// Both are found at runtime with <c>Shader.Find</c> rather than referenced by any material, and
-/// neither is dragged onto anything in a scene - which is exactly the condition under which
+/// All three are found at runtime with <c>Shader.Find</c> rather than referenced by any material,
+/// and none is dragged onto anything in a scene - which is exactly the condition under which
 /// Unity's shader stripping can and will cut an unreferenced shader from a build. In the Editor
 /// both keep working regardless, because the Editor never strips anything, which is what let the
 /// outline going missing "in the actual game" (a built player, not Play Mode) go unnoticed for as
@@ -21,6 +22,10 @@ public static class AlwaysIncludeShaders
     {
         "Custom/ScreenOutline",
         "Hidden/Gorilla Warfare/PSX Filter",
+
+        // VineGrapple's rope. Without it a build falls back to Sprites/Default, which is
+        // transparent, so the rope silently drops out of the toon outline.
+        "Custom/UnlitVertexColor",
     };
 
     [MenuItem("Tools/Gorilla Warfare/Always-include the custom shaders")]

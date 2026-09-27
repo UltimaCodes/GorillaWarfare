@@ -16,6 +16,4 @@ swish-13: 0.071s, crest 4.75, peak at 32.5%. Shortest overall, a second flavour 
 firing the vine repeatedly doesn't sound identical every time - GameAudio.PlayAt picks randomly
 between whatever's in a bank.
 
-Run `python tools/analyze_swishes.py <folder>` to see the numbers and an ASCII envelope for a
-folder of candidates - handles 8/16/24-bit WAV with no dependency beyond the standard library,
-since audioop (what the Slide measurement originally used) was removed in Python 3.13.
+The measuring script (tools/analyze_swishes.py) was a one-off and lives in git history.

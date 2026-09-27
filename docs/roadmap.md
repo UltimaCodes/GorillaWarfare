@@ -53,9 +53,6 @@ It spawns a player, checks it's carrying what the match rolled, kills it, and wa
 back. What it can't do is see a second client — offline mode is one player — so anything about
 remote copies still needs two people.
 
-`AssetFixups.All` reapplies import settings. `ProjectCleanup.Run` strips leftovers back out of
-the player prefab if they ever reappear.
-
 ---
 
 ## M0 — Stop the bleeding
@@ -101,9 +98,8 @@ its weapon.
 
 Banana-shaped guns. Plural — the point is variety, not one gun.
 
-- [x] Banana models, generated in Blender (`tools/banana_variants.py` - supersedes the original
-      `banana_generator.py`, deleted once superseded; the new script derives all five weapons
-      from one real modelled banana instead of building them from scratch)
+- [x] Banana models, derived in Blender from one real modelled banana (the one-off script,
+      `tools/banana_variants.py`, is in git history)
 - [x] Weapon definitions as ScriptableObjects: damage, fire rate, spread, auto vs semi, range
 - [x] Five weapons: pistol, shotgun, rifle, sniper, peel. Roles are asserted in WeaponCheck -
       no two may overlap, and anything that can one-pull a full health player has to pay for it
@@ -145,7 +141,7 @@ auto (5 shots to kill, sprays, 30 round mag).
 
 Asset names stay as roles, because the gun game ladder is defined in power order and
 `Pistol -> Shotgun -> Rifle -> Sniper -> Peel` says what each one does at a glance. What players
-read lives in `itemName` and is set by `WeaponNaming`:
+read lives in `itemName` on each `GunInfo` asset:
 
 | role | on screen | why |
 |---|---|---|
@@ -604,9 +600,8 @@ the above, which is still the real plan. `Tools/Gorilla Warfare/Expand the jungl
 (`Assets/Editor/MapExpansion.cs`) adds climbable cliff clusters (staggered cliff_block_rock
 tiers, real height now checked in the scene file after a bug where every tier landed at ground
 level instead of stacking) built to reward the new movement tech, plus a denser scatter of the
-existing prop kit across the open ground. Re-runnable and idempotent, same convention as
-`MapDressing`: everything it places lives under one `~MapExpansion` group, replaced whole on
-every run rather than accumulating. Explicitly a first pass on the numbers (tier count, scale,
+existing prop kit across the open ground. Re-runnable and idempotent: everything it places lives
+under one `~MapExpansion` group, replaced whole on every run rather than accumulating. Explicitly a first pass on the numbers (tier count, scale,
 how many clusters) - not played yet, see Unverified.
 
 **Grass, 2026-09-27** - MinionsArt's compute-shader grass system (Built-in pipeline version,
@@ -678,8 +673,8 @@ x 20 triangles, a ~96 MB draw buffer at most. See Unverified.
       rendering meters off the hand (a scale bug in `AttachWeaponsToHand`) and, separately, an
       unmodelled wrist bone between the elbow and the weapon's attach point meant even a
       correctly-solved arm left the gun somewhere else entirely. Both fixed - see `bug-log.md`'s
-      tenth pass. A proper-angle photography tool (`Tools/Gorilla Warfare/Photograph the grip`)
-      now exists for checking this kind of thing without guessing from a bad camera angle again.
+      tenth pass. Checked with a proper-angle photography tool (`TwoHandedPhotographer.cs`, since
+      removed - it's in git history) rather than guessed from a bad camera angle again.
 - [x] **Melee swing.** `SingleShotGun.StabSwing()` - a fast jab forward, a slower settle back,
       driven by maths off the weapon's own held pose rather than a clip, unscaled time so
       hitstop doesn't freeze it mid-jab.
@@ -690,8 +685,8 @@ x 20 triangles, a ~96 MB draw buffer at most. See Unverified.
       not reasoned about a third time. Its reticle was also `Dot`, which draws nothing at all
       unless a `CrosshairDot` setting most players never turn on is active. Both fixed 2026-08-23,
       see `bug-log.md`'s ninth pass.
-- [x] **Check hitbox alignment against the mesh.** Actually looked at, 2026-08-22, with
-      `Tools/Gorilla Warfare/Photograph the hitboxes` - and it was worse than "never checked":
+- [x] **Check hitbox alignment against the mesh.** Actually looked at, 2026-08-22, with a hitbox
+      overlay render (`HitboxPhotographer.cs`, since removed) - and it was worse than "never checked":
       the auto-fit measured the arm at 0.66m radius, wider than the torso, because this rig's
       skin weights are painted broadly around the shoulder and hip joints and the fitter trusted
       them. Replaced with `HitboxProfile.asset`, a hand-set radius per part - see bug-log.md.

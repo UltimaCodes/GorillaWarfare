@@ -25,12 +25,11 @@ public static class AudioCheck
     /// <summary>
     /// The shield break, checked for what Ryaan actually asked for.
     ///
-    /// He was specific: one break, not loud, not a pile of them. Length is the part worth
+    /// The brief was specific: one break, not loud, not a pile of them. Length is the part worth
     /// asserting - a clip over a second and a half is a cupboard falling over rather than a pane
-    /// going, and no amount of volume tuning fixes that. The transient count and the envelope
-    /// live in Tools/Gorilla Warfare/Measure the shield sounds, which prints them rather than
-    /// asserting, because picking a sound is a judgement and this is only a guard against the
-    /// obviously wrong one.
+    /// going, and no amount of volume tuning fixes that. The transient counts and envelopes were
+    /// measured when the clips were picked and are recorded in the bank's README, because
+    /// picking a sound is a judgement and this is only a guard against the obviously wrong one.
     /// </summary>
     static void ShieldIsTheRightShape()
     {
@@ -52,7 +51,7 @@ public static class AudioCheck
     ///
     /// Length is the checkable part: a slide loops for as long as you are sliding, so anything
     /// under half a second turns into a stutter no matter how good the recording is. Whether it
-    /// is continuous is judged from the envelope, which the measuring tool prints.
+    /// is continuous was judged from the envelope when the clips were picked (see the README).
     /// </summary>
     static void SlideIsAScrape()
     {
@@ -67,13 +66,6 @@ public static class AudioCheck
         }
     }
 
-    /// <summary>
-    /// The vine's thwip has to be a snap rather than a whoosh - the opposite shape from the
-    /// slide's scrape, which is exactly why it isn't the same bank. Length is the checkable
-    /// part, same as the other two shape checks; how sharp the attack is was measured with
-    /// tools/analyze_swishes.py when the clips were picked and is recorded in the bank's own
-    /// README rather than re-derived here every run.
-    /// </summary>
     /// <summary>
     /// The wind bed has to be a bed - the same requirement the jungle ambience failed and got
     /// cut for. That track buried wind chimes in it and measured 0.49 distinct events a second;
@@ -97,6 +89,12 @@ public static class AudioCheck
         }
     }
 
+    /// <summary>
+    /// The vine's thwip has to be a snap rather than a whoosh - the opposite shape from the
+    /// slide's scrape, which is exactly why it isn't the same bank. Length is the checkable
+    /// part, same as the other shape checks; how sharp the attack is was measured when the clips
+    /// were picked and is recorded in the bank's own README rather than re-derived every run.
+    /// </summary>
     static void VineIsAThwip()
     {
         AudioClip[] vine = Resources.LoadAll<AudioClip>("Audio/Vine");

@@ -377,8 +377,8 @@ Candidates that don't require new systems:
   lookup, not new plumbing.
 - **Victory lines** - a line shown on the post-match scoreboard for whoever's holding one, cheap
   to add given the scoreboard already exists (M3).
-- **Banana/weapon skins** - a colour or pattern swap on the existing banana models, same shape of
-  change as `WeaponNaming` already does for on-screen names.
+- **Banana/weapon skins** - a colour or pattern swap on the existing banana models, carried on
+  the `GunInfo` the same way `itemName` already carries on-screen names.
 
 **Deliberately not on this list: the 12 player colours in `PlayerColours.cs`.** They're already
 free, already in the lobby picker, and already played and confirmed working across 3-4 clients -
@@ -505,7 +505,7 @@ different from the compound — two maps that play the same way is the same as o
 Canopy and the Zoo are better maps but both are much more work, and Canopy in particular needs
 the launcher and vine to exist first or half of it is unreachable. Both now do.
 
-**How to build them:** blocked out from code, the way `MapDressing` already works, rather than
+**How to build them:** blocked out from code, the way `MapExpansion` already works, rather than
 placed by hand. A generated blockout is re-runnable, diffable and tunable by changing a number,
 which matters enormously while the layout is still wrong. Hand-placed art goes on top once the
 shape is settled and nobody is moving walls any more.

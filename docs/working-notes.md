@@ -142,7 +142,7 @@ loose doesn't throw, it just silently stops drawing and looks like a bug in the 
 
 **Weapon keys stay role names** — `Pistol`, `Shotgun`, `Rifle`, `Sniper`, `Peel`. The gun game
 ladder is defined in power order and reads at a glance. What players see lives in `itemName` on
-the `GunInfo` and is set by `WeaponNaming`.
+the `GunInfo`, set by hand in the inspector.
 
 **Banana models run along +Z**, grip at the origin. `SingleShotGun.AnchorGrip` re-seats every
 model at runtime, so a longer weapon reaches further forward instead of further backwards.
@@ -314,10 +314,11 @@ empty room browser. That reads as the game being broken, not as a setting.
 `FixedRegion` is `uae`, chosen because the testers are in Pakistan, the UAE and Italy and it is
 the only cluster that is not badly unfair to one of them. `SceneCheck` fails if it is ever blank.
 
-**The region token is not the dashboard name.** It is `uae`, not `mea`. Photon's docs are behind
-a bot check from here, so `Tools/Gorilla Warfare/List Photon regions` asks the account directly
-and prints every enabled token with its ping. Run that rather than guessing - a wrong token does
-not error, it just finds no rooms.
+**The region token is not the dashboard name.** It is `uae`, not `mea`. A wrong token does not
+error, it just finds no rooms. The tool that listed the account's tokens (`RegionCheck.cs`) was
+removed because it wrote a blank `FixedRegion` into the committed PhotonServerSettings as a side
+effect; if a region ever needs checking again, restore it from git history and revert that asset
+afterwards.
 
 Also worth knowing: `Launcher` falls back to best-region once if the fixed one is unreachable,
 and logs the region it actually landed on. If two people ever cannot see each other's lobbies,

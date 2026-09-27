@@ -7,8 +7,8 @@ from an impact - and these two are the smoothest of them: 0.53 and 0.58 distinct
 against 1.12 and 1.40 for the other two. Fewer events means fewer individual rock clacks, which
 is what you want under a slide.
 
-Run Tools/Gorilla Warfare/Measure the shield sounds to see the numbers and an ASCII envelope for
-every clip in this bank.
+The measuring tool (ShieldSoundPick.cs, which covered this bank too) was a one-off and lives in
+git history.
 
 They are about 1.8 seconds each and SpeedRush loops one on a dedicated source rather than
 retriggering it, with volume and pitch both following speed. Anything dropped in here should be

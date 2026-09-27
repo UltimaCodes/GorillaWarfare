@@ -287,7 +287,7 @@ public static class SceneCheck
             {
                 if (text.font != null && text.font.name.Contains("LiberationSans"))
                     Failures.Add($"{System.IO.Path.GetFileName(path)}/{text.name} is still on the "
-                                 + "default font - run Tools/Gorilla Warfare/Retarget default fonts");
+                                 + "default font - give it one of the project's own");
             }
         }
     }

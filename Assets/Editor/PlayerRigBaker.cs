@@ -93,9 +93,8 @@ public static class PlayerRigBaker
     /// exactly one place that knows how a weapon gets anchored to a hand - a second copy of that
     /// logic is exactly the kind of thing that quietly drifts from the real one.
     ///
-    /// Deliberately NOT built inside ItemHolder - ProjectCleanup.cs already treats anything
-    /// sitting in that holder in the prefab asset as a leftover to strip, because
-    /// WeaponLoadout.Build owns filling it at runtime. A weapon object is built as a temporary
+    /// Deliberately NOT built inside ItemHolder - anything sitting in that holder in the prefab
+    /// asset is a leftover, because WeaponLoadout.Build owns filling it at runtime. A weapon object is built as a temporary
     /// child of the real ItemHolder just long enough for BuildVisual's own grip math to anchor it
     /// correctly, then reparented onto a separate `~WeaponPreviews` group (kept inactive, so nothing
     /// about a real spawn ever sees it) with its SingleShotGun component removed again - what's

@@ -9,7 +9,8 @@ Matthew Nanney, [OpenGameArt](https://opengameart.org/content/the-free-firearm-s
 **CC0**. Studio recordings at 96kHz/24bit: a 1911 for the Cavendish, an AK-47 for the Bunch, a
 Mossberg for the Split, a Mosin Nagant for Big Mike.
 
-Each source file is a whole session, so `tools/extract_shot.py` cuts one shot out. That took
+Each source file is a whole session, so a one-off script (`tools/extract_shot.py`, now in git
+history) cut one shot out. That took
 several goes and the failures are worth recording, because every one of them produced a file
 that measured fine:
 
@@ -31,7 +32,7 @@ independently and fails on more than one, which is what finally settled it.
 
 **Vine grapple (thwip)** - "Swishes Sound Pack" by artisticdude,
 [OpenGameArt](https://opengameart.org/content/swishes-sound-pack), **CC0**. Two of the thirteen,
-picked by measurement (`tools/analyze_swishes.py`): highest crest factor and earliest peak in the
+picked by measurement (numbers in the bank's README): highest crest factor and earliest peak in the
 pack for `swish-10`, shortest overall for `swish-13` - a thwip wants a sharp, early crack rather
 than a swell, which is a different shape from Slide's sustained scrape and why this didn't just
 reuse that bank.
@@ -53,30 +54,19 @@ the menu sounds are percussive taps rather than tones, which is what the old one
 
 **Footsteps, impacts, hurt, UI clicks** - [Kenney](https://kenney.nl), **CC0**.
 
-### Still missing
-
-Four banks have nothing in them, and the game is quieter than it should be until they do:
-
-| bank | what it needs |
-|---|---|
-| `Hit/hit`, `Hit/headshot` | the tick when your shot lands. **The most important sound in the game** - it's the difference between aiming and guessing |
-| `Kill/kill` | distinct from a hit, and it should go downward where the hit goes up |
-| `Death/death` | heavy and organic. Not a sci-fi explosion, which is what it used to be |
-| `Shoot/Peel/swing` | a whoosh for the melee |
-
-`GameAudio` resolves banks by folder name, so dropping a wav or ogg into any of those folders is
-the whole installation - no wiring, no references. `AudioCheck` will tell you the moment they're
-filled, and it fails on a clip containing more than one shot, which is the bug that shipped once
-already.
+`GameAudio` resolves banks by folder name, so dropping a wav or ogg into a bank folder is the
+whole installation - no wiring, no references. `AudioCheck` fails on a clip containing more than
+one shot, which is the bug that shipped once already.
 
 ## Models
 
-Rigged monkey from [OpenGameArt](https://opengameart.org/content/monkey-3d-model-rigged-fbx) —
-CC0. 34 bones, skinned, and it maps to Unity's Humanoid rig so humanoid animations can be
-retargeted onto it.
+**Gorilla** (`Assets/Resources/Models/Gorilla`) - supplied by Ryaan as a zip whose rig only
+survived in a Source `.smd`, rebuilt into an FBX in Blender. **Its source and licence aren't
+recorded anywhere yet - add them here before release.**
 
-Every weapon in the game is one banana at a different size. `tools/banana_variants.py` derives
-all five from it — 9,356 triangles, one 2K texture shared between them.
+Every weapon in the game is one banana at a different size, derived from it by a one-off Blender
+script (`tools/banana_variants.py`, now in git history) — 9,356 triangles, one 2K texture shared
+between them.
 
 It is **CC BY 4.0**, not CC0, so attribution is a condition of the licence rather than a
 courtesy. The author's own wording, which has to travel with anything the game ships in:
@@ -110,18 +100,24 @@ menu one carries on, no warmup and combat starts early.
 
 ## Fonts
 
-In `Assets/Fonts/`, imported but not used by anything yet. Each keeps its own licence file
-alongside it.
+In `Assets/Fonts/`, each with its licence file alongside it where one shipped.
 
-| font | licence |
-|---|---|
-| Chomsky | SIL Open Font License 1.1 — Fredrick R. Brennan. The most permissive of the four |
-| Bring Me A Helicopter | **non-commercial only**; a commercial licence is sold separately |
-| The Wildeast | **demo version, personal use only** — the full font is paid |
-| Helvetica Punk | no licence file shipped with it |
+| font | used for | licence |
+|---|---|---|
+| Anton | menu and HUD headings | SIL Open Font License 1.1 — The Anton Project Authors |
+| Jersey 10 | menu and HUD body text | SIL Open Font License 1.1 — The Soft Type Project Authors |
+| Helvetica Punk | in-game text | **no licence file shipped with it** — check before release |
 
-Three of those are fine for this project and would not be for a released game. Worth knowing
-before any of them ends up on a title screen that leaves this machine.
+## Grass
+
+Compute grass system by Minions Art (Joyce), from the $10 Patreon tier — see
+`Assets/Grass/CREDIT.txt` for the terms and every local change.
+
+## Art
+
+Jungle props — Kenney's Nature Kit, and particle sprites — Kenney's Particle Pack, both **CC0**
+(licence files in `Assets/Art/Jungle` and `Assets/Resources/Particles`). The health banana sprite
+is credited in `Assets/Textures/UI/BananaHealth-CREDIT.txt`.
 
 ## Movement
 

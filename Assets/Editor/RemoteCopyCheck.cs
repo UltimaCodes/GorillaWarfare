@@ -253,7 +253,7 @@ public static class RemoteCopyCheck
             // Keys stay as roles; what players read comes off the asset. A weapon added without
             // one would show its key on the HUD and in the kill feed.
             if (string.IsNullOrWhiteSpace(info.itemName) || info.itemName == weapon)
-                Failures.Add($"'{weapon}' has no name of its own - run WeaponNaming");
+                Failures.Add($"'{weapon}' has no name of its own - set itemName on its GunInfo");
         }
 
         string[] shown = new string[WeaponLoadout.GunGameLadder.Length];

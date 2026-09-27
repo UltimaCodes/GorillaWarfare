@@ -3,8 +3,8 @@ though the credits should say so anyway.
 
 Picked by measuring rather than by filename: both are a single transient (not a pile of
 breaking), 0.54s long, and the quietest of the four candidates by RMS - 0.054 against 0.086
-for the 'light' one, which despite the name was the loudest on average. Run
-Tools/Gorilla Warfare/Measure the shield sounds to see the numbers and an ASCII envelope.
+for the 'light' one, which despite the name was the loudest on average. The measuring tool
+(ShieldSoundPick.cs) was a one-off and lives in git history.
 
 Two rather than one so repeated breaks vary slightly. GameAudio picks from a bank at random.
 

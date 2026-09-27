@@ -2105,8 +2105,7 @@ public class ProbeRunner : MonoBehaviour
 
     /// <summary>
     /// Reported directly as "does nothing." Unlike the scoreboard, this one's a camera effect, so
-    /// the same render-to-texture technique OutlinePlayCheck already proved out for ScreenOutline
-    /// works here too - a real before/after pixel comparison rather than trusting that "it
+    /// it can be checked by rendering to a texture - a real before/after pixel comparison rather than trusting that "it
     /// compiled and the profile has the setting in it" means the picture actually changed.
     ///
     /// Renders the composited frame (world camera, then the gun camera on top, the way a real
