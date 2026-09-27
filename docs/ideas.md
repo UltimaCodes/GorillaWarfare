@@ -29,87 +29,215 @@ The bugs and the vine swing from that round are done (roadmap.md, "Player feedba
 are design calls, so they're written up as options with a recommendation rather than built on a
 guess.
 
-### New weapons
+### New weapons - picked 2026-09-28, planned, not built
 
-**Why the Grenada gets old and loses to Big Mike.** It's mostly the map. Big Mike is hitscan, 95
-damage, scoped, and reaches across the whole arena; the Grenada is 105 on a direct hit but arcs, has
-travel time, and does its best work against someone with a wall behind them or a floor under a
-ledge. The current arena is a flat open field, which is Big Mike's ideal map and the Grenada's
-worst. New maps with cover and height (below) fix more of this than any number would. Worth doing as
-well, on the Grenada: a slightly bigger splash (people are bunched less than on the maps it was
-tuned on) and airbursting beside a player it passes close to, so a near miss still counts.
+The first candidate list (Peel Slick, Chest Beat and so on) was turned down: "gimmick abilities
+youd use", not weapons you can win a free-for-all with. Picked instead: **a grape gatling with
+physical projectiles, a TF2-style chili flamethrower, and a pomegranate cluster grenade.** Each is a
+real primary - it can take a fight on its own - with one thing about it nothing else in the game does.
 
-**Candidates**, each held to this doc's bar (does it change how you move, or how the space works?):
+**Why the Grenada gets old and loses to Big Mike.** Mostly the map. Big Mike is hitscan, 95 damage,
+scoped, and reaches across the whole arena; the Grenada is 105 on a direct hit but arcs and has travel
+time, and does its best work against someone with a wall behind them. A flat open field is Big Mike's
+ideal map and the Grenada's worst - new maps with cover and height fix more of it than any number.
 
-| weapon | what it does | why it's fun | builds on |
-|---|---|---|---|
-| **The Peel Slick** | a thrown banana peel that lies where it lands; step on it and you slip - a forced, uncontrollable slide in whatever direction you were going | the most gorilla-cartoon idea there is, and it turns a doorway or the lip of a ledge into a trap | the projectile system; the slide already exists to hijack |
-| **The Boomerang** | a thrown banana that curves out and comes back, hitting on both legs; catch it for an instant re-arm, miss the catch and wait | hits round corners, and the catch is a skill test you do while moving | projectile system, a curved path instead of an arc |
-| **The Durian** (on hold since 08-22) | sticky mortar - sticks to walls, floors or people, short fuse | getting marked forces a decision in two seconds | projectile system + stick-and-fuse |
-| **The Coconut** (on hold) | thrown, rolls with the terrain until it hits something, then sticks and blows | chases people down slopes and round corners | a rigidbody projectile + the Durian's fuse |
-| **The Chest Beat** | a gorilla shockwave: short range, little damage, big knockback away from you | knocks people off ledges and out of the air - pairs with every map that has height | the Grenada's knockback, without the projectile |
-| **The Zest** (on hold) | citrus spray that blinds for a couple of seconds | disable, not damage - funny to throw, infuriating to eat | a cone check + a post effect |
+Names follow the cultivar convention the bananas use (Cavendish, Gros Michel) - suggestions, Ryaan's
+call: **Thompson Seedless** for the gatling (a grape, and it fires them whole), **Carolina Reaper** for
+the flamethrower (the hottest chili there is), and **Pomo-Grenade** as named.
 
-**Recommendation: the Peel Slick and the Chest Beat first.** Both are short builds on systems that
-already exist, both are about movement and space rather than damage, and both get funnier the more
-height a map has - which is where the maps are going anyway. The Boomerang third.
+#### The Grape Gatling (`Gatling`)
 
-**Needs sourced models.** Every one of these needs a real model (a peel, a durian, a coconut) - not
-one made here. The banana weapons' source is CC BY 4.0 on Sketchfab; the same search for the rest.
+A minigun that fires grapes. **Real projectiles** - each grape flies, drops a little, and can be
+dodged at range - which is what separates it from the Bunch's hitscan.
 
-### New maps
-
-The arena is flat, open and plain - a big enclosure with trees, rocks and a moai. What every
-candidate below adds is **depth** (height to play on), **range variety** (short and long fights in
-one place) and **detail** (somewhere worth learning).
-
-**Before any second map is playable** there's infrastructure (section 6 has the detail): a map
-registry, `RoomManager.gameSceneIndex` stops being a constant, every map scene gets its spawns, HUD
-and post setup, and the host picks the map in the lobby. Voting after that.
-
-| map | shape | why now |
+| | value | why |
 |---|---|---|
-| **Canopy** (section 5) | treetop platforms at three or four heights, branches between them, a safe floor under the middle | it's the map the swinging vine was made for - tall trees to swing between is exactly what players asked for |
-| **Jungle Temple** (new) | a stepped ruin in the middle of the jungle, a river gorge across one side, tall trees round the edge; the moai becomes one of many ruins | close fights in the temple, long ones across the gorge, height everywhere, and it grows out of the current look rather than starting over |
-| **The Zoo** (section 5) | enclosures round a plaza | the best joke, and a proven hub-and-spokes layout |
+| spin-up | 0.6s from holding fire (or holding aim) | the commitment - you can't peek with it |
+| fire rate | 14 grapes/s at full spin | |
+| damage | 11 per grape, falloff from 20m | 154 DPS, a little under the Bunch's 178 - it trades raw damage for a bigger magazine and a lane it can hold, and every grape still has to reach you |
+| grape speed / drop | 55 m/s, gravity x0.25 | fast enough to track, slow enough to lead at 30m+ |
+| spread | 0.4° climbing to 2.5° over a 3s burst | rewards bursts over holding it down |
+| while spun up | move speed x0.6 | TF2 heavy's price: it holds a lane, it doesn't chase |
+| magazine | 120 grapes, 1 spare, 4s reload | |
+
+**Holding aim spins the barrel without firing**, the way TF2's heavy revs - so you can wait at a
+corner already spun up, at the cost of moving slowly the whole time.
+
+#### The Chili Thrower (`Flamer`)
+
+TF2's Pyro flamethrower. Hold fire for a short cone of flame that travels out and fades; anything the
+flame touches burns.
+
+| | value | why |
+|---|---|---|
+| reach | flame travels 14 m/s and lives 0.5s - about 7m | a close-range weapon that cannot be used at range at all |
+| damage | 110 DPS point blank, down to 40% at the tip of the flame | |
+| afterburn | 8 damage/s for 4s, refreshed by more flame; can kill, credited to whoever lit you | the TF2 part - chasing someone down still matters after they break away |
+| fuel | 200, 25/s while firing (8s), 3s refill | |
+| airblast (aim key) | a cone shove - knocks players back 12 m/s, costs 20 fuel, 0.75s cooldown | TF2's other half, and it throws people off ledges |
+
+Airblast **reflecting projectiles** (sending a Grenada back at whoever fired it) is the dream version
+and a second step - it means handing a shell's ownership to another client, which nothing does yet.
+
+#### The Pomo-Grenade (`Pomegranate`)
+
+A lobbed grenade that bursts into seeds.
+
+| | value | why |
+|---|---|---|
+| throw | 20 m/s, full gravity, bounces up to twice | arcs over cover - the thing hitscan can't do |
+| fuse | 1.4s from the throw, or at once on touching a player | |
+| burst | 45 damage, 3.5m radius, small knockback | |
+| seeds | 8 scatter out, bounce, and each pops after 0.5-0.9s: 22 damage, 1.6m radius | area denial - the space it lands in is dangerous for a second after |
+| ammo | one in hand, 5 spares, 0.8s to draw the next | |
+| self-damage | none, same as the Grenada | |
+
+#### How it gets built
+
+**Global constraints**
+
+- Hit registration stays client-authoritative: the shooter's client deals damage; everyone else only
+  draws. Knockback is applied by whoever owns the body pushed.
+- Each weapon is a `GunInfo` in `Resources/Guns/<Key>.asset` (the key is its role; the name on screen
+  is `itemName`), in `WeaponLoadout`'s random pool, and optionally on `GunGameLadder`.
+- **Models and sounds are sourced, never made here.** Kenney's Food Kit (CC0, where the Pineapple
+  came from) first - check it has grapes, a chili and a pomegranate; Poly Pizza's CC0 models after
+  that. Models to `Resources/Models/Weapons`, sounds to `Resources/Audio/Shoot/<Key>/`. The flame and
+  the seeds' pops use Kenney's particle pack, which is already here.
+- Health is 140, overshield tops out at 200 and soaks damage at 2x (`ShieldToughness`).
+
+**Files**
+
+- `Scripts/Weapons/Blast.cs` - new. The radial damage + knockback now inside `Projectile.Explode`,
+  pulled out as `Blast.Apply(Vector3 at, float radius, float damage, float knockback,
+  PlayerController shooter, string weapon, bool mine)`, so the Grenada, the Pomo-Grenade's burst and
+  every seed share one blast.
+- `Scripts/Weapons/LightProjectile.cs` - new. A pooled projectile with no light, trail or glow (the
+  Grenada's `Projectile` builds all three per shell - fine for one pineapple, far too heavy for 14
+  grapes a second). One shared mesh and material, a sphere sweep per frame like `Projectile.Update`,
+  a hit calls back. Used by grapes, flame puffs and seeds.
+- `Scripts/Weapons/GatlingSpin.cs` - new. Spin-up state, the move-speed multiplier it hands
+  `PlayerMovement`, the spin sound. Its spinning flag rides `PlayerController`'s existing
+  `OnPhotonSerializeView` stream, so everyone hears it and sees the barrel turn.
+- `Scripts/Weapons/FlameStream.cs` - new. Emits flame puffs while fired; the owner's puffs deal
+  damage, everyone's puffs are drawn from the replicated firing flag (no message per puff). Airblast.
+- `Scripts/Player/Afterburn.cs` - new, on every player and every `TrainingDummy`. Owner-side burn
+  timer; on a player, `RPC_Ignite(float seconds)` arrives from whoever lit you, and ticks go through a
+  new `PlayerController` path that credits them if the burn kills. A dummy just burns locally, the way
+  everything in the one-person sandbox already works.
+- `Scripts/Weapons/PomoGrenade.cs` - new. Bounce, fuse, then `RPC_PomoBurst(Vector3 at, int seed)`
+  from the thrower, so every client scatters the same seeds from the same point.
+- `Scripts/Weapons/GunInfo.cs` - new fields: `spinUp`, `spinMoveMultiplier`, `spreadGrowth`,
+  `flameSpeed`, `flameLife`, `burnPerSecond`, `burnSeconds`, `airblastKnockback`, `bounces`, `fuse`,
+  `clusterCount`, `clusterDamage`, `clusterRadius`. Defaults that leave every existing gun unchanged.
+- `Scripts/Weapons/SingleShotGun.cs` - `TryShoot` branches to the three behaviours by `GunInfo` flags,
+  the way `Info.projectile` already branches to `ThrowShell`.
+- `Scripts/Player/PlayerController.cs` - the grapes' fire message: one `RPC_GrapesFired(Vector3 origin,
+  Vector3 direction, byte count, int seed)` at most every 0.1s carrying every grape since the last,
+  rather than one per grape (14 a second would be more than the Bunch's 8.5 per-bullet messages).
+- `Resources/Guns/Gatling.asset`, `Flamer.asset`, `Pomegranate.asset`; `WeaponLoadout`'s pool.
+
+**Tasks, in order** - each ends with the suite passing and a commit:
+
+1. **`Blast` pulled out of `Projectile`.** No behaviour change. *Check:* the probe's existing Grenada
+   and knockback checks pass unchanged; a new `WeaponCheck` line asserts `Blast.Apply` at the
+   centre does full damage and at the radius edge none.
+2. **The Pomo-Grenade.** *Check (probe):* a `TrainingDummy` built 6m ahead, a grenade thrown at the
+   ground in front of it - the burst happens within 1.4s of the throw, 8 seeds pop, the dummy takes
+   more than the burst alone (seeds landed), and a throw straight at the dummy bursts on contact.
+3. **`LightProjectile` and the Grape Gatling.** *Check (probe):* fire held for 1.5s at a dummy 15m out
+   - no grapes before 0.6s (spin-up), more than 10 grapes in the air at once (they're physical),
+   the dummy damaged, move speed at 0.6x while spun, aim held spins without spending ammo. *Check
+   (`WeaponCheck`):* DPS at 10m within 0.8-1.0x of the Bunch's, magazine 120.
+4. **The Chili Thrower and afterburn.** *Check (probe):* a dummy at 4m takes damage, one at 10m takes
+   none; after the stream stops the near dummy's health keeps falling for at least 3s (afterburn);
+   airblast shoves a dummy away. *Check (`WeaponCheck`):* flame reach under 8m.
+5. **Into the game.** The three keys join the deathmatch pool; the ladder is a decision (a longer
+   ladder means a longer gun game - 9 rungs at 2 kills is 18 kills to win a 10 minute match).
+   `AudioCheck` gains banks for the three. Real models and sounds dropped in.
+6. **Later: airblast reflects projectiles.**
+
+Not settled by this plan, and worth a look once they're playable: every number above is a first pass.
+### New maps - the plumbing and a greybox Zoo, planned 2026-09-28, not built
+
+The arena is flat, open and plain - a big enclosure with trees, rocks and a moai. Picked: **the
+plumbing for more than one map, and a placeholder second map - a zoo - that Ryaan will rework by
+hand.** Jungle Temple and Canopy (below) stay on the list for after.
+
+**The plumbing** (section 6 has the reasoning):
+
+- **A map list** - `Scripts/Match/MapRegistry.cs`, a ScriptableObject in `Resources/Maps.asset` with
+  one row per map: key, display name, scene name. Adding a map is adding a row plus the scene to
+  Build Settings.
+- **The host picks the map in the lobby**, beside the mode picker - a room property (`map`), the same
+  way the mode already works, so late joiners and the room browser both see it. Voting later.
+- **`RoomManager.gameSceneIndex` stops being a constant.** Everything that assumes one map -
+  RoomManager's spawn wait, scene-loaded hook and late-join load, `MatchState`'s "the map is up",
+  `Sandbox`, `Launcher.StartGame`'s `LoadLevel(1)`, `MusicPlayer`'s own copy of the index, and the
+  probe and photographers' `LoadLevel(1)` - becomes "the scene the room's map names", or "any scene
+  that isn't the menu". `SceneCheck` checks every registered map is in Build Settings and passes the same
+  per-scene checks the arena does today.
+- **What every map scene needs:** a `SpawnManager` with spawnpoints, post-processing, a light, an
+  EventSystem, and the HUD. The first four are small and per-map anyway.
+- **The HUD - open, waiting on Ryaan.** It and the scoreboard are hand-edited objects inside
+  `Game.unity`, and every map needs them. (1, recommended) make them one shared prefab - the current
+  edits carry over and there's one place to edit them; (2) copy them into each map - edits then have
+  to be made once per map; (3) a shared game scene with each map loaded on top - cleanest, but
+  Photon's scene loading doesn't do it, so the most work.
+
+**The Zoo greybox** - `Editor/Builders/ZooBuilder.cs` builds `Scenes/Zoo.unity` once and then refuses
+to run over it, the same rule as `MenuBuilder.Run`, because it's Ryaan's to rework from there:
+
+- a central plaza with a bandstand, open to the sky
+- four to six enclosures round it - a drained pool, a rock enclosure, a glass-fronted reptile house,
+  a tall aviary cage to vine-swing in - each with its own entrances and a different shape of fight
+- one spawnpoint per enclosure, none in the plaza
+- about 80x80m, walled, with trees from the jungle kit round the edge
+- **plain blocks and the jungle kit's sourced props only** - a layout, not art; no made-up models or
+  textures. Real zoo art gets sourced once the layout is right.
+
+**Checks:** `SceneCheck` runs its scene checks on Zoo.unity; the probe gains a pass that loads the Zoo,
+spawns, and checks the player lands on a spawnpoint on the ground; `MenuButtonAudit` covers the new
+map picker.
+
+Still on the list after the Zoo:
+
+| map | shape | why |
+|---|---|---|
+| **Jungle Temple** | a stepped ruin in the jungle, a river gorge on one side, tall trees round the edge | close fights in the temple, long ones across the gorge, height everywhere; grows out of the current look |
+| **Canopy** (section 5) | treetop platforms at three or four heights, a safe floor under the middle | the swinging vine's showcase |
 | **The Compound** / **The Silo** (section 5) | walled courtyard / a vertical shaft | general-purpose / the small map |
 
-**Recommendation: the infrastructure, then Jungle Temple, then Canopy.** Jungle Temple fixes every
-complaint at once, reuses the jungle kit already in the project, and keeps the game's identity;
-Canopy is the vine's showcase and the natural second. Both would be blocked out from code first
-(the way `MapExpansion` works), then dressed with sourced kits - Kenney's Nature Kit is already here;
-a temple needs a sourced ruins/stone kit, CC0 by preference.
-
-### Crates
+### Crates - direction picked 2026-09-28, not built
 
 Mechanically they work (the one dead button is fixed). The problem is that **opening a crate wins
 nothing** - a rarity name on a coloured screen - and the shop still wears the old look.
 
-**What a crate should drop: cosmetics only.** Section 4's reasoning still stands - anything that
-touches a fight makes "I opened more crates" mean "I'm harder to beat". Candidates, cheapest first:
+**What a crate drops: things other people see on you - not weapon skins** ("i think theyre lazy").
+The model is CS2's cases or Crab Game's clothing: collectable, with rarity, worth showing off. Cosmetic
+only - section 4's reasoning stands: anything that touches a fight makes "I opened more crates" mean
+"I'm harder to beat".
 
-| cosmetic | shown where | cost to build |
+| slot | examples | seen |
 |---|---|---|
-| vine colours | your rope, seen by everyone | tiny - it's already a tint |
-| banana skins (tints first, patterns later) | your weapon, in your hand and in everyone else's view | small for tints; patterns need sourced textures |
-| kill-feed icons and victory lines | the feed, the results screen | small |
-| trails (Kenney particle pack, already here) | behind you when you're fast | medium |
-| hats and accessories | on your gorilla | medium - needs sourced models and a head attach point |
+| **Head, face, back, neck** (Crab Game style) | hats, glasses and masks, backpacks, chains | on your gorilla, by everyone - needs sourced models |
+| **Vine** | chain, licorice, rainbow rope | every time you swing |
+| **Kill effect** | what the person you kill bursts into - confetti, banana peels, feathers - and a sound | by your victim, which is the point |
+| **Title** | "SILVERBACK", "BANANA BARON" under your name | on your nametag and the scoreboard |
 
-**The rest of the rework:** a Locker screen (what you own, what you're wearing, one click to equip);
-duplicates refund some tokens so a bad pull still counts; what you're wearing replicates as a player
-property so everyone sees it; the reveal shows the item itself, not just its tier; and the shop gets
-the new menu's look.
+- **Wearables attach to the rig's bones by name** (head, chest, spine), never to the current model's
+  mesh - the gorilla is a placeholder (working-notes.md), and a hat has to survive the swap.
+- **A Locker screen** - what you own, what you're wearing, one click to equip. What you're wearing
+  replicates as a player property, so everyone sees it.
+- **CS2's shape:** each crate is a collection with its own items and odds, the reveal shows the item
+  itself (not just its tier), and a duplicate turns into some tokens so a bad pull still counts.
+- **Earned tokens only, nothing tradeable.** Selling crates or tokens for money is regulated as
+  gambling in several countries (Belgium bans paid loot boxes outright), and trading makes it worse.
+  If the game ever sells anything, sell the item directly, never a chance at it.
+- The shop gets the new menu's look.
 
-**One thing to decide up front: real money.** Crates bought only with earned tokens are a game
-mechanic. Selling crates or tokens for money is regulated as gambling in several countries (Belgium
-bans paid loot boxes outright), and letting players trade or sell items makes it worse. The
-recommendation is earned tokens only, cosmetics not tradeable - and if the game ever sells anything,
-sell the cosmetics directly, never a chance at them.
-
-**Recommendation: build vine colours and banana tints as the first drops, with the Locker and the
-reveal.** That's the smallest version where opening a crate gets you something you'll see in the
-next match. Hats once there are sourced models.
+**Still to decide:** which slots come first - vines and titles are cheapest, since they need no
+models; wearables are the Crab Game feel but need a sourced accessory pack.
 
 ---
 

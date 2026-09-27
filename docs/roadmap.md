@@ -91,13 +91,16 @@ The first round of feedback from people playing it. Worked through in this order
       222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
       listener saved into the prefab. Fixed. At 4:3 a few controls fell off the right edge; the
       menu's Canvas Scaler is on Screen Match Mode "Expand" now and 4:3 audits clean.
-- [ ] **The crates themselves want reworking** - opening one wins nothing yet, and the shop still
-      wears the old look. Planned (ideas.md section 0): cosmetic drops, a Locker, earned tokens
-      only. Waiting on a pick.
-- [ ] **New weapons** - fun and quirky; the Grenada is the favourite but gets old and loses to
-      Big Mike. Planned (ideas.md section 0): Peel Slick and Chest Beat first. Waiting on a pick.
-- [ ] **New maps** - the arena is flat, open and plain. Planned (ideas.md section 0): map
-      infrastructure, then Jungle Temple, then Canopy. Waiting on a pick.
+- [ ] **The crates themselves want reworking** - opening one wins nothing yet. Direction picked
+      (ideas.md section 0): things people see on you, not weapon skins - wearables Crab Game style,
+      vine styles, kill effects, titles - with a Locker and CS2-style collections. Earned tokens
+      only. Which slots first is still open.
+- [ ] **New weapons** - picked 2026-09-28: a grape gatling with physical projectiles, a TF2-style
+      chili flamethrower with afterburn, a pomegranate cluster grenade. Planned in ideas.md section 0
+      (design, files, checks, build order). Not started.
+- [ ] **New maps** - the plumbing for more than one map, and a greybox Zoo for Ryaan to rework.
+      Planned in ideas.md section 0. Waiting on one call: share the HUD as a prefab (recommended),
+      copy it per map, or load maps on top of a shared scene.
 
 ---
 
