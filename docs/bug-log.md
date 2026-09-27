@@ -3379,3 +3379,43 @@ branch at 8.8 m/s and still doing 8.8 after. Full suite passes.
 **Not verified: how it feels.** Every number here is a first pass - kick, reel speed, steering,
 clearance - and none of them has been played by a person yet.
 
+
+---
+
+# Thirty-seventh pass — the folders, 2026-09-28
+
+"A repo organization sweep where theres alot of miscategorized stuff, stuff that should be in one
+folder instead of multiple and a lack of ordering via subfolders especially for scripts." The new
+layout is in working-notes.md ("Where things live").
+
+## What moved
+
+- **75 scripts** out of one flat `Scripts/` into ten folders by what they belong to (Player,
+  Weapons, Match, Menu, Hud, Settings, Crates, Effects, Rendering, Audio). **24 editor tools** out of
+  one flat `Editor/` into Checks, Builders, Reports and Setup.
+- **Prefabs** into `UI/` and `World/`; the spawnpoint's material moved in beside its prefab, which
+  emptied the one-file `Materials/` folder.
+- **The app icon** out of `3DModels/chimpanzee/textures/SKINM.jpeg` - a whole models folder kept
+  alive by one texture - to `Textures/Icon/AppIcon.jpeg`. Same GUID, so ProjectSettings still has it.
+- **The jungle kit's 49 models** into `Art/Jungle/Models/`. Safe to move: their materials are
+  embedded in each FBX, with no external remaps for a move to break.
+- **The Pineapple's colormap** out of the jungle kit (it's the food kit's, and only the Pineapple
+  uses it) into `Resources/Models/Weapons/`, beside the material that uses it.
+- **Removed:** 15 of the jungle kit's 16 loose materials. A scan of every scene, prefab, material,
+  asset and meta found nothing using them; `grass.mat`, the arena floor, stays.
+
+Everything was moved with its `.meta`, so every GUID - and so every reference - is unchanged.
+`Resources/`, `Scenes/`, `Fonts/`, `Shaders/`, `Textures/UI/` and the vendor packages didn't move:
+`Resources` paths are loaded by name from code, and the rest were already where they belong.
+
+## What had to change with it
+
+- `WeaponCheck` read six scripts' source from `"Assets/Scripts/X.cs"`. It finds them by name through
+  the AssetDatabase now, so the next move can't break it.
+- `MapExpansion` loads the jungle kit by folder, and `MenuBuilder` its two row prefabs by path. Both
+  point at the new places.
+
+## Verified
+
+All nine suites pass on the reorganised project, including SceneCheck's missing-script and magenta
+checks across both scenes and every prefab, the button audit and the sandbox trip.

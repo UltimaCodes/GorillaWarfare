@@ -5,6 +5,10 @@ Kenney Food Kit            https://kenney.nl/assets/food-kit            CC0
 
 Both are CC0 - public domain, no attribution required. Credited anyway.
 
+Models/ is the nature kit (flat shaded, materials embedded in each FBX). Materials/grass.mat is the
+arena floor. The food kit's pineapple and its colormap live with the other weapons, in
+Resources/Models/Weapons.
+
 Picked for performance as much as for looks. The nature models carry no textures at all: they
 are flat shaded and coloured by material, and the whole 329 model kit uses 23 material names
 between them, so a map made of hundreds of props still runs on about ten materials and samples

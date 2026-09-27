@@ -178,7 +178,7 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
 - [x] Fire rate limiting — `SingleShotGun` fires once per click with no cooldown, so an auto
       weapon has nothing to hold it back
 
-Balance is asserted in `Assets/Editor/WeaponCheck.cs` rather than eyeballed - the rifle has to
+Balance is asserted in `Assets/Editor/Checks/WeaponCheck.cs` rather than eyeballed - the rifle has to
 win on sustained dps or the semi-auto is strictly better and nobody picks it. That check caught
 exactly that: pistol was doing 221 dps against the rifle's 210.
 
@@ -382,7 +382,7 @@ two feeds would either overlap or need a third thing to arbitrate.
          swatch otherwise, reported directly - a colour block with no edge is exactly that,
          wherever it sits over the map).
       Verified each time by an actual screenshot of a real offline match
-      (`Assets/Editor/HudPhotographer.cs`, kept as a permanent tool), not eyeballed math or a
+      (`Assets/Editor/Reports/HudPhotographer.cs`, kept as a permanent tool), not eyeballed math or a
       browser preview - see the sixteenth pass for the ammo-frame sign error and the flat-bar
       complaint that only showed up once rendered for real.
       4. Sent to real playtesters, who came back with "personality to it before, generic slop
@@ -643,7 +643,7 @@ Summary:
 
 **The current jungle map got a density and verticality pass 2026-08-22** - not a replacement for
 the above, which is still the real plan. `Tools/Gorilla Warfare/Expand the jungle map`
-(`Assets/Editor/MapExpansion.cs`) adds climbable cliff clusters (staggered cliff_block_rock
+(`Assets/Editor/Builders/MapExpansion.cs`) adds climbable cliff clusters (staggered cliff_block_rock
 tiers, real height now checked in the scene file after a bug where every tier landed at ground
 level instead of stacking) built to reward the new movement tech, plus a denser scatter of the
 existing prop kit across the open ground. Re-runnable and idempotent: everything it places lives

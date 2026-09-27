@@ -145,7 +145,7 @@ The projectile system unlocking everything else in this section is also done - s
 
 ### The Vine — grapple, now specced closer to ODM gear
 
-**Built 2026-08-21**, same day as the spec below — `Assets/Scripts/VineGrapple.cs`, bound to G.
+**Built 2026-08-21**, same day as the spec below — `Assets/Scripts/Player/VineGrapple.cs`, bound to G.
 Left the design writeup in place rather than trimming it down after the fact, since it's still
 the accurate account of what the feature is and why.
 
@@ -763,7 +763,7 @@ wall-smash, air-brake, slide-hop) rather than true from-scratch procedural gener
 real specialty and a much bigger technical bet than it looks. Instead: a kit of hand-authored course
 chunks (a grapple gap, a wall-run corridor, a precision air-brake drop, a slide-hop straight), each
 with fixed entry/exit points, shuffled and chained at match start — every chunk pre-tested and
-guaranteed traversable, only the combination is random. `Assets/Editor/MapExpansion.cs` already
+guaranteed traversable, only the combination is random. `Assets/Editor/Builders/MapExpansion.cs` already
 does exactly this "kit of pieces, placed proceduralized" trick for the jungle map's cliff clusters,
 so this isn't a new category of risk, it's the same technique pointed at a race course.
 

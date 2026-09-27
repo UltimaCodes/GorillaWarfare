@@ -108,6 +108,34 @@ PlayerPrefs-backed system needs the same switch, or the probes will overwrite it
 
 ## Conventions
 
+**Where things live** (reorganised 2026-09-28 - new files go in the folder that fits, never loose):
+
+| folder | what goes in it |
+|---|---|
+| `Scripts/Player` | the local and remote player: controller, movement, rig, camera, vine, hitboxes, nametags |
+| `Scripts/Weapons` | items, `GunInfo`, `SingleShotGun`, loadouts, projectiles, `IDamageable` |
+| `Scripts/Match` | match rules and phases, rooms, spawns, style score, the sandbox and its dummies |
+| `Scripts/Menu` | the main menu: launcher, screens, lobby widgets, loading screen |
+| `Scripts/Hud` | the in-match HUD and the scoreboard |
+| `Scripts/Settings` | `GameSettings`, `KeyBinds`, the settings screen |
+| `Scripts/Crates` | the crate shop, crate data, the wallet |
+| `Scripts/Effects` | juice, flashes, tracers, decals, corpses |
+| `Scripts/Rendering` | the post stack, PSX, outline, grass placement |
+| `Scripts/Audio` | sound banks, footsteps, music |
+| `Editor/Checks` | the verification suites (roadmap.md's table) |
+| `Editor/Builders` | tools that build a scene, prefab or map piece |
+| `Editor/Reports` | photographers and reports - read-only, change nothing |
+| `Editor/Setup` | one-time project setup that live errors point at |
+| `Prefabs/UI`, `Prefabs/World` | prefabs placed by scenes or code, by kind |
+| `Art/<kit>` | a sourced art kit - `Models/`, `Materials/`, its licence and a `SOURCES.txt` |
+| `Textures`, `Fonts`, `Shaders`, `Scenes` | what they say |
+| `Resources` | anything loaded by name at runtime - its paths are code, so don't move things inside it |
+| `Grass`, `Photon`, `TextMesh Pro` | vendor packages, left as shipped |
+
+Moving an asset: move it **with its `.meta`** (`git mv` both, or drag it inside Unity), so its GUID
+and every reference to it survive. Then search the code for its old path - a few tools load by path
+(`MapExpansion`, `MenuBuilder`'s row prefabs, the builders' `BananaHealth.png`) - and run the suite.
+
 **Everything is built at runtime, not wired in a scene.** Weapons, hitboxes, the rig, the HUDs,
 `MatchState`. The player prefab carries one `PhotonView` and an empty `ItemHolder`; anything
 found sitting in that holder is a leftover and `RemoteCopyCheck` fails on it.
