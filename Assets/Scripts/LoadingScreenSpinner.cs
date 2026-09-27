@@ -70,9 +70,16 @@ public class LoadingScreenSpinner : MonoBehaviour
         light.intensity = 2.2f;
         light.shadows = LightShadows.None;
 
+        // The texture takes the shape of the image it's drawn into, so resizing the Spinner object
+        // by hand widens the view rather than stretching the gorilla.
+        Rect rect = ((RectTransform)transform).rect;
+        float aspect = rect.width > 1f && rect.height > 1f ? rect.width / rect.height : 1f;
+
+        int width = aspect >= 1f ? textureSize : Mathf.RoundToInt(textureSize * aspect);
+        int height = aspect >= 1f ? Mathf.RoundToInt(textureSize / aspect) : textureSize;
+
         GameObject camGo = new GameObject("Camera");
         camGo.transform.SetParent(diorama.transform, false);
-        camGo.transform.localPosition = new Vector3(0f, 1f, -3.2f);
         camGo.transform.localRotation = Quaternion.identity;
 
         Camera cam = camGo.AddComponent<Camera>();
@@ -80,19 +87,77 @@ public class LoadingScreenSpinner : MonoBehaviour
         cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
         cam.fieldOfView = 35f;
         cam.nearClipPlane = 0.1f;
+        cam.aspect = aspect;
 
-        // Short on purpose - this camera only ever needs to see the one model 3.2m in front of
-        // it, and a short far plane means it physically cannot render anything else even if a
-        // future change put something else on whatever layer this ends up sharing.
-        cam.farClipPlane = 10f;
+        // Framed from the model itself rather than a fixed distance. A fixed 3.2m cut the arm
+        // off at the sides - it swings furthest from the middle as the model turns, which a
+        // front-on framing never sees. Reported by the person who asked for the spinner.
+        Frame(cam, rigGo.transform, aspect);
 
-        texture = new RenderTexture(textureSize, textureSize, 16) { name = "LoadingSpinnerRT" };
+        texture = new RenderTexture(width, height, 16) { name = "LoadingSpinnerRT" };
         cam.targetTexture = texture;
 
         GetComponent<RawImage>().texture = texture;
 
         // Only while this screen is actually showing - see OnEnable/OnDisable.
         diorama.SetActive(isActiveAndEnabled);
+    }
+
+    /// <summary>
+    /// Backs the camera off until the whole spin fits.
+    ///
+    /// Measured from the posed mesh's actual vertices: the furthest any of them sits from the
+    /// spin axis is the radius of the cylinder the model sweeps as it turns, and the camera has
+    /// to fit that cylinder's nearest face - which looms larger than the axis - inside both the
+    /// vertical and the horizontal field of view. A little margin so nothing touches the edge.
+    /// </summary>
+    static void Frame(Camera cam, Transform pivot, float aspect)
+    {
+        const float Margin = 1.1f;
+
+        float radius = 0f;
+        float bottom = float.MaxValue;
+        float top = float.MinValue;
+        Mesh baked = new Mesh();
+
+        foreach (SkinnedMeshRenderer skin in pivot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            skin.BakeMesh(baked, true);
+            Matrix4x4 toWorld = Matrix4x4.TRS(skin.transform.position, skin.transform.rotation, Vector3.one);
+
+            foreach (Vector3 vertex in baked.vertices)
+            {
+                Vector3 world = toWorld.MultiplyPoint3x4(vertex);
+                Vector3 fromAxis = world - pivot.position;
+
+                radius = Mathf.Max(radius, new Vector2(fromAxis.x, fromAxis.z).magnitude);
+                bottom = Mathf.Min(bottom, world.y);
+                top = Mathf.Max(top, world.y);
+            }
+        }
+
+        Object.Destroy(baked);
+
+        // Nothing to measure - keep the old fixed framing rather than a camera inside the model.
+        if (radius <= 0f || top <= bottom)
+        {
+            cam.transform.position = pivot.position + new Vector3(0f, 0f, -3.2f);
+            cam.farClipPlane = 10f;
+            return;
+        }
+
+        float halfHeight = (top - bottom) * 0.5f * Margin;
+        float tanVertical = Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        float tanHorizontal = tanVertical * aspect;
+
+        float distance = Mathf.Max(radius * Margin / tanHorizontal, halfHeight / tanVertical) + radius;
+
+        cam.transform.position = new Vector3(pivot.position.x, (top + bottom) * 0.5f, pivot.position.z - distance);
+
+        // Short on purpose - this camera only ever needs to see the one model, and a short far
+        // plane means it physically cannot render anything else even if a future change put
+        // something else on whatever layer this ends up sharing.
+        cam.farClipPlane = distance + radius + 1f;
     }
 
     // The diorama is its own root, so it doesn't switch off with the loading screen by itself -

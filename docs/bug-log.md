@@ -3239,3 +3239,65 @@ A final scan of every tracked text file for the GUIDs of every deleted asset fin
   back to `Sprites/Default` - transparent, so it drops out of the toon outline. Added to
   `AlwaysIncludeShaders` and applied.
 - `AudioCheck` had the vine check's doc comment sitting on top of the wind check.
+
+---
+
+# Thirty-fifth pass — player feedback, the bugs, 2026-09-27
+
+The first round of feedback from people playing it (roadmap.md, "Player feedback"). The bugs first.
+
+## Warmup damage walked into the match
+
+"The damage you take in warmup periods stays when the match starts which is unfair (same with
+overshield), this also carries on when a new round happens." Health is local to each client and only
+resets when a new body spawns - and neither warmup ending nor the next match starting respawns
+anyone. So a warmup scrap, a streak's overshield, or the last match's 10 health all carried straight
+over. `PlayerController.OnRoomPropertiesUpdate` now watches the phase and, on warmup or live, puts
+its own player back to even: full health, streak and combo cleared (which is what the overshield
+ceiling hangs off), every gun restocked (`SingleShotGun.Restock`). Style score already reset itself
+at warmup. New probe check: 100 damage in warmup (29% left), then 100% the moment it goes live.
+
+## The error screen on the way into the sandbox
+
+Built `SandboxFlowCheck` to see it, because a single frame is exactly what nobody can check by eye:
+the real menu, a real connection, into the sandbox and back, recording the open screen and every
+logged error each frame. Entering showed the error screen for 26 frames. Two causes:
+
+- The sandbox drops the connection to go offline, and `Launcher.OnDisconnected` reported every
+  disconnect as an error - "Disconnected: DisconnectByClientLogic". A disconnect we asked for isn't
+  one; it's skipped now.
+- Switching offline mode on fires `OnConnectedToMaster`, and the Launcher answered by joining a
+  lobby that doesn't exist offline - an error in the log every time. Skipped offline.
+
+The settings screen now opens the loading screen before the sandbox starts, so the spinning gorilla
+covers the trip instead of the title screen sitting there. Leaving measured clean both before and
+after (loading, then title, back on `uae`, nothing logged).
+
+## The loading-screen gorilla was cut off
+
+A fixed camera 3.2m away, and the arm swings furthest from the middle as the model turns - a
+front-on framing never sees that. `LoadingScreenSpinner.Frame` bakes the posed mesh and backs the
+camera off until the cylinder it sweeps fits both fields of view, with a margin; the texture takes the
+aspect of its `Spinner` image. Rendered and looked at: whole, with room at every edge.
+
+## The PSX filter was too strong
+
+A quarter-resolution render (270 lines at 1080p) and 20 colour levels: distant players were a
+couple of blocks, and players turned it off. Now sized to a target of 360 lines (a whole-number scale
+at any resolution) with the PS1's real 32 levels. Rendered at 270, 360 and 540 lines and compared on
+the menu backdrop: 540 nearly erased the look, 360 keeps the stepped edges and dither while distant
+rocks and statues read.
+
+"Doesn't affect the replay camera" did not reproduce - a new probe check renders the death camera
+(the killcam) with PSX off and on and the picture changes (average difference 6.2). The fallback that
+puts PSX on the world camera while dead shipped with the gun-camera change, so an older build would
+show exactly what was reported. Left open on the roadmap until someone checks a fresh build.
+
+## Found on the way
+
+- **The menu photographer drew the arena twice.** Its UI camera sat at the world origin and, to
+  catch the settings canvas, rendered the Default layer - so it drew the arena from ground height,
+  with no post, over the top half of every menu shot, with a hard seam at the horizon. Only the
+  photographs were affected (the real menu's canvases are overlays), but a verification tool that
+  lies is worse than none. The UI camera now sits far below the map with a 5m far plane.
+

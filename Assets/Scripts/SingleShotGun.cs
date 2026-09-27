@@ -308,6 +308,18 @@ public class SingleShotGun : Item
     /// weapon is inactive, so pull it forward from whoever is active.
     public void TickReloadWhileStowed() => TickReload();
 
+    /// Back to a full magazine and full spares, as if just handed out. For a new round, where
+    /// nobody respawns but everybody should start even.
+    public void Restock()
+    {
+        if (Info == null)
+            return;
+
+        reloading = false;
+        Ammo = Info.magazineSize;
+        SpareMagazines = Info.spareMagazines;
+    }
+
     public override void Use()
     {
         TryShoot();

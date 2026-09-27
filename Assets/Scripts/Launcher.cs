@@ -70,6 +70,11 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnConnectedToMaster()
     {
+        // Switching offline mode on fires this too, with no server behind it - the sandbox does
+        // that on its way in. There is no lobby to join offline, and trying logged an error.
+        if (PhotonNetwork.OfflineMode)
+            return;
+
         // Which server everybody actually landed on. Printed because the failure mode of a
         // fixed region is not an error - it is an empty room browser, which looks identical to
         // nobody being online. If two people ever cannot see each other's lobbies, this line is
@@ -136,6 +141,12 @@ public class Launcher : MonoBehaviourPunCallbacks
         cachedRoomList.Clear();
         ClearList(roomListItems);
         ClearList(playerListItems);
+
+        // We hung up on purpose - the sandbox drops the connection to go offline. That's not
+        // an error, and showing one flashed "Disconnected: DisconnectByClientLogic" on the way
+        // into every sandbox (players reported it; SandboxFlowCheck measured it at 26 frames).
+        if (cause == DisconnectCause.DisconnectByClientLogic)
+            return;
 
         // Used to be silent - you'd just sit on whatever screen you were on.
         ShowError($"Disconnected: {cause}");

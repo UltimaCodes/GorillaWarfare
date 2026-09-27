@@ -353,8 +353,16 @@ public static class MenuPhotographer
             RenderTexture target = new RenderTexture(Width, Height, 24);
 
             GameObject uiHost = new GameObject("~ShotUiCamera");
+
+            // Far below the arena with a short far plane, so the only thing this camera can see is
+            // the canvases a metre in front of it. The settings canvas isn't on the UI layer, so the
+            // mask below includes Default - and from the world origin that drew the arena a second
+            // time at ground height, without post, over the whole top half of every shot.
+            uiHost.transform.position = new Vector3(0f, -10000f, 0f);
+
             Camera ui = uiHost.AddComponent<Camera>();
             ui.clearFlags = CameraClearFlags.Depth;
+            ui.farClipPlane = 5f;
             ui.cullingMask = 1 << LayerMask.NameToLayer("UI");
             ui.depth = 100f;
             ui.targetTexture = target;

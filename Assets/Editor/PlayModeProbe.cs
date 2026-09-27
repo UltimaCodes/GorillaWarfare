@@ -208,8 +208,22 @@ public class ProbeRunner : MonoBehaviour
         float warmupLeft = MatchState.TimeLeft;
         Check(warmupLeft > 0f, "the clock is running", $"{warmupLeft:F1}s left");
 
+        // Reported by players: damage taken in warmup was still missing when the match went
+        // live, because nobody respawns at that moment and health only resets on a new body.
+        player.DropProtection();
+        player.TakeDamage(100f, "probe", false);
+        yield return null;
+        float woundedTo = player.HealthFraction;
+        Check(woundedTo < 0.5f, "warmup damage lands", $"{woundedTo:P0} health");
+
         yield return Until(() => MatchState.Phase == MatchPhase.Live, "go live");
         Check(MatchState.Phase == MatchPhase.Live, "warmup becomes live on its own", MatchState.Phase.ToString());
+
+        // The phase change arrives as a room property callback, which may land a frame after
+        // Phase reads Live.
+        yield return Until(() => player.HealthFraction >= 1f, "health reset for the live match");
+        Check(player.HealthFraction >= 1f, "the live match starts everyone on full health",
+              $"{woundedTo:P0} in warmup -> {player.HealthFraction:P0} live");
 
         // ---- switching mode has to reissue weapons ----
         yield return CheckModeChangeReissuesLoadouts();
@@ -1024,6 +1038,41 @@ public class ProbeRunner : MonoBehaviour
         Check(deathCamera != null && deathCamera.GetComponent<ScreenOutline>() != null,
               "the death camera draws the toon outline",
               deathCamera == null ? "respawned before a death camera was found" : "outlined");
+
+        // Reported by players: "the psx filter when turned on doesnt affect the replay camera".
+        // The check above only proves PSX is in the profile; this proves the picture changes.
+        Camera deathView = deathCamera != null ? deathCamera.GetComponent<Camera>() : null;
+
+        if (deathView != null && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+        {
+            bool psxBefore = GameSettings.PsxFilter;
+
+            GameSettings.SetPsxFilter(false);
+            yield return null;
+            yield return null;
+            Color32[] off = deathView != null ? ReadPixels(deathView) : null;
+
+            GameSettings.SetPsxFilter(true);
+            yield return null;
+            yield return null;
+            Color32[] on = deathView != null ? ReadPixels(deathView) : null;
+
+            GameSettings.SetPsxFilter(psxBefore);
+
+            if (off != null && on != null)
+            {
+                SavePixels(off, "psx-deathcam-off.png");
+                SavePixels(on, "psx-deathcam-on.png");
+
+                double diff = AverageDifference(off, on);
+                Check(diff > 0.5, "the psx filter changes the death camera's picture",
+                      $"average per-channel difference {diff:F2}");
+            }
+            else
+            {
+                Check(false, "the psx filter changes the death camera's picture", "respawned mid-check");
+            }
+        }
 
         yield return Until(() => LocalPlayer() != null, "respawn");
 

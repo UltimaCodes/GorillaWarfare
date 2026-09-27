@@ -22,7 +22,7 @@ something to check work against rather than a vibe:
 
 ## Checking it still works
 
-Seven suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
+Eight suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
 open the project.
 
 ```
@@ -38,6 +38,7 @@ open the project.
 | `MatchCheck` | the match rules, including a whole gun game played out |
 | `AudioCheck` | every bank has clips, named clips exist, nothing silent or clipping, shape checks (the slide scrape, the shield break, the vine thwip, the wind bed) |
 | `PlayModeProbe` | **runs the actual game** in Photon offline mode |
+| `SandboxFlowCheck` | the real menu, connected, into the sandbox and back - every frame's open screen and every logged error on the way (drop `-quit`, like the probe) |
 
 `PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
 
@@ -52,6 +53,41 @@ for days. See `bug-log.md`'s fourth pass.
 It spawns a player, checks it's carrying what the match rolled, kills it, and watches it come
 back. What it can't do is see a second client — offline mode is one player — so anything about
 remote copies still needs two people.
+
+---
+
+## Player feedback, 2026-09-27
+
+The first round of feedback from people playing it. Worked through in this order - bugs first.
+
+- [x] **Warmup damage and overshield carried into the live match**, and whatever health you ended a
+      match on carried into the next one. Nobody respawns at either moment and health only reset
+      on a new body. Every client now starts itself even (full health, no streak or overshield,
+      full ammo) when the phase goes to warmup or live. Probe-checked: 29% in warmup, 100% live.
+- [x] **An error flashed on the way into the sandbox.** The sandbox's own deliberate disconnect was
+      being reported as "Disconnected: DisconnectByClientLogic" - 26 frames of the error screen,
+      measured by the new `SandboxFlowCheck`. Now it shows the loading screen the whole way.
+      Leaving measured clean (loading screen, then title, back on `uae`, nothing logged) - if an
+      error still shows on the way out, it's something the check doesn't reach, so say what it says.
+- [x] **The loading-screen gorilla was cut off at the sides.** The camera now frames the posed mesh
+      from its actual vertices, so the arm's full swing fits. The texture also takes the shape of
+      the `Spinner` image, so widening that object by hand makes the gorilla bigger rather than
+      stretched.
+- [x] **The PSX filter was too strong at a distance.** It rendered at a quarter of the screen (270
+      lines at 1080p) with 20 colour levels. Now ~360 lines at any resolution, and the PS1's real 32
+      levels. Chunky edges and dither are still plainly there; a distant player gets a third more
+      pixels.
+- [ ] **"PSX doesn't affect the replay camera."** Not reproduced: the killcam is the death camera,
+      and a new probe check shows its picture changing when PSX turns on (average difference 6.2).
+      The death-camera fallback shipped with the "PSX covers the gun" change, so a build older than
+      that would show exactly this. Needs a look in a fresh build.
+- [ ] **Swing on the vine, don't just get pulled to the point.** A rope with a pendulum, and a kick
+      off the ground so a grapple from standing gets you airborne. Grappling a player stays a pull.
+- [ ] **Buttons that don't work, especially in the crate section** - and the crates themselves want
+      reworking.
+- [ ] **New weapons** - fun and quirky; the pineapple is the favourite but gets old and loses to
+      Big Mike. Plan first (ideas.md).
+- [ ] **New maps** - the arena is flat, open and plain. Plan first (ideas.md).
 
 ---
 

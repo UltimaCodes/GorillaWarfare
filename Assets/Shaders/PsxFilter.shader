@@ -36,10 +36,11 @@ Shader "Hidden/Gorilla Warfare/PSX Filter"
         {
             float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
 
-            // Levels per channel: 255 (off) down to 20 at full intensity. 20 is deliberately
-            // short of the PS1's real 32 - full 32 read as barely-there once lit scenes were
-            // actually on screen, and the ask was a vibe you can see, not a fact you can measure.
-            float levels = lerp(255.0, 20.0, saturate(_Intensity));
+            // Levels per channel: 255 (off) down to 32 at full intensity - the PS1's real 5 bits
+            // a channel. It was 20, chosen back when this pass was colour-only and had to carry
+            // the whole look; with the low-res pixelation doing that, 20 levels mostly banded the
+            // sky and flattened distant shapes into the ground, and players switched it off.
+            float levels = lerp(255.0, 32.0, saturate(_Intensity));
             float dither = DitherOffset(i.vertex.xy) / levels;
 
             float3 quantized = floor((color.rgb + dither) * levels + 0.5) / levels;

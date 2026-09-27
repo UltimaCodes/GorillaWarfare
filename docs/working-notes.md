@@ -276,8 +276,8 @@ finished rather than shipped early. What that changes, in order:
 - Steamworks integration and the move off PUN 2 happen **after** the Steam launch, not before it -
   ship on the current Photon-peer-hosted networking first, migrate once it's out.
 - Controller support is real but not near-term - "down the line".
-- First-time onboarding is blocked on a main menu rework Ryaan wants to do himself first, so it
-  isn't being built against the current menu.
+- First-time onboarding was blocked on a main menu rework, so it wasn't built against the old menu.
+  The rework landed 2026-09-27 (bug-log.md's thirty-third pass), so this is unblocked.
 - Store page assets (capsule art, trailer, screenshots) wait until the Steam Direct filing itself,
   near the end - not sequenced early the way the filing's review lag alone would otherwise argue
   for, because there's six months of runway now instead of eight weeks.
@@ -369,6 +369,16 @@ means "the match has not started" and is handled before the switch.
 
 Anything else that reads a phase or a deadline out of room properties needs to distinguish
 "absent" from "expired". They are not the same and the defaults make them look identical.
+
+**A new phase doesn't respawn anyone.** Warmup going live and one match rolling into the next both
+happen around players who are already standing there, so anything that only resets on a fresh body
+(health, overshield, streaks, ammo, a component's local state) carries straight across unless
+something resets it on the phase change. `PlayerController.StartRoundFresh` and StyleScore's warmup
+reset are the two that do; anything new that's per-round needs the same.
+
+**A disconnect we asked for is not an error.** The sandbox drops the connection on purpose to go
+offline, and switching offline mode on fires `OnConnectedToMaster` with no server behind it.
+`Launcher` ignores both; anything else listening for connection callbacks has to as well.
 
 ## Open, and known
 

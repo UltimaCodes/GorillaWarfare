@@ -129,6 +129,12 @@ public class SettingsMenu : MonoBehaviour
             return;
 
         Close();
+
+        // The spinning gorilla while the map loads, rather than the title screen sitting there
+        // looking like the button did nothing.
+        if (MenuManager.Instance != null)
+            MenuManager.Instance.OpenMenu("loading");
+
         Sandbox.Enter(this);
     }
 

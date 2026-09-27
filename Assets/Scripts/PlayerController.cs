@@ -738,6 +738,42 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     }
 
 
+    /// <summary>
+    /// A new round starts everybody even.
+    ///
+    /// Health is local and only resets when a new body spawns, and neither the warmup ending nor
+    /// the next match starting respawns anyone. So damage taken in warmup, and a streak's
+    /// overshield, walked straight into the live match - and someone on 10 health at the end of
+    /// one match started the next on 10. Reported by players as unfair, which it was.
+    /// </summary>
+    public override void OnRoomPropertiesUpdate(Hashtable changed)
+    {
+        if (!PV.IsMine || dead || !changed.ContainsKey(MatchState.PhaseKey))
+            return;
+
+        MatchPhase phase = MatchState.Phase;
+
+        if (phase == MatchPhase.Warmup || phase == MatchPhase.Live)
+            StartRoundFresh();
+    }
+
+    void StartRoundFresh()
+    {
+        currentHealth = maxHealth;
+        Killstreak = 0;
+        combo = 0;
+        multikill = 0;
+
+        if (items == null)
+            return;
+
+        foreach (Item item in items)
+        {
+            if (item is SingleShotGun gun)
+                gun.Restock();
+        }
+    }
+
     // verticalLookRotation is maintained on both sides - Look() sets it locally, ApplyRemoteLook
     // lerps it toward the replicated value - so the rig reads the same field either way.
     void FeedRig()

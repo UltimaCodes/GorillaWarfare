@@ -13,6 +13,9 @@ using UnityEngine.Rendering.PostProcessing;
 public sealed class PsxFilter : PostProcessEffectSettings
 {
     [Range(0f, 1f)] public FloatParameter intensity = new FloatParameter { value = 0.88f };
+
+    /// Roughly how many lines tall the low-res image is. The PS1 itself ran at 240.
+    [Range(120, 1080)] public IntParameter lines = new IntParameter { value = 360 };
 }
 
 public sealed class PsxFilterRenderer : PostProcessEffectRenderer<PsxFilter>
@@ -43,7 +46,12 @@ public sealed class PsxFilterRenderer : PostProcessEffectRenderer<PsxFilter>
         // touched at all: real internal resolution, not full-resolution colour banding. Rendering
         // low and upscaling with point filtering is what actually produces that - the same
         // technique the PS1 shaders researched for this feature use, not a novel idea.
-        int scale = 4;
+        //
+        // Sized to a target line count rather than a fixed divisor, so it looks the same at any
+        // resolution. It was a quarter of the screen - 270 lines at 1080p - and players turned it
+        // off because anyone at a distance was two blocks tall. A whole-number scale, so every
+        // low-res pixel covers the same number of screen pixels and none come out uneven.
+        int scale = Mathf.Max(1, Mathf.RoundToInt(context.camera.pixelHeight / (float)settings.lines.value));
         int lowWidth = Mathf.Max(4, context.camera.pixelWidth / scale);
         int lowHeight = Mathf.Max(4, context.camera.pixelHeight / scale);
 
