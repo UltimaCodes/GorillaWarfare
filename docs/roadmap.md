@@ -92,10 +92,12 @@ The first round of feedback from people playing it. Worked through in this order
       listener saved into the prefab. Fixed. At 4:3 a few controls fall off the right edge (menu
       Canvas Scaler wants Screen Match Mode "Expand" - one field in `Menu.unity`).
 - [ ] **The crates themselves want reworking** - opening one wins nothing yet, and the shop still
-      wears the old look. Needs decisions on what they drop (ideas.md).
-- [ ] **New weapons** - fun and quirky; the pineapple is the favourite but gets old and loses to
-      Big Mike. Plan first (ideas.md).
-- [ ] **New maps** - the arena is flat, open and plain. Plan first (ideas.md).
+      wears the old look. Planned (ideas.md section 0): cosmetic drops, a Locker, earned tokens
+      only. Waiting on a pick.
+- [ ] **New weapons** - fun and quirky; the Grenada is the favourite but gets old and loses to
+      Big Mike. Planned (ideas.md section 0): Peel Slick and Chest Beat first. Waiting on a pick.
+- [ ] **New maps** - the arena is flat, open and plain. Planned (ideas.md section 0): map
+      infrastructure, then Jungle Temple, then Canopy. Waiting on a pick.
 
 ---
 

@@ -23,6 +23,96 @@ for the interesting ones to be interesting against. Nothing here replaces them.
 
 ---
 
+## 0. From the 2026-09-27 player feedback - three plans waiting on a pick
+
+The bugs and the vine swing from that round are done (roadmap.md, "Player feedback"). These three
+are design calls, so they're written up as options with a recommendation rather than built on a
+guess.
+
+### New weapons
+
+**Why the Grenada gets old and loses to Big Mike.** It's mostly the map. Big Mike is hitscan, 95
+damage, scoped, and reaches across the whole arena; the Grenada is 105 on a direct hit but arcs, has
+travel time, and does its best work against someone with a wall behind them or a floor under a
+ledge. The current arena is a flat open field, which is Big Mike's ideal map and the Grenada's
+worst. New maps with cover and height (below) fix more of this than any number would. Worth doing as
+well, on the Grenada: a slightly bigger splash (people are bunched less than on the maps it was
+tuned on) and airbursting beside a player it passes close to, so a near miss still counts.
+
+**Candidates**, each held to this doc's bar (does it change how you move, or how the space works?):
+
+| weapon | what it does | why it's fun | builds on |
+|---|---|---|---|
+| **The Peel Slick** | a thrown banana peel that lies where it lands; step on it and you slip - a forced, uncontrollable slide in whatever direction you were going | the most gorilla-cartoon idea there is, and it turns a doorway or the lip of a ledge into a trap | the projectile system; the slide already exists to hijack |
+| **The Boomerang** | a thrown banana that curves out and comes back, hitting on both legs; catch it for an instant re-arm, miss the catch and wait | hits round corners, and the catch is a skill test you do while moving | projectile system, a curved path instead of an arc |
+| **The Durian** (on hold since 08-22) | sticky mortar - sticks to walls, floors or people, short fuse | getting marked forces a decision in two seconds | projectile system + stick-and-fuse |
+| **The Coconut** (on hold) | thrown, rolls with the terrain until it hits something, then sticks and blows | chases people down slopes and round corners | a rigidbody projectile + the Durian's fuse |
+| **The Chest Beat** | a gorilla shockwave: short range, little damage, big knockback away from you | knocks people off ledges and out of the air - pairs with every map that has height | the Grenada's knockback, without the projectile |
+| **The Zest** (on hold) | citrus spray that blinds for a couple of seconds | disable, not damage - funny to throw, infuriating to eat | a cone check + a post effect |
+
+**Recommendation: the Peel Slick and the Chest Beat first.** Both are short builds on systems that
+already exist, both are about movement and space rather than damage, and both get funnier the more
+height a map has - which is where the maps are going anyway. The Boomerang third.
+
+**Needs sourced models.** Every one of these needs a real model (a peel, a durian, a coconut) - not
+one made here. The banana weapons' source is CC BY 4.0 on Sketchfab; the same search for the rest.
+
+### New maps
+
+The arena is flat, open and plain - a big enclosure with trees, rocks and a moai. What every
+candidate below adds is **depth** (height to play on), **range variety** (short and long fights in
+one place) and **detail** (somewhere worth learning).
+
+**Before any second map is playable** there's infrastructure (section 6 has the detail): a map
+registry, `RoomManager.gameSceneIndex` stops being a constant, every map scene gets its spawns, HUD
+and post setup, and the host picks the map in the lobby. Voting after that.
+
+| map | shape | why now |
+|---|---|---|
+| **Canopy** (section 5) | treetop platforms at three or four heights, branches between them, a safe floor under the middle | it's the map the swinging vine was made for - tall trees to swing between is exactly what players asked for |
+| **Jungle Temple** (new) | a stepped ruin in the middle of the jungle, a river gorge across one side, tall trees round the edge; the moai becomes one of many ruins | close fights in the temple, long ones across the gorge, height everywhere, and it grows out of the current look rather than starting over |
+| **The Zoo** (section 5) | enclosures round a plaza | the best joke, and a proven hub-and-spokes layout |
+| **The Compound** / **The Silo** (section 5) | walled courtyard / a vertical shaft | general-purpose / the small map |
+
+**Recommendation: the infrastructure, then Jungle Temple, then Canopy.** Jungle Temple fixes every
+complaint at once, reuses the jungle kit already in the project, and keeps the game's identity;
+Canopy is the vine's showcase and the natural second. Both would be blocked out from code first
+(the way `MapExpansion` works), then dressed with sourced kits - Kenney's Nature Kit is already here;
+a temple needs a sourced ruins/stone kit, CC0 by preference.
+
+### Crates
+
+Mechanically they work (the one dead button is fixed). The problem is that **opening a crate wins
+nothing** - a rarity name on a coloured screen - and the shop still wears the old look.
+
+**What a crate should drop: cosmetics only.** Section 4's reasoning still stands - anything that
+touches a fight makes "I opened more crates" mean "I'm harder to beat". Candidates, cheapest first:
+
+| cosmetic | shown where | cost to build |
+|---|---|---|
+| vine colours | your rope, seen by everyone | tiny - it's already a tint |
+| banana skins (tints first, patterns later) | your weapon, in your hand and in everyone else's view | small for tints; patterns need sourced textures |
+| kill-feed icons and victory lines | the feed, the results screen | small |
+| trails (Kenney particle pack, already here) | behind you when you're fast | medium |
+| hats and accessories | on your gorilla | medium - needs sourced models and a head attach point |
+
+**The rest of the rework:** a Locker screen (what you own, what you're wearing, one click to equip);
+duplicates refund some tokens so a bad pull still counts; what you're wearing replicates as a player
+property so everyone sees it; the reveal shows the item itself, not just its tier; and the shop gets
+the new menu's look.
+
+**One thing to decide up front: real money.** Crates bought only with earned tokens are a game
+mechanic. Selling crates or tokens for money is regulated as gambling in several countries (Belgium
+bans paid loot boxes outright), and letting players trade or sell items makes it worse. The
+recommendation is earned tokens only, cosmetics not tradeable - and if the game ever sells anything,
+sell the cosmetics directly, never a chance at them.
+
+**Recommendation: build vine colours and banana tints as the first drops, with the Locker and the
+reveal.** That's the smallest version where opening a crate gets you something you'll see in the
+next match. Hats once there are sourced models.
+
+---
+
 ## 1. Weapons that move you
 
 ### The Pineapple — rocket launcher *(Ryaan's, and the anchor for the rest)*
@@ -413,10 +503,12 @@ doesn't block anything else on `roadmap.md`, so it can slot in whenever, not bef
 
 ## 5. Maps
 
-Plan only. Nothing here is built. The game has one map — seven cubes and four planes — and no way
-to change it. That's the single biggest reason a session gets old: every fight happens in the same
-place, so everybody learns the same three angles and the match becomes about who got to them
-first. Confirmed 2026-08-22: this is an active track now, not just a plan.
+Plan only. Nothing here is built. The game has one map - once seven cubes and four planes, now a
+walled jungle arena dressed with the Kenney nature kit, cliffs, trees and a moai, but still flat and
+open - and no way to change it. That's the single biggest reason a session gets old: every fight
+happens in the same place, so everybody learns the same three angles and the match becomes about who
+got to them first. Confirmed 2026-08-22: this is an active track now, not just a plan. Players said
+the same thing on 2026-09-27 - see section 0 for where that leaves the order.
 
 ### What this game's movement actually wants
 
