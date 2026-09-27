@@ -3116,3 +3116,80 @@ drop you actually see is `PlayerController`'s, which lowers the whole holder wit
 instead of fighting it. Also new for the probe: `KeyBinds.HeldOverride` (hold an action with no
 keyboard) and `FinalPoseRecorder` (reads a pose after every LateUpdate - `WaitForEndOfFrame`
 never resumes in batch mode, which wedged the check's first version for the full three minutes).
+
+---
+
+# Thirty-third pass — the main menu, rebuilt, 2026-09-27
+
+"We need a new main menu desperately, scrap the entire thing right now and make a new main menu"
+- with Portal 2, Black Ops II, Borderlands 2, a pixel-font settings screen, a room-list layout and
+Voxelium as references, the theme to fit the whole game, and the settings, error, lobby, create
+and find screens (plus the loading screen, keeping the spinning gorilla) all to match. Same rule as
+the HUD: real objects that can be moved by hand.
+
+## What it is
+
+`Tools/Gorilla Warfare/Build the main menu` (`MenuBuilder.cs`) builds all of it into `Menu.unity`:
+
+- **The look is the HUD's own.** Anton for anything that shouts, Jersey10 for labels, the same
+  near-black ink outline and underlay (two shared material presets, `* SDF - Menu Ink.mat`, so one
+  material restyles every menu label in that font), banana yellow as the one accent. Menu items are
+  words with no box, lighting banana with an accent bar on hover or focus (`MenuButton`); each
+  screen has one filled banana button for the thing it's for.
+- **The backdrop is the real arena** - the Game scene's Map, sun and grass, copied under
+  `~MenuBackdrop` with the Game scene's sky and ambient light, drifting slowly (`MenuBackdropCamera`)
+  and drawn with the game's own post stack and toon outline (ShaderStack now falls back to the menu
+  camera when there's no player). A gorilla in front of it holds a banana rifle - the real rig and a
+  real GunInfo (`MenuGorilla`), placed as an ordinary object. The camera spot was picked from
+  rendered candidates after a top-down render of the arena (`Photograph the menu backdrop from
+  above`): south-east corner looking north-west, sun behind the camera, cliffs and statues behind the menu.
+- **Screens:** title (logo, menu, a player card with the username field and token balance -
+  `TokenReadout`), find a lobby (a real table - lobby, mode, players - with an empty state; rows are
+  `RoomListItem` with three columns now), create a lobby, the lobby itself (players, game mode,
+  banana colour, start/leave), the error card, and the loading screen (the spinning gorilla, whole
+  now, over the logo and the bar). Settings was restyled in `SettingsMenuBuilder` to the same
+  language - ink card with the banana edge, eyebrow over a white heading, text tabs, text buttons.
+- **Every connection the old menu had was kept** - checked against `Tools/Gorilla Warfare/Report
+  the menu wiring`, which lists what every button and field calls, before and after.
+
+`Run` refuses to overwrite a menu that already exists (it may have been edited by hand); `Rebuild`
+replaces it on purpose; `Refresh the main menu backdrop` re-copies only the arena. The seven old
+tools that patched the old menu (`MenuSettingsButton`, `TitleMenuCrateButton`,
+`CreateRoomBackButton`, `LobbyRowUpgrade`, `ModeSelectorBuilder`, `ColourPickerBuilder`,
+`LoadingScreenBuilder`) are gone - each found old objects by name, and re-running one would have
+bolted old pieces onto the new menu.
+
+## Bugs found building it
+
+- **The menu gorilla was buried to the chest.** MonkeyRig puts the model a metre below its root
+  (the root is a player capsule's centre). The loading screen's spinning gorilla had the same bug
+  all along - cut off at the waist, because its camera framed the root, not the body. Both lifted.
+- **The loading spinner lit the whole menu.** Its diorama used a directional light, and a
+  directional light reaches every object in the scene however far away it's parked - it washed out
+  every colour behind the menu. It also kept rendering its own camera behind every other screen.
+  Now a short-range point light, and the diorama only exists while the loading screen is showing.
+- **The grass rendered near-black in the menu.** Took real measuring: not the post stack (post off:
+  still black), not shadows (sun shadows off: still black), not the camera (seven variations, and in
+  a match every one of them - plain camera included - drew it fine). The grass material's tints,
+  read back at runtime, were (0, 0, 0, 0) in the menu and correct in a match. `_TopTint` and
+  `_BottomTint` were never declared in the grass shader's Properties - GrassComputeScript just sets
+  them by name - and in a run where that shader was the first thing on screen, both `SetColor`
+  calls were silently dropped. Declared them. A cold-start bug that could have hit a match too.
+- **Two labels rendered as nothing.** The lobby's room name and every player-list name were
+  Ellipsis-overflow labels in rects shorter than Anton's line height (~1.5x the font size), and TMP
+  truncates a line that doesn't fit vertically to nothing at all. Taller rects.
+- **The death camera had no toon outline**, so the world changed look for the length of a respawn.
+  Added; new probe check.
+- **The photographer's own traps**, found by it misbehaving: `WaitForEndOfFrame` never resumes in
+  batch mode; `Launcher`'s connect switches Photon back online (now forced offline before any shot,
+  so the lobby shot can't create a real, listed room); the settings canvas isn't on the UI layer (a
+  UI-only camera photographed the lobby behind it); disabling the drift component unregistered the
+  camera (six black candidate frames); and it shared the probe's prefs namespace (a post-off run
+  left the next probe with no post). All fixed.
+
+## Verified
+
+`Tools/Gorilla Warfare/Photograph the main menu` (`MenuPhotographer`) renders every screen in play
+mode with the live backdrop, at 1920x1080 - `Logs/menu-shots/*.png`, all looked at. `SceneCheck`
+now also checks the six screens are each listed exactly once, `Launcher` is fully wired, and every
+menu button has a click target (13). Full suite passes.

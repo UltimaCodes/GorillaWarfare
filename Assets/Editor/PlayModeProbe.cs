@@ -1015,6 +1015,16 @@ public class ProbeRunner : MonoBehaviour
         Check(!GameSettings.PsxFilter || PsxWhere() == "world", "psx stays on while you're dead",
               $"psx {(GameSettings.PsxFilter ? "on" : "off")}, running on: {PsxWhere()}");
 
+        // Dying shouldn't change how the world looks - the death camera draws the same toon
+        // outline as the player camera. It's built a moment after the death registers.
+        // Found by name rather than through LocalCamera, which a quick respawn hands straight back
+        // to the new player camera - that would pass this without ever looking at the death one.
+        yield return Until(() => GameObject.Find("~DeathCamera") != null || LocalPlayer() != null, "build the death camera");
+        GameObject deathCamera = GameObject.Find("~DeathCamera");
+        Check(deathCamera != null && deathCamera.GetComponent<ScreenOutline>() != null,
+              "the death camera draws the toon outline",
+              deathCamera == null ? "respawned before a death camera was found" : "outlined");
+
         yield return Until(() => LocalPlayer() != null, "respawn");
 
         PlayerController respawned = LocalPlayer();
@@ -1552,21 +1562,6 @@ public class ProbeRunner : MonoBehaviour
             Capture(null, "grass-feet");
 
             camera.transform.rotation = was;
-
-            GameSettings.ShaderPreset preset = GameSettings.Shaders;
-            bool psx = GameSettings.PsxFilter;
-            GameSettings.SetShaders(GameSettings.ShaderPreset.Off);
-            GameSettings.SetPsxFilter(false);
-            yield return null;
-            yield return null;
-
-            camera.transform.rotation = Quaternion.Euler(0f, was.eulerAngles.y, 0f);
-            Capture(null, "grass-eye-noshaders");
-            camera.transform.rotation = was;
-
-            GameSettings.SetShaders(preset);
-            GameSettings.SetPsxFilter(psx);
-            yield return null;
         }
     }
 
@@ -2248,9 +2243,10 @@ public class ProbeRunner : MonoBehaviour
     }
 
     // Renders whatever the player is looking at to a PNG next to the log.
-    void Capture(PlayerController ignored, string name)
+    void Capture(PlayerController ignored, string name) => CaptureWith(PlayerController.LocalCamera, name);
+
+    void CaptureWith(Camera camera, string name)
     {
-        Camera camera = PlayerController.LocalCamera;
         if (camera == null || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
         {
             log.AppendLine($"  ..    screenshot '{name}'                             skipped, no graphics device");

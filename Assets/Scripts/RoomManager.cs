@@ -435,6 +435,9 @@ public class RoomManager : MonoBehaviourPunCallbacks
         Camera camera = host.AddComponent<Camera>();
         host.AddComponent<AudioListener>();
 
+        // The same toon outline the player camera draws, so dying doesn't change how the world looks.
+        host.AddComponent<ScreenOutline>();
+
         // Watching your own killer only makes sense if somebody else killed you. Falling off
         // the map and shooting yourself both arrive here with no killer at all.
         host.AddComponent<KillCam>().Watch(

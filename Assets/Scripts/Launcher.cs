@@ -18,6 +18,9 @@ public class Launcher : MonoBehaviourPunCallbacks
     [SerializeField] Transform playerListContent;
     [SerializeField] GameObject startGameButton;
 
+    [Tooltip("Shown in the room browser while there are no rooms, instead of an empty table.")]
+    [SerializeField] GameObject noRoomsMessage;
+
     [SerializeField] byte maxPlayersPerRoom = 12;
 
     bool triedFallbackRegion;
@@ -82,6 +85,10 @@ public class Launcher : MonoBehaviourPunCallbacks
     {
         cachedRoomList.Clear();
         ClearList(roomListItems);
+
+        if (noRoomsMessage != null)
+            noRoomsMessage.SetActive(true);
+
         OpenMenu("title");
     }
 
@@ -256,6 +263,9 @@ public class Launcher : MonoBehaviourPunCallbacks
         }
 
         ClearList(roomListItems);
+
+        if (noRoomsMessage != null)
+            noRoomsMessage.SetActive(cachedRoomList.Count == 0);
 
         if (roomListItemPrefab == null || roomListContent == null)
             return;

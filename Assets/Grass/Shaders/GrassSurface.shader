@@ -9,6 +9,13 @@ Shader "Custom/GrassComputeSurface"
 		_Metallic("Metallic", Range(0,1)) = 1
 		_Glossiness("Specular", Range(0,1)) = 1
 		_Edge("Edge", Range(0,1)) = 1
+
+		// Gorilla Warfare: declared, not just used. GrassComputeScript sets both from its settings
+		// asset, and an undeclared property's SetColor can be silently dropped - which it was, in a
+		// run where this shader was the first thing on screen: both tints stayed zero and the whole
+		// field rendered black. Hidden because the settings asset is where they're really set.
+		[HideInInspector] _TopTint("Top Tint", Color) = (0.55, 0.92, 0.37, 1)
+		[HideInInspector] _BottomTint("Bottom Tint", Color) = (0.26, 0.65, 0.23, 1)
 	}
 	SubShader 
 	{

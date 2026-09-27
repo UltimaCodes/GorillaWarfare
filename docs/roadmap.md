@@ -262,8 +262,13 @@ see Unverified.
 
 The big aesthetic one. See the philosophy section above.
 
-- [x] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction — Ryaan did this himself
+- [x] Main menu rebuilt to the ULTRAKILL/Cruelty Squad direction — Ryaan's own first pass
 - [x] Lobby and room browser restyled to match — same
+- [x] **Main menu scrapped and rebuilt again, 2026-09-27** (by request - "we need a new main menu
+      desperately"). `Tools/Gorilla Warfare/Build the main menu` (`MenuBuilder`): the HUD's own
+      visual language over a live, PSX-filtered copy of the arena with a gorilla holding a banana
+      rifle; title, find/create lobby, the lobby, error and loading screens as real objects; the
+      settings screen restyled to match. Details in bug-log.md's thirty-third pass. See Unverified.
 - [x] In-game HUD: health, ammo, timer, scores. The two IMGUI scripts are gone; `GameHud` drives
       a real Canvas built into the game scene by `HudBuilder`, so every position, size, colour
       and font is scene data rather than a constant in an `OnGUI` call
@@ -778,6 +783,11 @@ Separate from M0 because it needs a person playing it, not a fix.
 
 Things the checks can't reach, so they need a person:
 
+- **the new main menu, 2026-09-27.** Every screen has been rendered with the live backdrop and
+  looked at (`Tools/Gorilla Warfare/Photograph the main menu`), and SceneCheck confirms every
+  screen and button is wired. Not yet tried by a person: hover and click feel with a real mouse,
+  keyboard/controller focus, the online flow end to end (a real lobby list, joining someone
+  else's room), and non-16:9 windows (the canvas matches height, so ultrawide widens the gaps).
 - **the grass, added 2026-09-27.** `PlayModeProbe` confirms it grows (~58k points), builds its GPU
   buffers, draws from where you stand and registers your feet, and its renders have been looked at
   (`Logs/probe-shots/grass-*.png`). Not yet judged in play: how the push radius (0.6 m) feels while

@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 // Opens the shipping scenes and looks for the damage you only notice at runtime.
 //
@@ -333,6 +334,65 @@ public static class SceneCheck
 
         CheckWiring(Object.FindFirstObjectByType<ModeSelector>(FindObjectsInactive.Include), "ModeSelector");
         CheckWiring(Object.FindFirstObjectByType<ColourPicker>(FindObjectsInactive.Include), "ColourPicker");
+        CheckWiring(Object.FindFirstObjectByType<Launcher>(FindObjectsInactive.Include), "Launcher");
+        CheckMenuScreens();
+        CheckMenuButtons();
+    }
+
+    /// <summary>
+    /// Launcher and every button open screens by name ("title", "find room"...), and MenuManager
+    /// only opens what's in its own list - a screen that's missing, renamed or left off the list
+    /// is a button that does nothing, with one error in the log at the moment it's pressed.
+    /// </summary>
+    static void CheckMenuScreens()
+    {
+        MenuManager manager = Object.FindFirstObjectByType<MenuManager>(FindObjectsInactive.Include);
+        if (manager == null)
+            return;
+
+        List<string> listed = new List<string>();
+        SerializedProperty menus = new SerializedObject(manager).FindProperty("menus");
+        for (int i = 0; menus != null && i < menus.arraySize; i++)
+        {
+            if (menus.GetArrayElementAtIndex(i).objectReferenceValue is Menu m)
+                listed.Add(m.menuName);
+        }
+
+        foreach (string name in new[] { "loading", "title", "find room", "create room", "room", "error" })
+        {
+            int count = listed.FindAll(n => n == name).Count;
+            if (count != 1)
+                Failures.Add($"MenuManager lists '{name}' {count} times - it has to be exactly once, or Launcher opens nothing (or the wrong one)");
+        }
+
+        Notes.Add($"Menu: {listed.Count} screens listed ({string.Join(", ", listed)})");
+    }
+
+    /// <summary>
+    /// A button with no click target doesn't error - it just does nothing when pressed. Every one
+    /// in the menu needs either a persistent OnClick or a component that wires it at runtime.
+    /// </summary>
+    static void CheckMenuButtons()
+    {
+        int checkedCount = 0;
+
+        foreach (Button button in Object.FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            // Templates are stamped copies of, wired by whoever stamps them.
+            if (button.name.Contains("Template"))
+                continue;
+
+            bool wiredAtRuntime = button.GetComponent<OpenSettingsButton>() != null
+                                  || button.GetComponent<OpenCrateShopButton>() != null
+                                  || button.GetComponentInParent<ModeSelector>(true) != null;
+
+            if (button.onClick.GetPersistentEventCount() == 0 && !wiredAtRuntime)
+                Failures.Add($"menu button '{Path(button.transform)}' does nothing when clicked");
+
+            checkedCount++;
+        }
+
+        Notes.Add($"Menu: {checkedCount} buttons, each wired to something");
     }
 
     static T PrefabComponent<T>(string resourceName) where T : Object

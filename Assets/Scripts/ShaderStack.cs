@@ -184,7 +184,10 @@ public class ShaderStack : MonoBehaviour
     // Late, so it runs after PlayerController has finished building this frame's camera.
     void LateUpdate()
     {
-        Camera camera = PlayerController.LocalCamera;
+        // The menu's backdrop camera when there's no player - so the main menu gets the same
+        // presets and PSX filter as the game it's the menu for. It has no weapon camera, so PSX
+        // lands on the world profile the same way it does for the death camera.
+        Camera camera = PlayerController.LocalCamera != null ? PlayerController.LocalCamera : MenuBackdropCamera.Current;
 
         if (camera == null || camera == attached)
             return;

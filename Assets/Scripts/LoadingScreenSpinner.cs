@@ -33,7 +33,10 @@ public class LoadingScreenSpinner : MonoBehaviour
 
         GameObject rigGo = new GameObject("Model");
         rigGo.transform.SetParent(diorama.transform, false);
-        rigGo.transform.localPosition = Vector3.zero;
+
+        // A metre up: MonkeyRig puts the model a metre below its root (a player capsule's centre),
+        // so at zero the gorilla sat below the camera's line and was cut off at the waist.
+        rigGo.transform.localPosition = Vector3.up;
 
         MonkeyRig rig = rigGo.AddComponent<MonkeyRig>();
 
@@ -55,13 +58,16 @@ public class LoadingScreenSpinner : MonoBehaviour
 
         model = rigGo.transform;
 
+        // A point light with a short range, not a directional one. A directional light reaches the
+        // whole scene however far away it's parked - this one was lighting the entire main menu
+        // backdrop, washing out every colour behind the menu, for as long as the menu was open.
         GameObject lightGo = new GameObject("Light");
         lightGo.transform.SetParent(diorama.transform, false);
-        lightGo.transform.localPosition = new Vector3(1f, 2f, -1f);
-        lightGo.transform.localRotation = Quaternion.Euler(35f, -35f, 0f);
+        lightGo.transform.localPosition = new Vector3(1.6f, 2.6f, -2.4f);
         Light light = lightGo.AddComponent<Light>();
-        light.type = LightType.Directional;
-        light.intensity = 1.2f;
+        light.type = LightType.Point;
+        light.range = 8f;
+        light.intensity = 2.2f;
         light.shadows = LightShadows.None;
 
         GameObject camGo = new GameObject("Camera");
@@ -84,6 +90,23 @@ public class LoadingScreenSpinner : MonoBehaviour
         cam.targetTexture = texture;
 
         GetComponent<RawImage>().texture = texture;
+
+        // Only while this screen is actually showing - see OnEnable/OnDisable.
+        diorama.SetActive(isActiveAndEnabled);
+    }
+
+    // The diorama is its own root, so it doesn't switch off with the loading screen by itself -
+    // it went on rendering its camera (and lighting the scene) behind every other menu.
+    void OnEnable()
+    {
+        if (diorama != null)
+            diorama.SetActive(true);
+    }
+
+    void OnDisable()
+    {
+        if (diorama != null)
+            diorama.SetActive(false);
     }
 
     void Update()

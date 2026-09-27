@@ -79,6 +79,15 @@ layers still resolved fine) rather than failing anything, which is exactly how i
 for so long. If a `.asset`/`.unity` file logs a parse warning, check for exactly this before
 assuming it's benign noise.
 
+**A shader property set from code has to be declared in `Properties`.** The grass shader read
+`_TopTint`/`_BottomTint` without declaring them, and `Material.SetColor` on an undeclared property
+can be silently dropped - it was, whenever that shader was the first thing on screen, and the whole
+field rendered black. Read a value back (`GetColor`) when something renders the wrong colour.
+
+**Anton's line height is about 1.5x its size.** A single-line label with Ellipsis overflow in a
+rect shorter than that renders as nothing - TMP drops a line that doesn't fit vertically. Size
+label rects to the line, not the cap height.
+
 **One writer per transform.** Two scripts each writing a transform's absolute pose from their own
 remembered "rest" is a bug waiting for the wrong frame: whichever captures its rest while the
 other has it displaced pins it there. The player camera's local pose belongs to `CameraPose`
@@ -118,6 +127,13 @@ can be re-patched rather than silently losing the fixes. The game's own side is 
 (what grows where, seeded) plus one interactor child at each player's feet. Tuning lives in
 `GrassField.cs`'s defaults and `GrassSetup.cs`'s settings block - re-running `Set up the grass`
 resets the scene to them, so change the code, not the inspector.
+
+**The main menu is scene data too.** `Tools/Gorilla Warfare/Build the main menu` builds it once
+and then refuses to run over it; `Rebuild the main menu (replaces hand edits)` is the deliberate
+start-over, and once the menu has been edited by hand it shouldn't be used at all. The arena behind
+it is a copy (`~MenuBackdrop`), so a map change reaches the menu only after `Refresh the main menu
+backdrop`, which touches nothing else. `Photograph the main menu` renders every screen with the
+live backdrop - use it to check a change, not a guess.
 
 Run `Tools/Gorilla Warfare/Build the in-game HUD` to rebuild it. That **replaces** the whole
 `GameHud` root, so any restyling done by hand is lost - it's for starting over, not for updates.

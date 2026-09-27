@@ -25,8 +25,12 @@ public static class SettingsMenuBuilder
 
     static readonly Color Ink = new Color(0.94f, 0.94f, 0.9f);
     static readonly Color Dim = new Color(0.94f, 0.94f, 0.9f, 0.5f);
-    static readonly Color Backdrop = new Color(0.03f, 0.03f, 0.04f, 0.93f);
-    static readonly Color Face = new Color(0.11f, 0.11f, 0.13f, 1f);
+    // Matched to the main menu (MenuBuilder): a dim over whatever is behind, and a translucent
+    // ink card on top of it rather than a solid grey slab - reported as needing to fit the new
+    // main menu's theme.
+    static readonly Color Backdrop = new Color(0.02f, 0.025f, 0.03f, 0.8f);
+    static readonly Color Face = new Color(0.035f, 0.04f, 0.05f, 1f);   // opaque - this card sits over other UI, which ghosted through at 0.95
+    static readonly Color Muted = new Color(1f, 1f, 1f, 0.55f);
 
     // Was a plain orange - this screen's own colour, chosen independently of and before the rest
     // of the HUD settled on its own palette. Reported directly: "i dont like the settings menu
@@ -40,7 +44,7 @@ public static class SettingsMenuBuilder
     static readonly Color Accent = new Color(1f, 0.82f, 0.1f);
 
     const float RowHeight = 46f;
-    const float PanelWidth = 900f;
+    const float PanelWidth = 960f;
 
     [MenuItem("Tools/Gorilla Warfare/Build the settings menu")]
     public static void Run()
@@ -78,31 +82,41 @@ public static class SettingsMenuBuilder
                                Vector2.zero, Backdrop);
 
         GameObject frame = Box(panel.transform, "Frame", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                               Vector2.zero, new Vector2(PanelWidth, 780f), Face);
+                               Vector2.zero, new Vector2(PanelWidth, 800f), Face);
 
-        TMP_Text heading = Label(frame.transform, "Heading", headingFont, 52f, TextAlignmentOptions.Left,
-                                 new Vector2(0f, 1f), new Vector2(40f, -34f), new Vector2(500f, 56f));
+        // The same banana edge bar the main menu's cards carry.
+        Box(frame.transform, "AccentBar", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f),
+            Vector2.zero, new Vector2(6f, 0f), Accent).GetComponent<Image>().raycastTarget = false;
+
+        TMP_Text eyebrow = Label(frame.transform, "Eyebrow", font, 28f, TextAlignmentOptions.Left,
+                                 new Vector2(0f, 1f), new Vector2(44f, -26f), new Vector2(400f, 36f));
+        eyebrow.text = "SETTINGS";
+        eyebrow.color = Muted;
+        eyebrow.characterSpacing = 6f;
+
+        TMP_Text heading = Label(frame.transform, "Heading", headingFont, 66f, TextAlignmentOptions.Left,
+                                 new Vector2(0f, 1f), new Vector2(40f, -52f), new Vector2(560f, 100f));
         heading.text = "AIM";
-        heading.color = Accent;
+        heading.color = Ink;
 
         // "BACK" rather than "CLOSE": opening this from the main menu makes it a screen you
         // came from somewhere to reach, and back is what you want from it.
-        Button close = Push(frame.transform, "Close", font, "BACK",
-                            new Vector2(1f, 1f), new Vector2(-40f, -34f), new Vector2(160f, 48f));
+        Button close = TextButton(frame.transform, "Close", headingFont, "BACK", TextAlignmentOptions.Right,
+                                  new Vector2(1f, 1f), new Vector2(-40f, -40f), new Vector2(200f, 60f));
 
-        Button reset = Push(frame.transform, "Reset", font, "DEFAULTS",
-                            new Vector2(1f, 0f), new Vector2(-40f, 34f), new Vector2(210f, 48f));
+        Button reset = TextButton(frame.transform, "Reset", headingFont, "DEFAULTS", TextAlignmentOptions.Right,
+                                  new Vector2(1f, 0f), new Vector2(-40f, 30f), new Vector2(360f, 60f));
 
         // Bottom left, well away from DEFAULTS - the two most destructive buttons on the screen
         // should not be neighbours. Hidden unless there is a match to leave.
-        Button quit = Push(frame.transform, "Quit", font, "MAIN MENU",
-                           new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
+        Button quit = TextButton(frame.transform, "Quit", headingFont, "MAIN MENU", TextAlignmentOptions.Left,
+                                 new Vector2(0f, 0f), new Vector2(44f, 30f), new Vector2(320f, 60f));
         quit.gameObject.SetActive(false);
 
         // Same corner as MAIN MENU, because the two are never up at once - one is menu only and
         // the other match only.
-        Button sandbox = Push(frame.transform, "Sandbox", font, "SANDBOX",
-                              new Vector2(0f, 0f), new Vector2(40f, 34f), new Vector2(260f, 48f));
+        Button sandbox = TextButton(frame.transform, "Sandbox", headingFont, "SANDBOX", TextAlignmentOptions.Left,
+                                    new Vector2(0f, 0f), new Vector2(44f, 30f), new Vector2(320f, 60f));
         sandbox.gameObject.SetActive(false);
 
         // ---------------------------------------------------------------- crosshair preview
@@ -142,7 +156,7 @@ public static class SettingsMenuBuilder
 
         // ---------------------------------------------------------------- tabs
         GameObject tabBar = Empty(frame.transform, "Tabs", new Vector2(0f, 1f),
-                                  new Vector2(40f, -104f), new Vector2(PanelWidth - 80f, 54f));
+                                  new Vector2(40f, -150f), new Vector2(PanelWidth - 80f, 56f));
 
         HorizontalLayoutGroup tabLayout = tabBar.AddComponent<HorizontalLayoutGroup>();
         tabLayout.spacing = 8f;
@@ -151,8 +165,7 @@ public static class SettingsMenuBuilder
         tabLayout.childControlWidth = true;
         tabLayout.childControlHeight = true;
 
-        Button tabTemplate = Push(tabBar.transform, "TabTemplate", headingFont, "TAB",
-                                  new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 54f));
+        Button tabTemplate = Tab(tabBar.transform, headingFont);
         tabTemplate.gameObject.SetActive(false);
 
         // ---------------------------------------------------------------- scrolling content
@@ -160,7 +173,7 @@ public static class SettingsMenuBuilder
         // Without it the last few bindings would sit below the bottom edge with no way to reach
         // them, which is a good way to lose the reload key forever.
         GameObject viewport = Box(frame.transform, "Viewport", new Vector2(0f, 1f), new Vector2(0f, 1f),
-                                  new Vector2(40f, -172f), new Vector2(PanelWidth - 80f, 520f),
+                                  new Vector2(40f, -222f), new Vector2(PanelWidth - 80f, 470f),
                                   new Color(0f, 0f, 0f, 0.25f));
 
         RectTransform viewportRect = (RectTransform)viewport.transform;
@@ -169,7 +182,7 @@ public static class SettingsMenuBuilder
         viewport.AddComponent<RectMask2D>();
 
         GameObject content = Empty(viewport.transform, "Content", new Vector2(0f, 1f),
-                                   Vector2.zero, new Vector2(PanelWidth - 80f, 520f));
+                                   Vector2.zero, new Vector2(PanelWidth - 80f, 470f));
 
         RectTransform contentRect = (RectTransform)content.transform;
         contentRect.pivot = new Vector2(0f, 1f);
@@ -442,7 +455,13 @@ public static class SettingsMenuBuilder
         text.color = Ink;
 
         if (font != null)
+        {
             text.font = font;
+
+            // The main menu's own ink outline and underlay (MenuBuilder), so text here is drawn
+            // exactly like text there.
+            text.fontSharedMaterial = MenuBuilder.InkPreset(font);
+        }
 
         RectTransform rect = (RectTransform)go.transform;
         rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
@@ -450,6 +469,74 @@ public static class SettingsMenuBuilder
         rect.sizeDelta = dimensions;
 
         return text;
+    }
+
+    /// <summary>
+    /// The main menu's text button (MenuBuilder.TextButton): just the words, lighting banana with
+    /// an accent bar on hover through MenuButton. The invisible image is the hit area. Used for
+    /// BACK, the reset and the two corner buttons - labels nothing else recolours, so MenuButton
+    /// can own their colour.
+    /// </summary>
+    static Button TextButton(Transform parent, string name, TMP_FontAsset font, string caption,
+                             TextAlignmentOptions alignment, Vector2 anchor, Vector2 position, Vector2 size)
+    {
+        GameObject go = Empty(parent, name, anchor, position, size);
+
+        Image hit = go.AddComponent<Image>();
+        hit.color = new Color(0f, 0f, 0f, 0f);
+
+        Button button = go.AddComponent<Button>();
+        button.transition = Selectable.Transition.None;
+        button.targetGraphic = hit;
+
+        bool right = alignment == TextAlignmentOptions.Right;
+        GameObject accent = Box(go.transform, "Accent", new Vector2(right ? 1f : 0f, 0.5f), new Vector2(right ? 1f : 0f, 0.5f),
+                                new Vector2(right ? 0f : 1f, 0.5f), new Vector2(right ? 14f : -14f, 0f), new Vector2(6f, size.y * 0.6f),
+                                new Color(Accent.r, Accent.g, Accent.b, 0f));
+        accent.GetComponent<Image>().raycastTarget = false;
+
+        TMP_Text label = Label(go.transform, "Label", font, size.y * 0.66f, alignment,
+                               new Vector2(0.5f, 0.5f), Vector2.zero, size);
+        label.text = caption;
+
+        MenuButton look = go.AddComponent<MenuButton>();
+        SerializedObject so = new SerializedObject(look);
+        so.FindProperty("label").objectReferenceValue = label;
+        so.FindProperty("accent").objectReferenceValue = accent.GetComponent<Image>();
+        // Stepping in from whichever side it sits on.
+        so.FindProperty("hoverShift").floatValue = right ? -12f : 12f;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        return button;
+    }
+
+    /// <summary>
+    /// One tab: its name in Anton, no box - SettingsMenu dims the ones that aren't showing
+    /// (label alpha), and hovering one tints it banana (a colour tint on the label, which
+    /// multiplies with that alpha rather than fighting it).
+    /// </summary>
+    static Button Tab(Transform parent, TMP_FontAsset font)
+    {
+        GameObject go = Empty(parent, "TabTemplate", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 56f));
+
+        Image hit = go.AddComponent<Image>();
+        hit.color = new Color(0f, 0f, 0f, 0f);
+
+        TMP_Text label = Label(go.transform, "Label", font, 40f, TextAlignmentOptions.Center,
+                               new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 56f));
+        label.text = "TAB";
+
+        Button button = go.AddComponent<Button>();
+        button.targetGraphic = label;
+        ColorBlock colours = button.colors;
+        colours.normalColor = Color.white;
+        colours.highlightedColor = Accent;
+        colours.pressedColor = new Color(Accent.r * 0.8f, Accent.g * 0.8f, Accent.b * 0.8f);
+        colours.selectedColor = Color.white;
+        colours.fadeDuration = 0.08f;
+        button.colors = colours;
+
+        return button;
     }
 
     static Button Push(Transform parent, string name, TMP_FontAsset font, string caption,
@@ -465,14 +552,19 @@ public static class SettingsMenuBuilder
         rect.sizeDelta = size;
 
         Image face = go.GetComponent<Image>();
-        face.color = new Color(1f, 1f, 1f, 0.1f);
+        face.color = Color.white;
 
         Button button = go.GetComponent<Button>();
         button.targetGraphic = face;
 
+        // The main menu's row states: a faint strip that lights banana, not the old orange.
         ColorBlock colours = button.colors;
-        colours.highlightedColor = new Color(1f, 0.42f, 0.06f, 0.35f);
-        colours.pressedColor = Accent;
+        colours.normalColor = new Color(1f, 1f, 1f, 0.07f);
+        colours.highlightedColor = new Color(Accent.r, Accent.g, Accent.b, 0.28f);
+        colours.pressedColor = new Color(Accent.r, Accent.g, Accent.b, 0.45f);
+        colours.selectedColor = colours.normalColor;
+        colours.disabledColor = new Color(1f, 1f, 1f, 0.03f);
+        colours.fadeDuration = 0.08f;
         button.colors = colours;
 
         TMP_Text label = Label(go.transform, "Label", font, 24f, TextAlignmentOptions.Center,
