@@ -39,7 +39,7 @@ open the project.
 | `AudioCheck` | every bank has clips, named clips exist, nothing silent or clipping, shape checks (the slide scrape, the shield break, the vine thwip, the wind bed) |
 | `PlayModeProbe` | **runs the actual game** in Photon offline mode |
 | `SandboxFlowCheck` | the real menu, connected, into the sandbox and back - every frame's open screen and every logged error on the way (drop `-quit`, like the probe) |
-| `MenuButtonAudit` | every control on every menu screen (crates and settings tabs included): does a click at its centre reach it, is it on screen, does anything listen - at 16:9, and 4:3 as warnings (drop `-quit`) |
+| `MenuButtonAudit` | every control on every menu screen (crates and settings tabs included): does a click at its centre reach it, is it on screen, does anything listen - at 16:9 and 4:3 (drop `-quit`) |
 
 `PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
 
@@ -89,8 +89,8 @@ The first round of feedback from people playing it. Worked through in this order
       reel 16 m/s, steer 9 m/s², clearance 1.3m are all first guesses, on `VineGrapple`'s inspector.
 - [x] **Buttons that don't work, especially in the crate section.** `MenuButtonAudit` clicked all
       222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
-      listener saved into the prefab. Fixed. At 4:3 a few controls fall off the right edge (menu
-      Canvas Scaler wants Screen Match Mode "Expand" - one field in `Menu.unity`).
+      listener saved into the prefab. Fixed. At 4:3 a few controls fell off the right edge; the
+      menu's Canvas Scaler is on Screen Match Mode "Expand" now and 4:3 audits clean.
 - [ ] **The crates themselves want reworking** - opening one wins nothing yet, and the shop still
       wears the old look. Planned (ideas.md section 0): cosmetic drops, a Locker, earned tokens
       only. Waiting on a pick.
@@ -651,7 +651,7 @@ under one `~MapExpansion` group, replaced whole on every run rather than accumul
 how many clusters) - not played yet, see Unverified.
 
 **Grass, 2026-09-27** - MinionsArt's compute-shader grass system (Built-in pipeline version,
-sourced from their $10 patron tier, `Assets/Grass/CREDIT.txt`) across the jungle floor, grown at
+the free demo from their public Patreon post, `Assets/Grass/CREDIT.txt`) across the jungle floor, grown at
 match load by `GrassField` from a fixed seed (same field on every client) and bending away from
 every player's feet. 20-35 cm tall - ankle to low shin on the gorilla, measured against the model
 in probe renders rather than the tool's metre-tall default. `Tools/Gorilla Warfare/Set up the

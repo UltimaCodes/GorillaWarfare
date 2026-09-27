@@ -60,9 +60,12 @@ one shot, which is the bug that shipped once already.
 
 ## Models
 
-**Gorilla** (`Assets/Resources/Models/Gorilla`) - supplied by Ryaan as a zip whose rig only
-survived in a Source `.smd`, rebuilt into an FBX in Blender. **Its source and licence aren't
-recorded anywhere yet - add them here before release.**
+**Most of the 3D models are placeholders**, to be replaced before the Steam release - they can't
+ship as they are. What's here is what's in the build today.
+
+**Gorilla** (`Assets/Resources/Models/Gorilla`) - a placeholder, supplied by Ryaan as a zip whose rig
+only survived in a Source `.smd`, rebuilt into an FBX in Blender. Source and licence unrecorded;
+it's being replaced rather than cleared.
 
 Every weapon in the game is one banana at a different size, derived from it by a one-off Blender
 script (`tools/banana_variants.py`, now in git history) — 9,356 triangles, one 2K texture shared
@@ -110,8 +113,8 @@ In `Assets/Fonts/`, each with its licence file alongside it where one shipped.
 
 ## Grass
 
-Compute grass system by Minions Art (Joyce), from the $10 Patreon tier — see
-`Assets/Grass/CREDIT.txt` for the terms and every local change.
+Compute grass system by Minions Art (Joyce) — the free demo version from her public Patreon post,
+not a paid tier. See `Assets/Grass/CREDIT.txt` for the terms and every local change.
 
 ## Art
 

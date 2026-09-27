@@ -95,10 +95,11 @@ public class MenuButtonAuditRunner : MonoBehaviour
 
         UseVirtualScreen();
 
-        // 16:9 is what nearly everyone plays at, so anything broken there fails. 4:3 is reported
-        // but doesn't fail - it says what a narrow window loses.
+        // 16:9 is what nearly everyone plays at; 4:3 is the narrowest shape a window is likely to
+        // be. Both fail on a problem - 4:3 was report-only until the menu's Canvas Scaler went to
+        // Expand (2026-09-27) and it came up clean, so now it guards that.
         yield return Pass(1920, 1080, true);
-        yield return Pass(1440, 1080, false);
+        yield return Pass(1440, 1080, true);
 
         Finish(null);
     }

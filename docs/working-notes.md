@@ -274,6 +274,13 @@ assert the method count is unchanged.
 - **Music is sourced, SFX are sourced.** Four attempts at synthesising them were all rejected;
   measuring "improvement" is not the same as sounding good.
 - **Everyone must run the same build.** RPCs are sent as indices into `RpcList`.
+- **Most 3D models are placeholders** (decided 2026-09-27) - the gorilla included - and get replaced
+  before the Steam release; they can't ship as they are. Don't spend effort tracing their licences
+  or polishing them. Anything built on a model (the rig, hitboxes, grip offsets) should keep working
+  when the model is swapped, which is the argument for the measured-not-hardcoded approach the rig
+  code already takes.
+- **The grass is fine to ship.** MinionsArt's free public demo, not a paid tier - the same one Muck
+  shipped with. See `Assets/Grass/CREDIT.txt`.
 
 **Steam launch sequencing, decided 2026-08-22.** The game is going up on Steam; the target moved
 from "a month or two" to six months the same day, specifically to leave room for the game to feel

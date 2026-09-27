@@ -1,8 +1,10 @@
 Grass System (Built-in render pipeline version) by Minions Art (Joyce)
 https://minionsart.github.io/tutorials/grasssystem
-https://www.patreon.com/minionsart/posts/grass-system-urp-83683483 ($10 patron tier)
+https://www.patreon.com/minionsart/posts/grass-system-urp-83683483
 
-Supplied by the project owner from their own patron download, 2026-09-27.
+The free, public demo version - not a paid tier. Her paid tiers are a more premium version of these
+shaders and a more in-depth tutorial; these are the free-to-use files (the same demo Dani's Muck, on
+Steam, was built with). Supplied by the project owner, 2026-09-27.
 
 Terms, per the tutorial page above (paraphrased - check the page for the exact wording): usable in
 free and commercial projects, modifiable, credit appreciated but not required, and not to be resold

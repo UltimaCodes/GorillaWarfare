@@ -3027,7 +3027,9 @@ probe check on the Name column's settings.
 
 "grass :D" with a link to MinionsArt's grass system and one brief: "making sure its not too big or
 too small for the player's proportions." The post turned out to be the BIRP & URP version; Ryaan
-downloaded the $10-tier files from their own patron account (Patreon blocks automated reads) and dropped all thirteen in.
+downloaded the files (Patreon blocks automated reads) and dropped all thirteen in. They're the free,
+public demo - not a paid tier (corrected 2026-09-27; the paid tiers are a more premium version and a
+deeper tutorial) - the same demo Dani's Muck shipped on Steam with.
 
 ## What was imported, and what wasn't
 
@@ -3316,10 +3318,12 @@ prefab never keeps - so it shipped with no listener at all, and the only way out
 was OPEN ANOTHER and then CLOSE. It has its own serialized field now, wired in the prefab and in the
 builder. The only builder that did this; MenuBuilder uses persistent listeners throughout.
 
-At 4:3 (reported, not failed): the find screen's CREATE LOBBY and four of the lobby's colour swatches
-fall off the right edge. The menu canvas scales to match height, so anything narrower than 16:9 loses
-its sides. Screen Match Mode "Expand" on the menu's Canvas Scaler fixes it without changing 16:9 at
-all - left for Ryaan, since `Menu.unity` has uncommitted hand edits.
+At 4:3: the find screen's CREATE LOBBY and four of the lobby's colour swatches fell off the right
+edge. The menu canvas scaled to match height, so anything narrower than 16:9 lost its sides. The
+menu's Canvas Scaler is on Screen Match Mode "Expand" now (Ryaan's OK) - identical at 16:9, and the
+whole reference area stays on screen at any other shape. 4:3 audits clean and is a failing pass now,
+not a report. Committed alongside Ryaan's own hand edit to `Menu.unity` (the loading screen's logo
+removed, on purpose).
 
 Mechanically everything else works. What the audit can't judge is whether a button does what a
 player expects - and in the crate shop the honest answer is that opening a crate wins nothing yet
