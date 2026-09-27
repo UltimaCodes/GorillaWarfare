@@ -102,6 +102,13 @@ driven from code on purpose and shouldn't be moved back: the scope, which has to
 window's aspect ratio, and the crosshair ticks, which open with the weapon's spread. Everything
 else that looks like a layout decision in that script is a bug.
 
+**The grass is a vendored package, patched in place.** `Assets/Grass` is MinionsArt's system;
+every change to it is marked `Gorilla Warfare:` (list in its `CREDIT.txt`) so a newer download
+can be re-patched rather than silently losing the fixes. The game's own side is `GrassField`
+(what grows where, seeded) plus one interactor child at each player's feet. Tuning lives in
+`GrassField.cs`'s defaults and `GrassSetup.cs`'s settings block - re-running `Set up the grass`
+resets the scene to them, so change the code, not the inspector.
+
 Run `Tools/Gorilla Warfare/Build the in-game HUD` to rebuild it. That **replaces** the whole
 `GameHud` root, so any restyling done by hand is lost - it's for starting over, not for updates.
 `SceneCheck` walks every serialized slot and names the empty ones, because a reference dragged

@@ -604,6 +604,14 @@ existing prop kit across the open ground. Re-runnable and idempotent, same conve
 every run rather than accumulating. Explicitly a first pass on the numbers (tier count, scale,
 how many clusters) - not played yet, see Unverified.
 
+**Grass, 2026-09-27** - MinionsArt's compute-shader grass system (Built-in pipeline version,
+sourced from their $10 patron tier, `Assets/Grass/CREDIT.txt`) across the jungle floor, grown at
+match load by `GrassField` from a fixed seed (same field on every client) and bending away from
+every player's feet. 20-35 cm tall - ankle to low shin on the gorilla, measured against the model
+in probe renders rather than the tool's metre-tall default. `Tools/Gorilla Warfare/Set up the
+grass` wires it; re-running it resets the tuning to `GrassField.cs`'s defaults. Budget: ~58k points
+x 20 triangles, a ~96 MB draw buffer at most. See Unverified.
+
 ---
 
 ## Tried and dropped
@@ -770,6 +778,10 @@ Separate from M0 because it needs a person playing it, not a fix.
 
 Things the checks can't reach, so they need a person:
 
+- **the grass, added 2026-09-27.** `PlayModeProbe` confirms it grows (~58k points), builds its GPU
+  buffers, draws from where you stand and registers your feet, and its renders have been looked at
+  (`Logs/probe-shots/grass-*.png`). Not yet judged in play: how the push radius (0.6 m) feels while
+  moving, the tip colour, and the frame cost on a weaker GPU than this one.
 - whether the recoil, gait and weapon framing feel right
 - whether the bananas read as their weapons at a glance
 - **all of M4.** Every sound is verified to exist, to be one shot, and not to clip. Whether any

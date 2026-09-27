@@ -210,6 +210,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- unrelated settings don't rebuild post-processing ----
         yield return CheckUnrelatedSettingsDontRebuildShaders();
 
+        // ---- the grass grows, draws, and knows where you're standing ----
+        yield return CheckGrass();
+
         // ---- joining mid match ----
         yield return CheckLateJoinGetsWeapons(player);
 
@@ -1475,6 +1478,76 @@ public class ProbeRunner : MonoBehaviour
         yield return null;
     }
 
+    /// <summary>
+    /// MinionsArt's grass (Assets/Grass) driven by GrassField: it has to have grown, be drawing
+    /// something from where you stand, and have your own feet registered to push it. The shots
+    /// are for a person to judge - height against the gorilla, how it bends underfoot.
+    /// </summary>
+    IEnumerator CheckGrass()
+    {
+        yield return null;
+        yield return null;
+
+        GrassField field = GrassField.Instance;
+        GrassComputeScript compute = field != null ? field.GetComponent<GrassComputeScript>() : null;
+
+        Check(field != null && field.PointCount > 10000, "the grass grew",
+              field == null ? "no GrassField in the scene" : $"{field.PointCount} points");
+
+        Check(compute != null && compute.IsInitialized, "the grass set itself up on the GPU",
+              compute == null ? "no GrassComputeScript" : compute.IsInitialized ? "buffers built" : "never initialized");
+
+        Check(compute != null && compute.VisibleCount > 0, "some grass is in view",
+              compute == null ? "-" : $"{compute.VisibleCount} points past the culling tree");
+
+        PlayerController player = LocalPlayer();
+        ShaderInteractor feet = null;
+
+        foreach (ShaderInteractor interactor in ShaderInteractor.Active)
+        {
+            if (player != null && interactor.transform.IsChildOf(player.transform))
+                feet = interactor;
+        }
+
+        float feetHeight = 0f;
+        if (feet != null && Physics.Raycast(feet.transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit ground, 3f, 1))
+            feetHeight = feet.transform.position.y - ground.point.y;
+
+        Check(feet != null && Mathf.Abs(feetHeight) < 0.25f, "your feet push the grass",
+              feet == null ? "no interactor on the local player" : $"interactor {feetHeight:F2} m above the ground, radius {feet.radius}");
+
+        Camera camera = PlayerController.LocalCamera;
+        if (camera != null)
+        {
+            // Rotated and captured in the same frame - set it and wait a frame, and the player's own
+            // look code has put it back before the render (which is what flattened "map-floor").
+            Quaternion was = camera.transform.rotation;
+
+            camera.transform.rotation = Quaternion.Euler(0f, was.eulerAngles.y, 0f);
+            Capture(null, "grass-eye");
+
+            camera.transform.rotation = Quaternion.Euler(60f, was.eulerAngles.y, 0f);
+            Capture(null, "grass-feet");
+
+            camera.transform.rotation = was;
+
+            GameSettings.ShaderPreset preset = GameSettings.Shaders;
+            bool psx = GameSettings.PsxFilter;
+            GameSettings.SetShaders(GameSettings.ShaderPreset.Off);
+            GameSettings.SetPsxFilter(false);
+            yield return null;
+            yield return null;
+
+            camera.transform.rotation = Quaternion.Euler(0f, was.eulerAngles.y, 0f);
+            Capture(null, "grass-eye-noshaders");
+            camera.transform.rotation = was;
+
+            GameSettings.SetShaders(preset);
+            GameSettings.SetPsxFilter(psx);
+            yield return null;
+        }
+    }
+
     /// Which of ShaderStack's volumes the PSX pass is in right now: "world", "gun camera", both,
     /// or "nowhere".
     static string PsxWhere()
@@ -1999,9 +2072,12 @@ public class ProbeRunner : MonoBehaviour
         Check(frameDiff > 0.5, "the psx filter visibly changes the render",
               $"average per-channel difference {frameDiff:F2} across the finished frame");
 
-        double gunDiff = AverageDifference(offGun, onGun);
-        Check(gunDiff > 0.5, "the psx filter reaches the gun too",
-              $"average per-channel difference {gunDiff:F2} on the gun camera alone");
+        // Averaged over the gun's own pixels, not the whole frame - over the whole frame the number
+        // mostly measured how much of the screen the gun covered (0.92 for one weapon, 0.42 for a
+        // smaller one, the same effect both times).
+        double gunDiff = AverageDifference(offGun, onGun, lit: 24);
+        Check(gunDiff > 3.0, "the psx filter reaches the gun too",
+              $"average per-channel difference {gunDiff:F2} across the gun's own pixels");
 
         GameSettings.SetPsxFilter(psxBefore);
         GameSettings.SetShaders(presetBefore);
@@ -2010,14 +2086,23 @@ public class ProbeRunner : MonoBehaviour
     const int ReadWidth = 480;
     const int ReadHeight = 270;
 
-    static double AverageDifference(Color32[] a, Color32[] b)
+    /// Average per-channel difference. With lit set, only over pixels brighter than that in either
+    /// image - the gun against a black background, rather than the background too.
+    static double AverageDifference(Color32[] a, Color32[] b, int lit = -1)
     {
         long diff = 0;
+        long counted = 0;
 
         for (int i = 0; i < a.Length; i++)
-            diff += System.Math.Abs(a[i].r - b[i].r) + System.Math.Abs(a[i].g - b[i].g) + System.Math.Abs(a[i].b - b[i].b);
+        {
+            if (lit >= 0 && a[i].r + a[i].g + a[i].b <= lit && b[i].r + b[i].g + b[i].b <= lit)
+                continue;
 
-        return diff / (double)(a.Length * 3);
+            diff += System.Math.Abs(a[i].r - b[i].r) + System.Math.Abs(a[i].g - b[i].g) + System.Math.Abs(a[i].b - b[i].b);
+            counted++;
+        }
+
+        return counted == 0 ? 0 : diff / (double)(counted * 3);
     }
 
     /// Renders each camera in order into one black-cleared target - world first, then the gun

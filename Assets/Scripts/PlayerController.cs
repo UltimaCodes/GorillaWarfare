@@ -313,6 +313,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             cameraHolderBasePos = cameraHolder.transform.localPosition;
     }
 
+    /// Grass bends away from every player, remote ones included - it's the thing that makes the
+    /// field read as something you're walking through rather than a texture you're walking over.
+    /// 0.8 first, which flattened a 1.6 m bald circle around a body whose capsule is 1 m across.
+    public const float GrassPushRadius = 0.6f;
+
+    /// <summary>
+    /// At the feet, not the root: the root sits at the capsule's centre, a metre off the ground,
+    /// and GrassBlades.compute measures from the interactor to each blade's base - a sphere at the
+    /// root would need a radius over a metre just to reach the grass at all.
+    /// </summary>
+    void AddGrassInteractor()
+    {
+        CharacterController body = GetComponent<CharacterController>();
+
+        GameObject feet = new GameObject("~GrassInteractor");
+        feet.transform.SetParent(transform, false);
+        feet.transform.localPosition = body != null ? body.center + Vector3.down * (body.height * 0.5f) : Vector3.zero;
+
+        feet.AddComponent<ShaderInteractor>().radius = GrassPushRadius;
+    }
+
     void Start()
     {
         // Added here rather than on the prefab so there's nothing to wire up. Runs on remote
@@ -324,6 +345,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // owner ever fires one or gets pulled by one. It gates its own input internally the same
         // way FootstepPlayer and MonkeyRig already do.
         vine = gameObject.AddComponent<VineGrapple>();
+
+        AddGrassInteractor();
 
         // Hidden from its owner - you shouldn't see your own body from inside its head - but it
         // still casts a shadow.

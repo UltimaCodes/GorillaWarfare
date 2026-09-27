@@ -40,6 +40,7 @@ public static class SceneCheck
         // The game scene has to be the one the spawner waits for, and it has to have somewhere
         // to put people.
         CheckGameScene();
+        CheckGrass();
         CheckMenuScene();
 
         // SettingsMenu and CrateOpeningScreen are RoomManager-instantiated Resources prefabs,
@@ -114,6 +115,48 @@ public static class SceneCheck
         }
 
         Notes.Add($"{scene.name}: {broken} broken material slots");
+    }
+
+    /// <summary>
+    /// The grass (Assets/Grass + GrassField) fails silently: a missing compute shader or material
+    /// is one warning in the log and no grass, and a GrassField with no ground colliders grows
+    /// nothing at all. Re-run Tools/Gorilla Warfare/Set up the grass to fix any of these.
+    /// </summary>
+    static void CheckGrass()
+    {
+        EditorSceneManager.OpenScene("Assets/Scenes/Game.unity", OpenSceneMode.Single);
+
+        GrassField field = Object.FindFirstObjectByType<GrassField>();
+        if (field == null)
+        {
+            Failures.Add("Game has no GrassField - no grass. Run Tools/Gorilla Warfare/Set up the grass");
+            return;
+        }
+
+        GrassComputeScript compute = field.GetComponent<GrassComputeScript>();
+        SO_GrassSettings settings = compute != null ? compute.currentPresets : null;
+
+        if (settings == null)
+            Failures.Add("the grass has no settings asset - GrassComputeScript draws nothing");
+        else if (settings.shaderToUse == null || settings.materialToUse == null)
+            Failures.Add("the grass settings are missing their compute shader or material");
+        // Not Shader.isSupported - with -nographics there's no GPU to be supported by. A shader that
+        // failed to compile or went missing shows up as Unity's error shader instead.
+        else if (settings.materialToUse.shader == null || settings.materialToUse.shader.name == "Hidden/InternalErrorShader")
+            Failures.Add("the grass material's shader is missing or failed to compile");
+
+        SerializedProperty ground = new SerializedObject(field).FindProperty("ground");
+        int wired = 0;
+        for (int i = 0; ground != null && i < ground.arraySize; i++)
+        {
+            if (ground.GetArrayElementAtIndex(i).objectReferenceValue != null)
+                wired++;
+        }
+
+        if (wired == 0)
+            Failures.Add("GrassField has no ground colliders - it raycasts onto them to grow anything");
+        else
+            Notes.Add($"Game: grass wired to {wired} ground collider(s), settings '{settings?.name}'");
     }
 
     static void CheckGameScene()

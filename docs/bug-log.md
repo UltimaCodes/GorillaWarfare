@@ -1914,7 +1914,7 @@ grep, not assumed) before editing. Real confirmation is Ryaan's own sandbox pass
 
 # Twenty-fourth pass — a real screenshot again, a movement combo, dummies ragdoll, 2026-08-29
 
-Same-day continuation. Ryaan ran the fixed style meter himself and sent back a real screenshot -
+Same-day continuation. Ryaan ran the fixed style meter in a real session and sent back a screenshot -
 proof the dummy-crediting fix landed (a real kill, "FULL SILVERBACK x5.4" with a real breakdown)
 but also proof of a new bug the fix itself exposed: the rank text and the breakdown rows
 overlapped. Same message asked for three more things: a second, separate movement-tech combo
@@ -3020,3 +3020,69 @@ scoreboard's Name column is plain text with an ellipsis as a backstop (`Scoreboa
 the Name cell only ever holds plain text, so nothing there relied on rich text). Six new
 `MatchCheck` cases, a compile failure before `PlayerNames` existed and all passing after, plus a
 probe check on the Name column's settings.
+
+---
+
+# Thirty-second pass — grass, 2026-09-27
+
+"grass :D" with a link to MinionsArt's grass system and one brief: "making sure its not too big or
+too small for the player's proportions." The post turned out to be the BIRP & URP version; Ryaan
+downloaded the $10-tier files from their own patron account (Patreon blocks automated reads) and dropped all thirteen in.
+
+## What was imported, and what wasn't
+
+Eight of the thirteen, into `Assets/Grass` (see its `CREDIT.txt`). Left out on purpose:
+`ComputeGrassVertexFrag.shader` reads a triangle struct with a different layout from the one
+`GrassBlades.compute` writes (colour per vertex instead of per triangle) and would have drawn
+garbage; `GrassSurfaceVR.shader` declares the same shader name as `GrassSurface.shader`; the
+ShaderGraph and `Grass.hlsl` are URP-only; `RenderTerrainMap.cs` only serves the terrain-colour
+blend, which stays off.
+
+## What had to change in the vendor code before it could work here
+
+Found by reading all of it first, each marked `Gorilla Warfare:` in the source:
+- `GrassComputeScript` had `using UnityEditor;` outside its `#if UNITY_EDITOR` - every player
+  build, including a Steam one, would have failed to compile.
+- It culled against `Camera.main`, and this game's player camera is deliberately untagged - so in
+  play it would never have drawn a blade. Now asks a `PlayModeCamera` hook (GrassField points it
+  at `PlayerController.LocalCamera`) every frame, since the camera is rebuilt on every respawn.
+- It found interactors once, with `FindObjectsOfType`, when the grass set itself up - before any
+  player had spawned, so nobody would ever have pushed it, and a destroyed one would have thrown
+  every frame. `ShaderInteractor` keeps a live registry now; the positions array is reused
+  instead of reallocated per frame.
+- Its draw buffer was a flat 2.5 million triangles - 210 MB of GPU memory whatever the amount of
+  grass. Sized to what this grass can actually append now (~96 MB here).
+- The instantiated material was a serialized field, so a copy got written into the scene file.
+- No compute support (including every `-nographics` batch run) now means no grass instead of a
+  buffer error.
+- The painter window needed the Burst and Mathematics packages, which this project doesn't have -
+  the one job runs fine unburst, with a small xorshift standing in for Mathematics' Random - and
+  wrote its settings to an `Assets/Settings` folder that doesn't exist.
+
+## GrassField, and the proportions
+
+Painting with the tool would serialize every point into `Game.unity` - a floor's worth is
+megabytes of YAML rewritten on every touch-up - so `GrassField` grows it at match load instead,
+from a fixed seed: the same field on every client. It raycasts down onto the floor's own colliders
+(mesh data isn't readable in a build unless the import has Read/Write on), only inside the walls
+(the arena is 126 x 124 m of a 128 m plane), rejects slopes and anything standing on the spot.
+~58k points after rejections.
+
+Sized by looking, twice. First pass was 0.28-0.45 m - "shin height" on the 2 m capsule - and the
+probe render of an enemy five metres off showed it hidden to the knee: a gorilla's legs are short,
+so shin height on the capsule is knee height on the model. Now 0.2-0.35 m, which leaves the legs
+visible with grass at the ankles. The first pass also showed blades twice as wide as intended (the
+compute builds each blade from -width to +width, so the value is a half-width) and no root-to-tip
+gradient at all (the material's `_Fade` default of 1 saturates it). Both fixed, both re-rendered.
+
+The push sits on a child at each player's feet: the player root is the capsule's centre, a metre
+up, and the compute measures from the interactor to each blade's base. 0.8 m radius read as a bald
+crop circle round a 1 m-wide body when looking down; 0.6 m now.
+
+New `PlayModeProbe` checks: the grass grew, built its GPU buffers, has points in view past the
+culling tree, and your feet are registered to push it (0.08 m off the ground). Three renders saved
+each run - eye level, looking down at your feet, and eye level with post off (which ruled out AO
+as the cause of a dark band in the first pass). `SceneCheck` checks the wiring. Also fixed in the
+same run: the PSX gun check averaged over the whole frame, so it mostly measured how much screen
+the gun covered (0.92 one run, 0.42 the next, same effect) - it averages over the gun's own pixels
+now (7.05).

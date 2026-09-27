@@ -1,0 +1,22 @@
+Grass System (Built-in render pipeline version) by Minions Art (Joyce)
+https://minionsart.github.io/tutorials/grasssystem
+https://www.patreon.com/minionsart/posts/grass-system-urp-83683483 ($10 patron tier)
+
+Supplied by the project owner from their own patron download, 2026-09-27.
+
+Terms, per the tutorial page above (paraphrased - check the page for the exact wording): usable in
+free and commercial projects, modifiable, credit appreciated but not required, and not to be resold
+on their own.
+
+What's here, and what was left out of the download on purpose:
+  Scripts/  GrassComputeScript, CullingTreeNode, ShaderInteractor, SO_GrassSettings, SO_GrassToolSettings
+  Editor/   GrassPainterWindow (Tools > Grass Tool)
+  Shaders/  GrassBlades.compute, GrassSurface.shader ("Custom/GrassComputeSurface")
+
+  Not imported: ComputeGrassVertexFrag.shader (an older layout - its triangle struct doesn't match
+  what GrassBlades.compute writes, so it would draw garbage), GrassSurfaceVR.shader (declares the
+  same shader name as GrassSurface.shader), the ShaderGraph + Grass.hlsl pair (URP only), and
+  RenderTerrainMap.cs (terrain-colour blending, unused - the BLEND toggle stays off).
+
+Every change made to these files is marked with a "Gorilla Warfare:" comment, so they can be
+re-applied on top of a newer download. See docs/bug-log.md's thirty-second pass for why each exists.
