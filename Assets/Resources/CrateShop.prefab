@@ -1238,6 +1238,7 @@ MonoBehaviour:
   resultCardImage: {fileID: 312718967540961067}
   openAnotherButton: {fileID: 1420815712967852030}
   closeButton: {fileID: 8375590302546886464}
+  closeFromResultButton: {fileID: 7040468282060056596}
 --- !u!1 &3646855441698129063
 GameObject:
   m_ObjectHideFlags: 0

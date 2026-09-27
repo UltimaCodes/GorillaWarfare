@@ -3301,3 +3301,27 @@ show exactly what was reported. Left open on the roadmap until someone checks a 
   photographs were affected (the real menu's canvases are overlays), but a verification tool that
   lies is worse than none. The UI camera now sits far below the map with a 5m far plane.
 
+## "A lot of buttons don't work, especially in the loot crate section"
+
+Built `MenuButtonAudit` rather than clicking around: every visible, interactable control on every
+menu screen - title, find, create, error, lobby, all five settings tabs, the crate shop and a crate
+opened for real - asked of the EventSystem the way a click would be: what a click at its centre
+actually lands on, whether it's on the screen, and whether anything listens to it. Scoped to the
+open modal (the title screen under the crate shop is meant to be unreachable), and run at 1920x1080
+through a camera-space copy of the canvases, because batch mode's own screen is 640x480.
+
+At 16:9, 222 controls, one broken: **the crate result screen's CLOSE did nothing.** CrateShopBuilder
+wired it with `onClick.AddListener` while building the prefab - a runtime listener, which a saved
+prefab never keeps - so it shipped with no listener at all, and the only way out of a crate result
+was OPEN ANOTHER and then CLOSE. It has its own serialized field now, wired in the prefab and in the
+builder. The only builder that did this; MenuBuilder uses persistent listeners throughout.
+
+At 4:3 (reported, not failed): the find screen's CREATE LOBBY and four of the lobby's colour swatches
+fall off the right edge. The menu canvas scales to match height, so anything narrower than 16:9 loses
+its sides. Screen Match Mode "Expand" on the menu's Canvas Scaler fixes it without changing 16:9 at
+all - left for Ryaan, since `Menu.unity` has uncommitted hand edits.
+
+Mechanically everything else works. What the audit can't judge is whether a button does what a
+player expects - and in the crate shop the honest answer is that opening a crate wins nothing yet
+(a rarity name on a purple screen), which is the rework the same feedback asks for.
+

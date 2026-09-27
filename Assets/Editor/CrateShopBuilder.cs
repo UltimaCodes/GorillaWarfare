@@ -166,10 +166,9 @@ public static class CrateShopBuilder
         GameObject closeFromResult = BuildTextButton(resultPanel.transform, "CloseFromResultButton", "CLOSE",
                                                      font, new Vector2(0.5f, 0f), new Vector2(180f, 90f),
                                                      new Vector2(340f, 70f));
-        // Reusing the same closeButton field the select page's own close button is wired to
-        // isn't possible (one field, one target) - this calls screen.Close directly instead,
-        // same effect (toggles `panel`, not root - see CrateOpeningScreen.Close's own comment).
-        closeFromResult.GetComponent<Button>().onClick.AddListener(screen.Close);
+        // Its own field. This used to be onClick.AddListener(screen.Close) right here - a runtime
+        // listener, which the saved prefab never keeps, so the button shipped dead.
+        Wire(so, "closeFromResultButton", closeFromResult.GetComponent<Button>());
 
         Wire(so, "resultPanel", resultPanel);
 

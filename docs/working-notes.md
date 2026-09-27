@@ -300,6 +300,12 @@ rather than the letters.
 **`AddComponent` on a prefab loaded with `LoadAssetAtPath` does not work either.** Use
 `PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset` / `UnloadPrefabContents`.
 
+**`onClick.AddListener` in an editor builder saves nothing.** It's a runtime listener; the prefab or
+scene it's saved into keeps no trace of it, so the button ships dead while looking perfectly wired
+in the builder. Use `UnityEditor.Events.UnityEventTools.AddPersistentListener`, or a serialized field
+the component wires in its own `Start`. The crate result's CLOSE shipped dead this way.
+`MenuButtonAudit` catches it.
+
 **The cursor has no owner in the menu.** `PlayerController` captures and releases it, and there
 is no PlayerController in the menu scene - so whatever state the game left it in persists. Any
 path back to the title has to free it explicitly or the menu is unclickable, which reads as a

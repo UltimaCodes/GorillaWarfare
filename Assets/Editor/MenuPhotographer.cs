@@ -214,6 +214,25 @@ public static class MenuPhotographer
                 SettingsMenu.Instance.Close();
             }
 
+            // The crate shop, and a crate opened for real (the spin runs 5.6s).
+            if (CrateOpeningScreen.Instance != null)
+            {
+                PlayerPrefs.SetInt(PrefsPrefix + "wallet_Tokens", 1000);
+                PlayerWallet.UsePrefsNamespace(PrefsPrefix + "wallet_");
+
+                CrateOpeningScreen.Instance.Open();
+                yield return Shot(null, "crates");
+
+                typeof(CrateOpeningScreen).GetMethod("TryOpen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    ?.Invoke(CrateOpeningScreen.Instance, new object[] { CrateInfo.Ripe });
+                yield return new WaitForSecondsRealtime(2f);
+                yield return Shot(null, "crates-spinning");
+                yield return new WaitForSecondsRealtime(4.5f);
+                yield return Shot(null, "crates-result");
+
+                CrateOpeningScreen.Instance.Close();
+            }
+
             Debug.Log($"[menushot] {taken.Count} shots in {Time.realtimeSinceStartup - started:F1}s:\n  " + string.Join("\n  ", taken));
             CleanUp();
             EditorApplication.Exit(0);

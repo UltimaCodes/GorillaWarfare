@@ -61,6 +61,11 @@ public class CrateOpeningScreen : MonoBehaviour
     [SerializeField] Button openAnotherButton;
     [SerializeField] Button closeButton;
 
+    /// The result screen's own CLOSE. It used to be wired by CrateShopBuilder with AddListener at
+    /// build time - a runtime listener, which a prefab never saves - so it shipped doing nothing,
+    /// and the only way out of a result was OPEN ANOTHER and then close. Found by MenuButtonAudit.
+    [SerializeField] Button closeFromResultButton;
+
     const float CardWidth = 190f;
     const float CardSpacing = 18f;
     const int FillerCount = 56;
@@ -128,6 +133,9 @@ public class CrateOpeningScreen : MonoBehaviour
 
         if (closeButton != null)
             closeButton.onClick.AddListener(Close);
+
+        if (closeFromResultButton != null)
+            closeFromResultButton.onClick.AddListener(Close);
     }
 
     void RefreshBalance()

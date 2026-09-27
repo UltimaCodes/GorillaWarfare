@@ -22,7 +22,7 @@ something to check work against rather than a vibe:
 
 ## Checking it still works
 
-Eight suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
+Nine suites, all runnable from a closed editor. Unity has to be **shut** or batch mode refuses to
 open the project.
 
 ```
@@ -39,6 +39,7 @@ open the project.
 | `AudioCheck` | every bank has clips, named clips exist, nothing silent or clipping, shape checks (the slide scrape, the shield break, the vine thwip, the wind bed) |
 | `PlayModeProbe` | **runs the actual game** in Photon offline mode |
 | `SandboxFlowCheck` | the real menu, connected, into the sandbox and back - every frame's open screen and every logged error on the way (drop `-quit`, like the probe) |
+| `MenuButtonAudit` | every control on every menu screen (crates and settings tabs included): does a click at its centre reach it, is it on screen, does anything listen - at 16:9, and 4:3 as warnings (drop `-quit`) |
 
 `PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
 
@@ -83,8 +84,12 @@ The first round of feedback from people playing it. Worked through in this order
       that would show exactly this. Needs a look in a fresh build.
 - [ ] **Swing on the vine, don't just get pulled to the point.** A rope with a pendulum, and a kick
       off the ground so a grapple from standing gets you airborne. Grappling a player stays a pull.
-- [ ] **Buttons that don't work, especially in the crate section** - and the crates themselves want
-      reworking.
+- [x] **Buttons that don't work, especially in the crate section.** `MenuButtonAudit` clicked all
+      222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
+      listener saved into the prefab. Fixed. At 4:3 a few controls fall off the right edge (menu
+      Canvas Scaler wants Screen Match Mode "Expand" - one field in `Menu.unity`).
+- [ ] **The crates themselves want reworking** - opening one wins nothing yet, and the shop still
+      wears the old look. Needs decisions on what they drop (ideas.md).
 - [ ] **New weapons** - fun and quirky; the pineapple is the favourite but gets old and loses to
       Big Mike. Plan first (ideas.md).
 - [ ] **New maps** - the arena is flat, open and plain. Plan first (ideas.md).
