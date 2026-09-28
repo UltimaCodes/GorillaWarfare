@@ -136,6 +136,59 @@ public class SandboxFlowRunner : MonoBehaviour
         if (!online)
             yield break;
 
+        // ---- a room made while the connection is down ----
+        // Reported: "CreateRoom failed. Client is on NameServer... State: Disconnected" after the
+        // connection dropped - the menu sent the create into a dead connection and sat on the
+        // loading screen. It has to reconnect, then create, with nothing logged and no error screen.
+        phase = "reconnect";
+        errors.Clear();
+        errorScreenFrames = 0;
+
+        PhotonNetwork.Disconnect();
+        yield return Until(() => !PhotonNetwork.IsConnected, "drop the connection");
+
+        System.Reflection.FieldInfo nameField = typeof(Launcher).GetField("roomNameInputField",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (nameField?.GetValue(Launcher.Instance) is TMPro.TMP_InputField roomName)
+            roomName.text = "CHECK " + Random.Range(1000, 9999);
+
+        Launcher.Instance.CreateRoom();
+        yield return Until(() => PhotonNetwork.InRoom && OpenScreens() == "room", "reconnect, then make the room");
+
+        Check(PhotonNetwork.InRoom && OpenScreens() == "room", "a room made while disconnected reconnects, then opens",
+              $"{OpenScreens()}, in room {PhotonNetwork.InRoom}");
+        Check(errorScreenFrames == 0, "...without an error screen", $"{errorScreenFrames} frames");
+        Check(errors.Count == 0, "...and without an error", errors.Count == 0 ? "none" : errors[0]);
+        foreach (string e in errors)
+            log.AppendLine($"        {e}");
+
+        // ---- the lobby's backdrop follows the lobby's map ----
+        phase = "backdrop";
+        MenuBackdrop backdrop = FindFirstObjectByType<MenuBackdrop>();
+        Transform zooWorld = backdrop != null ? backdrop.transform.Find("zoo") : null;
+        Transform jungleWorld = backdrop != null ? backdrop.transform.Find(MapRegistry.Default.key) : null;
+
+        Check(jungleWorld != null && jungleWorld.gameObject.activeSelf && zooWorld != null && !zooWorld.gameObject.activeSelf,
+              "a new lobby shows its own map behind it", MapRegistry.Current.displayName);
+
+        PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, "zoo" } });
+        yield return Until(() => zooWorld != null && zooWorld.gameObject.activeSelf, "the backdrop to change map");
+
+        Transform zooSpot = zooWorld != null ? zooWorld.Find("CameraSpot") : null;
+        float fromSpot = zooSpot != null && MenuBackdropCamera.Current != null
+            ? Vector3.Distance(MenuBackdropCamera.Current.transform.position, zooSpot.position) : float.MaxValue;
+
+        Check(zooWorld != null && zooWorld.gameObject.activeSelf && jungleWorld != null && !jungleWorld.gameObject.activeSelf,
+              "picking the zoo puts the zoo behind the lobby", zooWorld != null && zooWorld.gameObject.activeSelf ? "zoo" : "not switched");
+        Check(fromSpot < 1.5f, "and the camera moves to the zoo's spot", $"{fromSpot:F2}m from it");
+
+        Launcher.Instance.LeaveRoom();
+        yield return Until(() => OpenScreens() == "title" && PhotonNetwork.InLobby, "leave for the title");
+        yield return null;
+
+        Check(jungleWorld != null && jungleWorld.gameObject.activeSelf, "leaving puts the first map back behind the title",
+              jungleWorld != null && jungleWorld.gameObject.activeSelf ? MapRegistry.Default.displayName : "still the zoo");
+
         SettingsMenu settings = SettingsMenu.Instance;
         Check(settings != null, "the settings screen exists in the menu", settings != null ? "yes" : "missing");
 

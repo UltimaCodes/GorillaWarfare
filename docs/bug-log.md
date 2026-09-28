@@ -3480,3 +3480,51 @@ the second map and add a map system in the game." The Zoo is a greybox for Ryaan
 
 `HudPhotographer` can't run in batch mode - it waits on `WaitForEndOfFrame`, which never resumes
 there (working-notes.md). Not new; it's an editor-menu tool.
+---
+
+# Thirty-ninth pass — the menu's connection, the lobby's backdrop, one CREATE LOBBY, 2026-09-28
+
+## "CreateRoom failed. Client is on NameServer... State: Disconnected"
+
+Reported as happening "when i click play then create a room". The editor log had the sequence: the
+connection to Photon failed on a DNS lookup (`DnsExceptionOnConnect` - the network, briefly), the
+launcher started reconnecting to the nearest region, and the create was pressed in between. Photon
+refused it, and the launcher opened the loading screen anyway - with nothing on its way. Both CREATE
+LOBBY buttons open the same screen and call the same `Launcher.CreateRoom`, so the path didn't
+matter; the moment did.
+
+- **Room actions wait for the lobby** (`Launcher.WhenInLobby`): create and join run now if the lobby
+  is up, otherwise show loading, reconnect if nothing is already, and run the moment `OnJoinedLobby`
+  comes back. A refused call says so instead of hanging on loading.
+- **A lost connection keeps trying.** It used to show "Disconnected: X" and stop, leaving a menu
+  where every button failed until the game was restarted. Now it says so once and retries with
+  backoff (2s, doubling, up to 20s); the title comes back on its own when it reconnects.
+- **A DNS failure retries the same region.** The region fallback goes through the same name server,
+  so for a failed lookup it could only ever land you on a different region from your friends once
+  the network came back.
+- `RoomManager`'s "still waiting to spawn" warning fired every time anyone sat in a lobby for three
+  seconds - that's its wait loop working as intended. It only counts, and complains, once a map is up.
+
+Checked against the real servers: `SandboxFlowCheck` drops the connection, presses create, and
+comes out in the new room - no error logged, no error screen.
+
+## The lobby's backdrop follows the lobby's map
+
+"When I change the map of a lobby, make the background change maps to that map." Each map now has a
+copy behind the menu, `~MenuBackdrop/<key>`, with a `CameraSpot` and a `GorillaSpot` to move by hand;
+`MenuBackdrop` shows the room's map (the first map outside a room), moves the menu camera and the
+gorilla to that map's spots, and hands `RenderSettings.sun` to its light. The arena's copy kept the
+camera and gorilla exactly where they stood. The zoo's spot - the south avenue, up the path at the
+bandstand - was picked from six rendered candidates (`Photograph the zoo` with `GW_ZOO_VIEWS`).
+`MapSetup` makes the copies, and MenuBuilder's backdrop refresh calls it, so a refresh keeps every map.
+
+Checked: a new lobby shows the jungle, picking the zoo swaps it in with the camera on its spot
+(0.00m off), and leaving puts the jungle back. Looked at in `lobby-zoo.png`.
+
+## One CREATE LOBBY
+
+"Delete the create a lobby button in the main menu when theres one in the play/view lobby menu
+aswell." The title screen's is gone (PLAY, CRATES, SETTINGS, QUIT); the one on PLAY's screen stays.
+Removed from MenuBuilder too, so a rebuild doesn't bring it back.
+
+All nine suites pass.

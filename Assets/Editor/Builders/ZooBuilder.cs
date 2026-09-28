@@ -122,17 +122,17 @@ public static class ZooBuilder
         Camera camera = host.AddComponent<Camera>();
         camera.farClipPlane = 400f;
 
-        void Shot(string name, Vector3 at, Vector3 lookAt, bool fromAbove)
+        void Shot(string name, Vector3 at, Vector3 lookAt, bool fromAbove, float fov = 70f)
         {
             camera.orthographic = fromAbove;
             camera.orthographicSize = Half + 6f;
             camera.clearFlags = fromAbove ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
             camera.backgroundColor = Color.black;
-            camera.fieldOfView = 70f;
+            camera.fieldOfView = fov;
             host.transform.position = at;
             host.transform.rotation = Quaternion.LookRotation(lookAt - at, fromAbove ? Vector3.forward : Vector3.up);
 
-            int width = fromAbove ? 1400 : 1600, height = fromAbove ? 1400 : 900;
+            int width = fromAbove ? 1400 : 1920, height = fromAbove ? 1400 : 1080;
             RenderTexture target = new RenderTexture(width, height, 24);
             camera.targetTexture = target;
             camera.Render();
@@ -147,6 +147,32 @@ public static class ZooBuilder
             File.WriteAllBytes(Path.Combine(folder, name + ".png"), image.EncodeToPNG());
             Object.DestroyImmediate(image);
             target.Release();
+        }
+
+        // GW_ZOO_VIEWS="x,y,z,yaw;..." - menu-camera framings (55 degrees, 16:9) to choose the lobby
+        // backdrop's spot by looking, the way the arena's was chosen.
+        string views = System.Environment.GetEnvironmentVariable("GW_ZOO_VIEWS");
+        if (!string.IsNullOrEmpty(views))
+        {
+            string[] spots = views.Split(';');
+            for (int i = 0; i < spots.Length; i++)
+            {
+                string[] v = spots[i].Split(',');
+                if (v.Length < 4)
+                    continue;
+
+                float Parse(string s) => float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+                Vector3 at = new Vector3(Parse(v[0]), Parse(v[1]), Parse(v[2]));
+                Vector3 look = at + Quaternion.Euler(-2f, Parse(v[3]), 0f) * Vector3.forward * 10f;
+
+                Shot($"view-{i}", at, look, false, 55f);
+            }
+
+            Object.DestroyImmediate(host);
+            Debug.Log($"[zoo] photographed {spots.Length} candidate views into {folder}");
+            if (Application.isBatchMode)
+                EditorApplication.Exit(0);
+            return;
         }
 
         Shot("top", new Vector3(0f, 120f, 0f), Vector3.zero, true);

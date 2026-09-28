@@ -25,6 +25,20 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     bool triedFallbackRegion;
 
+    // A room action pressed while there was no lobby to act in - a reconnect still under way, or
+    // a connection that had dropped. Run the moment the lobby is back rather than fired at a dead
+    // connection, which Photon refuses ("CreateRoom failed. Client is on NameServer...") and which
+    // left the screen on "loading" with nothing coming.
+    System.Action whenInLobby;
+
+    // Retrying after a lost connection, backing off so a dead network isn't hammered.
+    const float RetryFirst = 2f;
+    const float RetryMost = 20f;
+    float retryDelay = RetryFirst;
+    Coroutine reconnecting;
+
+    bool InLobby => PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InLobby;
+
 
     // Used to be static and never cleared, so dead rooms hung around in the browser for
     // the whole session (and across play sessions in the editor).
@@ -94,7 +108,53 @@ public class Launcher : MonoBehaviourPunCallbacks
         if (noRoomsMessage != null)
             noRoomsMessage.SetActive(true);
 
+        retryDelay = RetryFirst;
+
+        // Something was pressed while we were reconnecting - do it now, instead of dropping the
+        // player back on the title as if they hadn't.
+        if (whenInLobby != null)
+        {
+            System.Action pending = whenInLobby;
+            whenInLobby = null;
+            pending();
+            return;
+        }
+
         OpenMenu("title");
+    }
+
+    /// <summary>
+    /// Runs a room action now if the lobby is up, otherwise shows the loading screen and runs it
+    /// the moment the lobby comes back - reconnecting first if nothing else is.
+    /// </summary>
+    void WhenInLobby(System.Action action)
+    {
+        if (InLobby)
+        {
+            action();
+            return;
+        }
+
+        whenInLobby = action;
+        OpenMenu("loading");
+
+        if (!PhotonNetwork.IsConnected && reconnecting == null)
+        {
+            Debug.Log("[net] not connected - reconnecting before doing that");
+            PhotonNetwork.ConnectUsingSettings();
+        }
+    }
+
+    System.Collections.IEnumerator ReconnectAfter(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        reconnecting = null;
+
+        if (!PhotonNetwork.IsConnected && !PhotonNetwork.OfflineMode && !Sandbox.Active)
+        {
+            Debug.Log($"[net] reconnecting (next wait {retryDelay:F0}s if this fails too)");
+            PhotonNetwork.ConnectUsingSettings();
+        }
     }
 
     public override void OnLeftLobby()
@@ -113,9 +173,15 @@ public class Launcher : MonoBehaviourPunCallbacks
         // If that region is ever unreachable, falling back to the nearest one is much better
         // than refusing to start: everyone can at least play with whoever else defaults the same
         // way. Once, so a genuinely dead connection does not spin.
+        //
+        // Not for a failed name lookup. DnsExceptionOnConnect means the machine couldn't resolve
+        // Photon's name server at all - the network, not the region - and the fallback goes
+        // through the very same name server. All it could do is land you on a different region
+        // from your friends once the network came back. That one retries the same region below.
         if (!triedFallbackRegion
             && !string.IsNullOrEmpty(PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion)
-            && cause != DisconnectCause.DisconnectByClientLogic)
+            && cause != DisconnectCause.DisconnectByClientLogic
+            && cause != DisconnectCause.DnsExceptionOnConnect)
         {
             triedFallbackRegion = true;
 
@@ -148,8 +214,21 @@ public class Launcher : MonoBehaviourPunCallbacks
         if (cause == DisconnectCause.DisconnectByClientLogic)
             return;
 
-        // Used to be silent - you'd just sit on whatever screen you were on.
-        ShowError($"Disconnected: {cause}");
+        // Said once per outage, then kept quiet while it keeps trying - the error screen and its
+        // sound every few seconds would be worse than the outage. It used to say it and stop, which
+        // left the menu sitting disconnected: every button on it failed until the game restarted.
+        bool firstFailure = retryDelay <= RetryFirst;
+
+        if (firstFailure)
+            ShowError($"Lost the connection to the game servers ({cause}). Reconnecting...");
+        else
+            Debug.LogWarning($"[net] still can't reach the game servers ({cause})");
+
+        if (reconnecting != null)
+            StopCoroutine(reconnecting);
+
+        reconnecting = StartCoroutine(ReconnectAfter(retryDelay));
+        retryDelay = Mathf.Min(retryDelay * 2f, RetryMost);
     }
 
     public void CreateRoom()
@@ -186,8 +265,13 @@ public class Launcher : MonoBehaviourPunCallbacks
             CustomRoomPropertiesForLobby = new[] { MatchState.ModeKey, MapRegistry.RoomKey },
         };
 
-        PhotonNetwork.CreateRoom(roomName, options);
-        OpenMenu("loading");
+        WhenInLobby(() =>
+        {
+            if (PhotonNetwork.CreateRoom(roomName, options))
+                OpenMenu("loading");
+            else
+                ShowError("Couldn't create the room - not connected yet. Try again in a moment.");
+        });
     }
 
     public override void OnJoinedRoom()
@@ -258,8 +342,14 @@ public class Launcher : MonoBehaviourPunCallbacks
             return;
 
         GameAudio.Play2D(GameAudio.UI, "click_001", GameAudio.UiVolume);
-        PhotonNetwork.JoinRoom(info.Name);
-        OpenMenu("loading");
+
+        WhenInLobby(() =>
+        {
+            if (PhotonNetwork.JoinRoom(info.Name))
+                OpenMenu("loading");
+            else
+                ShowError("Couldn't join the room - not connected yet. Try again in a moment.");
+        });
     }
 
     public override void OnLeftRoom()

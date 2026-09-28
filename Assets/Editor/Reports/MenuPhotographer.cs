@@ -206,6 +206,13 @@ public static class MenuPhotographer
             yield return new WaitForSecondsRealtime(0.5f);
             yield return Shot(null, "lobby");
 
+            // The same lobby with the zoo picked - the backdrop follows the map (MenuBackdrop).
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, "zoo" } });
+            yield return new WaitForSecondsRealtime(1.5f);
+            yield return Shot(null, "lobby-zoo");
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, MapRegistry.Default.key } });
+            yield return new WaitForSecondsRealtime(0.5f);
+
             if (SettingsMenu.Instance != null)
             {
                 SettingsMenu.Instance.Open();

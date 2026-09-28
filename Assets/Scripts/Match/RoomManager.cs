@@ -377,13 +377,16 @@ public class RoomManager : MonoBehaviourPunCallbacks
                || !MapRegistry.InMap
                || SpawnManager.Instance == null)
         {
-            waited += Time.unscaledDeltaTime;
+            // Counted only once a map is up - the lobby wait before it isn't being stuck.
+            waited = MapRegistry.InMap ? waited + Time.unscaledDeltaTime : 0f;
 
             // Says what it is waiting for, once, after long enough that it is clearly stuck
             // rather than merely loading. Every one of these four conditions has been the reason
             // somebody did not spawn at some point, and without this the symptom is identical in
             // all four cases: standing in a map with no body and no explanation.
-            if (waited > 3f && !complained)
+            // Only in a map. Waiting in the lobby for the host to press Start is this loop working
+            // as intended, and it said "still waiting to spawn" every time anyone sat there.
+            if (waited > 3f && !complained && MapRegistry.InMap)
             {
                 complained = true;
 

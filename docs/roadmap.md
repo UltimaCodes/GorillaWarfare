@@ -38,7 +38,7 @@ open the project.
 | `MatchCheck` | the match rules, including a whole gun game played out |
 | `AudioCheck` | every bank has clips, named clips exist, nothing silent or clipping, shape checks (the slide scrape, the shield break, the vine thwip, the wind bed) |
 | `PlayModeProbe` | **runs the actual game** in Photon offline mode |
-| `SandboxFlowCheck` | the real menu, connected, into the sandbox and back - every frame's open screen and every logged error on the way (drop `-quit`, like the probe) |
+| `SandboxFlowCheck` | the real menu, connected: a room made while the connection is down, the lobby backdrop following the map, and into the sandbox and back - every frame's open screen and every logged error on the way (drop `-quit`, like the probe) |
 | `MenuButtonAudit` | every control on every menu screen (crates and settings tabs included): does a click at its centre reach it, is it on screen, does anything listen - at 16:9 and 4:3 (drop `-quit`) |
 
 `PlayModeProbe` is the odd one — it needs play mode, so drop `-quit` and let it exit by itself:
@@ -103,6 +103,12 @@ The first round of feedback from people playing it. Worked through in this order
       loading the room's pick, and the HUD moved into one shared prefab every map gets. The Zoo is
       `Scenes/Zoo.unity` - a plaza, four avenues and four enclosures (pool, rocks, reptile house,
       aviary), built once by `ZooBuilder` and Ryaan's to rework by hand. Probe-checked end to end.
+- [x] **The lobby's backdrop follows its map** - each map has a copy behind the menu with its own
+      camera and gorilla spots (`MenuBackdrop`); pick the Zoo and the Zoo is behind the lobby.
+- [x] **One CREATE LOBBY, not two** - the title screen's is gone; the one on PLAY's screen stays.
+- [x] **Creating a room right after the connection dropped failed** ("CreateRoom failed. Client is
+      on NameServer") and left the menu on loading. Room actions now wait for the lobby and
+      reconnect first; a lost connection keeps retrying. Checked against the real servers.
 - [ ] **More maps** - Jungle Temple and Canopy next (ideas.md section 0); voting after that.
 
 ---

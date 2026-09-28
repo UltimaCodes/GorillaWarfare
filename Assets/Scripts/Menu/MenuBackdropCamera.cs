@@ -32,6 +32,15 @@ public class MenuBackdropCamera : MonoBehaviour
         restRotation = transform.rotation;
     }
 
+    /// Somewhere else to wander around - MenuBackdrop moves the camera to each map's own spot
+    /// when the lobby's map changes.
+    public void MoveTo(Vector3 position, Quaternion rotation)
+    {
+        restPosition = position;
+        restRotation = rotation;
+        transform.SetPositionAndRotation(position, rotation);
+    }
+
     void OnEnable() => Current = GetComponent<Camera>();
 
     void OnDisable()

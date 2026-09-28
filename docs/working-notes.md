@@ -135,8 +135,11 @@ PlayerPrefs-backed system needs the same switch, or the probes will overwrite it
 **Adding a map:** its scene in `Scenes/` with a `SpawnManager` (at least 6 spawnpoints, each with
 ground under it and room to stand), an `EventSystem`, a light, and grass if it wants it - no HUD, the
 shared one arrives on its own. Then a row in `Resources/Maps.asset` (key, name, scene) and the scene
-in Build Settings, the menu staying index 0. `ZooBuilder` is a worked example; `SceneCheck` checks
-all of it for every map in the list, and the host picks from the list in the lobby.
+in Build Settings, the menu staying index 0. Then `Tools/Gorilla Warfare/Set up the maps`, which
+also copies it in behind the lobby (`~MenuBackdrop/<key>`, with a `CameraSpot` and a `GorillaSpot`
+to move by hand) so the lobby's backdrop can show it. `ZooBuilder` is a worked example;
+`SceneCheck` checks all of it for every map in the list, and the host picks from the list in the
+lobby.
 
 Moving an asset: move it **with its `.meta`** (`git mv` both, or drag it inside Unity), so its GUID
 and every reference to it survive. Then search the code for its old path - a few tools load by path
@@ -435,6 +438,14 @@ reset are the two that do; anything new that's per-round needs the same.
 **A disconnect we asked for is not an error.** The sandbox drops the connection on purpose to go
 offline, and switching offline mode on fires `OnConnectedToMaster` with no server behind it.
 `Launcher` ignores both; anything else listening for connection callbacks has to as well.
+
+**Nothing in the menu talks to Photon without a lobby.** A connection can drop at any moment - a
+DNS blip, a sleep - and a create or join sent into it is refused ("CreateRoom failed. Client is on
+NameServer..."). Room actions go through `Launcher.WhenInLobby`, which runs them now or, if the
+lobby isn't up, shows loading, reconnects if nothing is, and runs them when it's back. A real
+disconnect says so once and keeps retrying with backoff; a DNS failure retries the same region
+rather than falling back to another. `SandboxFlowCheck` drops the connection and creates a room to
+prove it.
 
 ## Open, and known
 

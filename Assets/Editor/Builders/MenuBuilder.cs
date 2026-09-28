@@ -196,6 +196,10 @@ public static class MenuBuilder
         }
 
         PlaceCamera(menu, floor);
+
+        // Every other map in beside the arena, each with its own camera and gorilla spot, so the
+        // lobby's backdrop can follow the lobby's map - see MenuBackdrop.
+        MapSetup.EnsureBackdrops(menu);
     }
 
     /// <summary>
@@ -357,8 +361,8 @@ public static class MenuBuilder
         Button play = NavItem(nav, "Play", "PLAY", 70f);
         UnityEventTools.AddObjectPersistentListener<Menu>(play.onClick, manager.OpenMenu, find);
 
-        Button host = NavItem(nav, "CreateLobby", "CREATE LOBBY", 70f);
-        UnityEventTools.AddObjectPersistentListener<Menu>(host.onClick, manager.OpenMenu, create);
+        // No CREATE LOBBY here - the find screen PLAY opens has one, and two buttons doing the same
+        // thing was one too many (Ryaan, 2026-09-28).
 
         // Both wired at runtime by their own components - the screens they open are Resources
         // prefabs RoomManager instantiates, so there's nothing in this scene to point at.
