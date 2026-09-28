@@ -149,7 +149,7 @@ public class SandboxFlowRunner : MonoBehaviour
 
         settings.EnterSandbox();
 
-        yield return Until(() => SceneManager.GetActiveScene().buildIndex == RoomManager.gameSceneIndex
+        yield return Until(() => MapRegistry.InMap
                                  && PlayerController.Local != null, "arrive in the sandbox");
 
         Check(Sandbox.Active && PlayerController.Local != null, "the sandbox loads with a player in it",

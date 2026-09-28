@@ -114,7 +114,7 @@ PlayerPrefs-backed system needs the same switch, or the probes will overwrite it
 |---|---|
 | `Scripts/Player` | the local and remote player: controller, movement, rig, camera, vine, hitboxes, nametags |
 | `Scripts/Weapons` | items, `GunInfo`, `SingleShotGun`, loadouts, projectiles, `IDamageable` |
-| `Scripts/Match` | match rules and phases, rooms, spawns, style score, the sandbox and its dummies |
+| `Scripts/Match` | match rules and phases, rooms, spawns, the map list, style score, the sandbox and its dummies |
 | `Scripts/Menu` | the main menu: launcher, screens, lobby widgets, loading screen |
 | `Scripts/Hud` | the in-match HUD and the scoreboard |
 | `Scripts/Settings` | `GameSettings`, `KeyBinds`, the settings screen |
@@ -132,6 +132,12 @@ PlayerPrefs-backed system needs the same switch, or the probes will overwrite it
 | `Resources` | anything loaded by name at runtime - its paths are code, so don't move things inside it |
 | `Grass`, `Photon`, `TextMesh Pro` | vendor packages, left as shipped |
 
+**Adding a map:** its scene in `Scenes/` with a `SpawnManager` (at least 6 spawnpoints, each with
+ground under it and room to stand), an `EventSystem`, a light, and grass if it wants it - no HUD, the
+shared one arrives on its own. Then a row in `Resources/Maps.asset` (key, name, scene) and the scene
+in Build Settings, the menu staying index 0. `ZooBuilder` is a worked example; `SceneCheck` checks
+all of it for every map in the list, and the host picks from the list in the lobby.
+
 Moving an asset: move it **with its `.meta`** (`git mv` both, or drag it inside Unity), so its GUID
 and every reference to it survive. Then search the code for its old path - a few tools load by path
 (`MapExpansion`, `MenuBuilder`'s row prefabs, the builders' `BananaHealth.png`) - and run the suite.
@@ -143,8 +149,11 @@ found sitting in that holder is a leftover and `RemoteCopyCheck` fails on it.
 Exceptions, deliberate: the menu UI, the mode selector and the in-game HUD are real objects so
 Ryaan can edit them.
 
-**The HUD is scene data.** `GameHud` decides what the labels say and whether they're visible;
-where they sit, what size they are and what font they use belongs to the scene. Two things are
+**The HUD is prefab data** - `Resources/MatchHud.prefab`, the HUD and the tab scoreboard together,
+spawned by RoomManager into whichever map loads (it was scene data inside `Game.unity` until the
+second map, 2026-09-28). Edit it there, not in a map; a map carrying its own HUD fails SceneCheck,
+since it would draw two. `GameHud` decides what the labels say and whether they're visible; where
+they sit, what size they are and what font they use belongs to the prefab. Two things are
 driven from code on purpose and shouldn't be moved back: the scope, which has to track the
 window's aspect ratio, and the crosshair ticks, which open with the weapon's spread. Everything
 else that looks like a layout decision in that script is a bug.

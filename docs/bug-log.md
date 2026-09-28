@@ -3419,3 +3419,64 @@ Everything was moved with its `.meta`, so every GUID - and so every reference - 
 
 All nine suites pass on the reorganised project, including SceneCheck's missing-script and magenta
 checks across both scenes and every prefab, the button audit and the sandbox trip.
+---
+
+# Thirty-eighth pass — more than one map, 2026-09-28
+
+"Make it a shared player prefab instead of just putting the HUD on every single map and all. Make
+the second map and add a map system in the game." The Zoo is a greybox for Ryaan to rework by hand.
+
+## What it is
+
+- **A map list** - `MapRegistry` (`Scripts/Match`), a ScriptableObject at `Resources/Maps.asset`
+  with a key, a display name and a scene per map: JUNGLE (`Game`) and THE ZOO (`Zoo`). Everything
+  that assumed one map - build index 1, hard-coded in RoomManager, `MatchState`, `Sandbox`,
+  `Launcher.StartGame`, `MusicPlayer`, the probe and the HUD photographer - asks it instead: which
+  map the room picked, and whether the loaded scene is a map at all. The menu stays index 0.
+- **The pick is a room property** (`map`), set to the first map when a room is made and published to
+  the lobby, the same way the mode is. The room browser shows it beside the mode; Start loads it by
+  scene name; a late joiner loads whatever the room is on.
+- **A map card in the lobby** (`MapSelector`) - a copy of the game mode card, so it's in the same
+  style, placed in the empty space directly above it; nothing already in the lobby moved. The host
+  clicks to cycle; everyone else sees the pick.
+- **The HUD is one shared prefab.** `MatchHudPrefab` moved `GameHud` and `ScoreboardCanvas` out of
+  `Game.unity` into `Resources/MatchHud.prefab` - as they were, so every hand edit to the layout came
+  with them (104 references before, 104 after). RoomManager spawns it into each map as it loads,
+  before the player, which asks for `GameHud.Instance` when it starts. `HudBuilder.Repair` and
+  `ScoreboardBuilder` edit the prefab now; `HudBuilder.Run` refuses rather than build a second HUD
+  into a map.
+- **The Zoo** - `ZooBuilder` built `Scenes/Zoo.unity` once and won't run over it again: 90 x 90 m
+  inside stone walls, a paved plaza with a bandstand, four tree-lined avenues out to the walls, and an
+  enclosure in each corner - a drained pool you drop into (NE), a rock mound to climb (SE), a reptile
+  house with a roof and tanks (SW), and a 14m aviary cage to swing through (NW). Plain blocks in the
+  jungle kit's own embedded stone, wood and dirt materials, the kit's trees and rocks as dressing, the
+  arena's sun, sky and grass copied across. Eight spawnpoints, two per enclosure, facing in.
+- `MapSetup` (`Tools/Gorilla Warfare/Set up the maps`) makes the list, puts every map in Build
+  Settings with the menu first, and adds the lobby card - each only if it's missing.
+
+## Bugs found building it
+
+- **The HUD conversion's own safety check fired on nothing.** It refuses if any reference crosses the
+  HUD's edge, and the first run listed dozens: TextMesh Pro's in-memory material copies
+  ("... (Instance)"), which it rebuilds at load and a prefab never keeps. The check, and its
+  before-and-after reference count, look only at scene objects and saved assets now.
+- **The spawn check found every arena pad "inside something" - itself.** The spawnpoint prefab's editor
+  marker has a collider, which the room-to-stand test hit, and which the ground-under-it test would
+  have passed on for the wrong reason. Both ignore the pad's own colliders.
+- **A prefab asset's objects aren't active in any scene**, so a parent lookup that skips inactive
+  objects said the HUD had no canvas. Includes inactive now.
+
+## Verified
+
+- `SceneCheck`, per map: in Build Settings, 13 (arena) and 8 (zoo) spawnpoints each with ground under
+  it and room to stand, grass wired, an EventSystem, no HUD of its own; the HUD prefab fully wired;
+  the lobby's map button wired.
+- The probe, end to end on the Zoo: the room takes the pick, the Zoo loads, you spawn 0.01m from one
+  of its spawnpoints, exactly one HUD - the shared one - bound to you, standing on its floor.
+- `MenuButtonAudit` clicks the new map button along with everything else; the sandbox trip still
+  passes; every other suite passes.
+- Looked at: the Zoo from above and from eye height in each enclosure (`Photograph the zoo`), and the
+  lobby with the new card.
+
+`HudPhotographer` can't run in batch mode - it waits on `WaitForEndOfFrame`, which never resumes
+there (working-notes.md). Not new; it's an editor-menu tool.

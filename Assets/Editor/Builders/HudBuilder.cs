@@ -36,6 +36,18 @@ public static class HudBuilder
     [MenuItem("Tools/Gorilla Warfare/Build the in-game HUD")]
     public static void Run()
     {
+        // The HUD moved into a shared prefab (MatchHudPrefab) that every map spawns. Building a
+        // fresh one into the Game scene now would put a second HUD in that map and throw away
+        // the hand-edited one's layout - Repair works on the prefab instead.
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(MatchHudPrefab.PrefabPath) != null)
+        {
+            Debug.LogError($"[hud] the HUD lives in {MatchHudPrefab.PrefabPath} now - use Repair, "
+                           + "or delete the prefab to start over");
+            if (Application.isBatchMode)
+                EditorApplication.Exit(1);
+            return;
+        }
+
         Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
         foreach (GameObject root in scene.GetRootGameObjects())
@@ -642,13 +654,22 @@ public static class HudBuilder
     [MenuItem("Tools/Gorilla Warfare/Repair the in-game HUD")]
     public static void Repair()
     {
-        Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        // The shared prefab every map spawns (see MatchHudPrefab), edited in place.
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(MatchHudPrefab.PrefabPath) == null)
+        {
+            Debug.LogError($"[hud] no {MatchHudPrefab.PrefabPath} - build the HUD first");
+            if (Application.isBatchMode)
+                EditorApplication.Exit(1);
+            return;
+        }
 
-        GameHud hud = Object.FindFirstObjectByType<GameHud>();
+        GameObject contents = PrefabUtility.LoadPrefabContents(MatchHudPrefab.PrefabPath);
+        GameHud hud = contents.GetComponentInChildren<GameHud>(true);
 
         if (hud == null)
         {
-            Debug.LogError("[hud] no GameHud in the scene - build it first");
+            PrefabUtility.UnloadPrefabContents(contents);
+            Debug.LogError("[hud] the HUD prefab has no GameHud in it");
             if (Application.isBatchMode)
                 EditorApplication.Exit(1);
             return;
@@ -1007,10 +1028,11 @@ public static class HudBuilder
         else
         {
             so.ApplyModifiedPropertiesWithoutUndo();
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
+            PrefabUtility.SaveAsPrefabAsset(contents, MatchHudPrefab.PrefabPath);
             Debug.Log($"[hud] repaired {added} missing piece(s), everything else left alone");
         }
+
+        PrefabUtility.UnloadPrefabContents(contents);
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);

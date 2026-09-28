@@ -14,21 +14,27 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static class ScoreboardBuilder
 {
-    const string ScenePath = "Assets/Scenes/Game.unity";
-
     static readonly Color OutlineColour = new Color(0.07f, 0.08f, 0.1f);
     const float OutlineWidth = 0.55f;
 
     [MenuItem("Tools/Gorilla Warfare/Build the tab scoreboard")]
     public static void Run()
     {
-        Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        // Inside the shared HUD prefab every map spawns (see MatchHudPrefab), not the Game scene.
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(MatchHudPrefab.PrefabPath) == null)
+        {
+            Debug.LogError($"[scoreboard] no {MatchHudPrefab.PrefabPath} - nothing to build onto");
+            Finish(1);
+            return;
+        }
 
-        Scoreboard scoreboard = Object.FindFirstObjectByType<Scoreboard>(FindObjectsInactive.Include);
+        GameObject contents = PrefabUtility.LoadPrefabContents(MatchHudPrefab.PrefabPath);
+        Scoreboard scoreboard = contents.GetComponentInChildren<Scoreboard>(true);
 
         if (scoreboard == null)
         {
-            Debug.LogError("[scoreboard] no Scoreboard component in the Game scene - nothing to build onto");
+            PrefabUtility.UnloadPrefabContents(contents);
+            Debug.LogError("[scoreboard] no Scoreboard component in the HUD prefab - nothing to build onto");
             Finish(1);
             return;
         }
@@ -128,8 +134,8 @@ public static class ScoreboardBuilder
         Wire(so, "canvasGroup", group);
         so.ApplyModifiedPropertiesWithoutUndo();
 
-        EditorSceneManager.MarkSceneDirty(scene);
-        EditorSceneManager.SaveScene(scene);
+        PrefabUtility.SaveAsPrefabAsset(contents, MatchHudPrefab.PrefabPath);
+        PrefabUtility.UnloadPrefabContents(contents);
 
         Debug.Log("[scoreboard] rebuilt - one row template, pooled and filled by Scoreboard.cs at runtime");
         Finish(0);

@@ -69,7 +69,8 @@ public static class Sandbox
         while (!PhotonNetwork.InRoom)
             yield return null;
 
-        PhotonNetwork.LoadLevel(RoomManager.gameSceneIndex);
+        // The first map. The sandbox has no lobby to pick one in.
+        PhotonNetwork.LoadLevel(MapRegistry.Default.sceneName);
     }
 
     /// <summary>

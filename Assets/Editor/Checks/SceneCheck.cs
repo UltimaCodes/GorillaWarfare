@@ -38,11 +38,12 @@ public static class SceneCheck
             CheckMissingMaterials(scene);
         }
 
-        // The game scene has to be the one the spawner waits for, and it has to have somewhere
-        // to put people.
-        CheckGameScene();
-        CheckGrass();
+        // Every map has to be loadable, and have somewhere to put people.
+        CheckMaps();
         CheckMenuScene();
+        CheckHud();
+        CheckNothingIsOnTheDefaultFont();
+        CheckEveryoneMeetsOnOneServer();
 
         // SettingsMenu and CrateOpeningScreen are RoomManager-instantiated Resources prefabs,
         // not scene objects - GameHud, ModeSelector and ColourPicker's own dropped-reference
@@ -123,14 +124,12 @@ public static class SceneCheck
     /// is one warning in the log and no grass, and a GrassField with no ground colliders grows
     /// nothing at all. Re-run Tools/Gorilla Warfare/Set up the grass to fix any of these.
     /// </summary>
-    static void CheckGrass()
+    static void CheckGrass(string map)
     {
-        EditorSceneManager.OpenScene("Assets/Scenes/Game.unity", OpenSceneMode.Single);
-
         GrassField field = Object.FindFirstObjectByType<GrassField>();
         if (field == null)
         {
-            Failures.Add("Game has no GrassField - no grass. Run Tools/Gorilla Warfare/Set up the grass");
+            Failures.Add($"{map} has no GrassField - no grass. Run Tools/Gorilla Warfare/Set up the grass");
             return;
         }
 
@@ -155,56 +154,113 @@ public static class SceneCheck
         }
 
         if (wired == 0)
-            Failures.Add("GrassField has no ground colliders - it raycasts onto them to grow anything");
+            Failures.Add($"{map}'s GrassField has no ground colliders - it raycasts onto them to grow anything");
         else
-            Notes.Add($"Game: grass wired to {wired} ground collider(s), settings '{settings?.name}'");
+            Notes.Add($"{map}: grass wired to {wired} ground collider(s), settings '{settings?.name}'");
     }
 
-    static void CheckGameScene()
+    /// <summary>
+    /// Every map MapRegistry lists: in Build Settings, loadable, and fit to play on.
+    ///
+    /// This used to be one check of one scene that had to be build index 1, because RoomManager
+    /// hard-coded that. Maps are found by name through the registry now, so what matters is that
+    /// each one is there at all, and the menu is still index 0 - the one scene that isn't a map.
+    /// </summary>
+    static void CheckMaps()
     {
-        Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Game.unity", OpenSceneMode.Single);
+        EditorBuildSettingsScene[] built = EditorBuildSettings.scenes;
 
+        if (built.Length == 0 || !built[0].path.EndsWith("/Menu.unity"))
+            Failures.Add("the menu isn't build index 0 - a build would open straight into something else");
+
+        if (AssetDatabase.LoadAssetAtPath<MapRegistry>("Assets/Resources/Maps.asset") == null)
+            Failures.Add("no Resources/Maps.asset - only the fallback jungle is playable. Run Tools/Gorilla Warfare/Set up the maps");
+
+        foreach (MapRegistry.Map map in MapRegistry.All)
+        {
+            string path = $"Assets/Scenes/{map.sceneName}.unity";
+
+            if (!System.Array.Exists(built, s => s.enabled && s.path == path))
+            {
+                Failures.Add($"map '{map.key}' wants {path}, which isn't an enabled scene in Build Settings");
+                continue;
+            }
+
+            Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            Physics.SyncTransforms();
+
+            CheckSpawns(map.sceneName);
+            CheckGrass(map.sceneName);
+
+            // The HUD is a prefab now (Resources/MatchHud) spawned into every map; a map carrying
+            // its own as well would draw two of everything.
+            if (Object.FindFirstObjectByType<GameHud>(FindObjectsInactive.Include) != null
+                || Object.FindFirstObjectByType<Scoreboard>(FindObjectsInactive.Include) != null)
+                Failures.Add($"{map.sceneName} has its own HUD - it gets the shared one when it loads, so this is a second");
+
+            // Nothing on any screen can be clicked without one - the settings screen included.
+            if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>(FindObjectsInactive.Include) == null)
+                Failures.Add($"{map.sceneName} has no EventSystem - nothing in a match can be clicked");
+
+            Notes.Add($"{map.sceneName}: map '{map.key}' ({map.displayName}), build index {scene.buildIndex}");
+        }
+    }
+
+    static void CheckSpawns(string map)
+    {
         SpawnManager spawner = Object.FindFirstObjectByType<SpawnManager>();
         if (spawner == null)
         {
-            Failures.Add("Game has no SpawnManager - RoomManager waits for it forever and nobody spawns");
+            Failures.Add($"{map} has no SpawnManager - RoomManager waits for it forever and nobody spawns");
             return;
         }
 
         Spawnpoint[] points = spawner.GetComponentsInChildren<Spawnpoint>(true);
-        Notes.Add($"Game: {points.Length} spawnpoints");
+        Notes.Add($"{map}: {points.Length} spawnpoints");
 
-        if (points.Length == 0)
-            Failures.Add("no spawnpoints under SpawnManager - nobody can spawn");
-
-        // Everyone landing on one pad is a spawn kill waiting to happen, and the number that
-        // matters is how many people can be in the room - which is now twelve, not eight.
-        Launcher launcher = Object.FindFirstObjectByType<Launcher>(FindObjectsInactive.Include);
-        int seats = 12;
-
-        if (launcher != null)
-        {
-            System.Reflection.FieldInfo field = typeof(Launcher).GetField("maxPlayersPerRoom",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            if (field != null)
-                seats = (byte)field.GetValue(launcher);
-        }
-
-        // Half the room, so at worst two people share a pad. Below that and a full game starts
-        // with several players inside each other.
+        // Half a twelve-seat room, so at worst two people share a pad. Below that and a full game
+        // starts with several players inside each other.
+        const int seats = 12;
         int wanted = Mathf.Max(4, seats / 2);
 
         if (points.Length < wanted)
-            Failures.Add($"only {points.Length} spawnpoints for a {seats} player room - want {wanted}");
+            Failures.Add($"{map} has only {points.Length} spawnpoints for a {seats} player room - want {wanted}");
 
-        // The game scene must be build index 1 - RoomManager hard codes it.
-        if (scene.buildIndex != 1)
-            Failures.Add($"Game is build index {scene.buildIndex}, but the spawn path waits for index 1");
+        // A pad over nothing drops you out of the map; a pad inside a wall leaves you stuck in it.
+        // The pad's own editor marker has a collider, so it's left out of both tests - the first
+        // version of this found every pad in the arena "inside something": itself.
+        float highest = 0f;
 
-        CheckHud();
-        CheckNothingIsOnTheDefaultFont();
-        CheckEveryoneMeetsOnOneServer();
+        foreach (Spawnpoint point in points)
+        {
+            Vector3 at = point.transform.position;
+            bool Own(Collider c) => c.transform.IsChildOf(point.transform);
+
+            float drop = float.MaxValue;
+            foreach (RaycastHit hit in Physics.RaycastAll(at + Vector3.up * 0.2f, Vector3.down, 3f,
+                                                          Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            {
+                if (!Own(hit.collider))
+                    drop = Mathf.Min(drop, hit.distance - 0.2f);
+            }
+
+            if (drop == float.MaxValue)
+                Failures.Add($"{map}: '{point.name}' at {at:F1} has no ground within 3m under it");
+            else
+                highest = Mathf.Max(highest, drop);
+
+            foreach (Collider blocker in Physics.OverlapCapsule(at + Vector3.down * 0.4f, at + Vector3.up * 0.5f, 0.45f,
+                                                                 Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            {
+                if (Own(blocker))
+                    continue;
+
+                Failures.Add($"{map}: '{point.name}' at {at:F1} is inside '{blocker.name}' - there's no room to stand");
+                break;
+            }
+        }
+
+        Notes.Add($"{map}: every pad has ground under it, the highest {highest:F2}m up");
     }
 
     /// <summary>
@@ -223,16 +279,22 @@ public static class SceneCheck
 
     static void CheckHud()
     {
-        GameHud hud = Object.FindFirstObjectByType<GameHud>(FindObjectsInactive.Include);
+        // The shared prefab RoomManager spawns into every map - see MatchHudPrefab.
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(MatchHudPrefab.PrefabPath);
+        GameHud hud = prefab != null ? prefab.GetComponentInChildren<GameHud>(true) : null;
 
         if (hud == null)
         {
-            Failures.Add("Game has no GameHud - no health, ammo, crosshair, clock or kill feed. "
-                         + "Run Tools/Gorilla Warfare/Build the in-game HUD");
+            Failures.Add($"no GameHud in {MatchHudPrefab.PrefabPath} - no health, ammo, crosshair, clock or "
+                         + "kill feed in any map");
             return;
         }
 
-        if (hud.GetComponentInParent<Canvas>() == null)
+        if (prefab.GetComponentInChildren<Scoreboard>(true) == null)
+            Failures.Add($"no Scoreboard in {MatchHudPrefab.PrefabPath} - Tab shows nothing");
+
+        // Including inactive - a prefab asset's objects aren't active in any scene.
+        if (hud.GetComponentInParent<Canvas>(true) == null)
             Failures.Add("GameHud is not under a Canvas, so none of it will draw");
 
         int empty = 0;
@@ -255,12 +317,12 @@ public static class SceneCheck
             if (OptionalFields.Contains(property.propertyPath))
                 continue;
 
-            Failures.Add($"GameHud.{property.propertyPath} is empty - that part of the HUD is missing");
+            Failures.Add($"the HUD prefab's GameHud.{property.propertyPath} is empty - that part of the HUD is missing");
             empty++;
         }
 
         if (empty == 0)
-            Notes.Add("Game: HUD is fully wired");
+            Notes.Add("HUD prefab is fully wired");
     }
 
     /// <summary>
@@ -333,6 +395,7 @@ public static class SceneCheck
             Failures.Add("Menu has no EventSystem - no button is clickable");
 
         CheckWiring(Object.FindFirstObjectByType<ModeSelector>(FindObjectsInactive.Include), "ModeSelector");
+        CheckWiring(Object.FindFirstObjectByType<MapSelector>(FindObjectsInactive.Include), "MapSelector");
         CheckWiring(Object.FindFirstObjectByType<ColourPicker>(FindObjectsInactive.Include), "ColourPicker");
         CheckWiring(Object.FindFirstObjectByType<Launcher>(FindObjectsInactive.Include), "Launcher");
         CheckMenuScreens();
@@ -384,7 +447,8 @@ public static class SceneCheck
 
             bool wiredAtRuntime = button.GetComponent<OpenSettingsButton>() != null
                                   || button.GetComponent<OpenCrateShopButton>() != null
-                                  || button.GetComponentInParent<ModeSelector>(true) != null;
+                                  || button.GetComponentInParent<ModeSelector>(true) != null
+                                  || button.GetComponentInParent<MapSelector>(true) != null;
 
             if (button.onClick.GetPersistentEventCount() == 0 && !wiredAtRuntime)
                 Failures.Add($"menu button '{Path(button.transform)}' does nothing when clicked");

@@ -436,8 +436,7 @@ public class MatchState : MonoBehaviourPunCallbacks
             if (awaitingEcho)
                 return;
 
-            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
-                == RoomManager.gameSceneIndex)
+            if (MapRegistry.InMap)
             {
                 Debug.Log("[match] map is up, starting warmup");
                 BeginWarmup();

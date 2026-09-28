@@ -15,8 +15,6 @@ using Photon.Pun;
 /// </summary>
 public class MusicPlayer : MonoBehaviour
 {
-    const int gameSceneIndex = 1;
-
     [SerializeField] float volume = 0.22f;
     [SerializeField] float fadeSeconds = 1.4f;
 
@@ -47,7 +45,7 @@ public class MusicPlayer : MonoBehaviour
     {
         get
         {
-            bool inGame = SceneManager.GetActiveScene().buildIndex == gameSceneIndex;
+            bool inGame = MapRegistry.InMap;
 
             if (!inGame)
                 return PhotonNetwork.InRoom ? Pick(lobby, menu) : Pick(menu, lobby);

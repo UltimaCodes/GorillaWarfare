@@ -176,8 +176,14 @@ public class Launcher : MonoBehaviourPunCallbacks
             // server rather than from whoever answers first, and it has to be declared for the
             // lobby so the browser can show what a room is running before you commit to it -
             // including after the host changes their mind.
-            CustomRoomProperties = new Hashtable { { MatchState.ModeKey, (int)MatchMode.Deathmatch } },
-            CustomRoomPropertiesForLobby = new[] { MatchState.ModeKey },
+            // The map rides the same way, for the same reasons - the host changes it in the lobby
+            // (MapSelector) and the browser shows it.
+            CustomRoomProperties = new Hashtable
+            {
+                { MatchState.ModeKey, (int)MatchMode.Deathmatch },
+                { MapRegistry.RoomKey, MapRegistry.Default.key },
+            },
+            CustomRoomPropertiesForLobby = new[] { MatchState.ModeKey, MapRegistry.RoomKey },
         };
 
         PhotonNetwork.CreateRoom(roomName, options);
@@ -234,7 +240,9 @@ public class Launcher : MonoBehaviourPunCallbacks
 
         GameAudio.Play2D(GameAudio.UI, "confirm", GameAudio.UiVolume);
 
-        PhotonNetwork.LoadLevel(1);
+        // Whichever map the host picked. By name, which is what Build Settings and every other
+        // client's AutomaticallySyncScene agree on regardless of the order the maps were added.
+        PhotonNetwork.LoadLevel(MapRegistry.Current.sceneName);
     }
 
     public void LeaveRoom()

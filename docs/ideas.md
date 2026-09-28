@@ -41,9 +41,15 @@ scoped, and reaches across the whole arena; the Grenada is 105 on a direct hit b
 time, and does its best work against someone with a wall behind them. A flat open field is Big Mike's
 ideal map and the Grenada's worst - new maps with cover and height fix more of it than any number.
 
-Names follow the cultivar convention the bananas use (Cavendish, Gros Michel) - suggestions, Ryaan's
-call: **Thompson Seedless** for the gatling (a grape, and it fires them whole), **Carolina Reaper** for
-the flamethrower (the hottest chili there is), and **Pomo-Grenade** as named.
+**Names: JoJo references** (Ryaan's call, 2026-09-28 - still a plan). Suggestions:
+
+- the gatling: **Purple Haze** - Fugo's Stand, purple like the grapes, and it fights by firing the
+  virus capsules on its knuckles, which is what a stream of grapes looks like. Runner-up: **Hermit
+  Purple**, Joseph's Stand - purple vines, and grapes grow on vines.
+- the flamethrower: **Red Hot Chili Pepper** - a real Part 4 Stand, named after the band, and
+  literally a chili. Runner-up: **Magician's Red**, Avdol's fire Stand.
+- the grenade keeps **Pomo-Grenade** as named. If it wants a JoJo name too: **Sheer Heart Attack**,
+  Killer Queen's bomb.
 
 #### The Grape Gatling (`Gatling`)
 
@@ -158,7 +164,7 @@ A lobbed grenade that bursts into seeds.
 6. **Later: airblast reflects projectiles.**
 
 Not settled by this plan, and worth a look once they're playable: every number above is a first pass.
-### New maps - the plumbing and a greybox Zoo, planned 2026-09-28, not built
+### New maps - the plumbing and a greybox Zoo, built 2026-09-28
 
 The arena is flat, open and plain - a big enclosure with trees, rocks and a moai. Picked: **the
 plumbing for more than one map, and a placeholder second map - a zoo - that Ryaan will rework by
@@ -179,11 +185,9 @@ hand.** Jungle Temple and Canopy (below) stay on the list for after.
   per-scene checks the arena does today.
 - **What every map scene needs:** a `SpawnManager` with spawnpoints, post-processing, a light, an
   EventSystem, and the HUD. The first four are small and per-map anyway.
-- **The HUD - open, waiting on Ryaan.** It and the scoreboard are hand-edited objects inside
-  `Game.unity`, and every map needs them. (1, recommended) make them one shared prefab - the current
-  edits carry over and there's one place to edit them; (2) copy them into each map - edits then have
-  to be made once per map; (3) a shared game scene with each map loaded on top - cleanest, but
-  Photon's scene loading doesn't do it, so the most work.
+- **The HUD - one shared prefab** (Ryaan's call). The HUD and the scoreboard moved out of
+  `Game.unity` into `Resources/MatchHud.prefab` with every hand edit intact; RoomManager spawns it
+  into whichever map loads. Edit the HUD there now, not in a scene.
 
 **The Zoo greybox** - `Editor/Builders/ZooBuilder.cs` builds `Scenes/Zoo.unity` once and then refuses
 to run over it, the same rule as `MenuBuilder.Run`, because it's Ryaan's to rework from there:
@@ -208,7 +212,7 @@ Still on the list after the Zoo:
 | **Canopy** (section 5) | treetop platforms at three or four heights, a safe floor under the middle | the swinging vine's showcase |
 | **The Compound** / **The Silo** (section 5) | walled courtyard / a vertical shaft | general-purpose / the small map |
 
-### Crates - direction picked 2026-09-28, not built
+### Crates - direction picked 2026-09-28, kept for later
 
 Mechanically they work (the one dead button is fixed). The problem is that **opening a crate wins
 nothing** - a rarity name on a coloured screen - and the shop still wears the old look.
@@ -236,8 +240,9 @@ only - section 4's reasoning stands: anything that touches a fight makes "I open
   If the game ever sells anything, sell the item directly, never a chance at it.
 - The shop gets the new menu's look.
 
-**Still to decide:** which slots come first - vines and titles are cheapest, since they need no
-models; wearables are the Crab Game feel but need a sourced accessory pack.
+**Picked 2026-09-28: titles, kill effects and wearables** - kept for later, not started. Vine styles
+weren't picked. Titles are the cheapest (text, no models); wearables are the Crab Game feel but need
+a sourced accessory pack, and should wait for the replacement gorilla so they're fitted once.
 
 ---
 

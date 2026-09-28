@@ -21,10 +21,12 @@ public class RoomManager : MonoBehaviourPunCallbacks
     public static RoomManager Instance;
 
     const string playerPrefab = "PhotonPrefabs/PlayerController";
-    /// The map. Public because MatchState needs to know whether the game has actually started
-    /// or whether everyone is still standing in the lobby, and the answer is "which scene are
-    /// we in".
-    public const int gameSceneIndex = 1;
+
+    /// The HUD and the tab scoreboard, shared by every map. They used to be objects inside the
+    /// one map scene, which meant a second map would need its own copy - and every hand edit
+    /// made twice. Spawned into each map as it loads, before the player, instead. Which scene is
+    /// a map is MapRegistry's call now; this used to be a hard-coded build index 1.
+    const string hudPrefab = "MatchHud";
 
     public const string KillsKey = "kills";
     public const string DeathsKey = "deaths";
@@ -176,12 +178,12 @@ public class RoomManager : MonoBehaviourPunCallbacks
         // harmless when PUN was going to do it anyway - LoadLevel on the scene you are already
         // in is a no-op.
         if (!PhotonNetwork.IsMasterClient
-            && SceneManager.GetActiveScene().buildIndex != gameSceneIndex
+            && !MapRegistry.InMap
             && PhotonNetwork.CurrentRoom != null
             && PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(MatchState.PhaseKey))
         {
-            Debug.Log("[room] joined a match already in progress, loading the map");
-            PhotonNetwork.LoadLevel(gameSceneIndex);
+            Debug.Log($"[room] joined a match already in progress, loading {MapRegistry.Current.displayName}");
+            PhotonNetwork.LoadLevel(MapRegistry.Current.sceneName);
         }
 
         TrySpawn();
@@ -226,9 +228,11 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (scene.buildIndex != gameSceneIndex)
+        if (!MapRegistry.IsMapScene(scene))
             return;
 
+        // Before the spawn - the player asks for GameHud.Instance the moment it starts.
+        EnsureHud();
         TrySpawn();
 
         // Moved here from OnJoinedRoom 2026-08-22 - reported as never having worked at all.
@@ -328,6 +332,30 @@ public class RoomManager : MonoBehaviourPunCallbacks
         PhotonNetwork.IsMessageQueueRunning = true;
     }
 
+    /// <summary>
+    /// Puts the shared HUD into the map that just loaded, unless it already has one.
+    ///
+    /// Part of the map scene rather than riding along on this object the way the settings screen
+    /// does: a new map is a new match, and the HUD's feed, standings and results start clean
+    /// with it. A map scene with a HUD of its own still works - it just keeps the one it has.
+    /// </summary>
+    void EnsureHud()
+    {
+        if (GameHud.Instance != null)
+            return;
+
+        GameObject prefab = Resources.Load<GameObject>(hudPrefab);
+
+        if (prefab == null)
+        {
+            Debug.LogError($"[room] no {hudPrefab} prefab in Resources - no HUD in this map");
+            return;
+        }
+
+        GameObject hud = Instantiate(prefab);
+        hud.name = hudPrefab;
+    }
+
     void TrySpawn()
     {
         if (spawnRoutine == null && localController == null && deathRoutine == null)
@@ -346,7 +374,7 @@ public class RoomManager : MonoBehaviourPunCallbacks
 
         while (PhotonNetwork.InRoom == false
                || PhotonNetwork.IsMessageQueueRunning == false
-               || SceneManager.GetActiveScene().buildIndex != gameSceneIndex
+               || !MapRegistry.InMap
                || SpawnManager.Instance == null)
         {
             waited += Time.unscaledDeltaTime;

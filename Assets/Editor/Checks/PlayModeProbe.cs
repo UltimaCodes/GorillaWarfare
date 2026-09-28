@@ -163,8 +163,8 @@ public class ProbeRunner : MonoBehaviour
         PhotonNetwork.CurrentRoom.SetCustomProperties(
             new Hashtable { { MatchState.ModeKey, (int)MatchMode.Deathmatch } });
 
-        PhotonNetwork.LoadLevel(1);
-        yield return Until(() => UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex == 1,
+        PhotonNetwork.LoadLevel(MapRegistry.Default.sceneName);
+        yield return Until(() => MapRegistry.InMap,
                            "load the game scene");
 
         // ---- spawning ----
@@ -293,6 +293,59 @@ public class ProbeRunner : MonoBehaviour
 
         // ---- gun game hands out one weapon ----
         yield return CheckGunGameLoadout();
+
+        // ---- a second map ----
+        yield return CheckTheZoo();
+    }
+
+    /// <summary>
+    /// The map system, end to end: pick the zoo the way the host's map picker does, load it the
+    /// way the lobby's Start does, and come out standing on one of its spawnpoints with the shared
+    /// HUD - exactly one of it - bound to you. Last, because it leaves the arena behind.
+    /// </summary>
+    IEnumerator CheckTheZoo()
+    {
+        MapRegistry.Map zoo = MapRegistry.Find("zoo");
+
+        if (zoo.key != "zoo")
+        {
+            Check(false, "the zoo is a registered map", "not in Resources/Maps.asset");
+            yield break;
+        }
+
+        PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable { { MapRegistry.RoomKey, zoo.key } });
+        yield return Until(() => MapRegistry.Current.key == zoo.key, "pick the zoo");
+        Check(MapRegistry.Current.key == zoo.key, "the room remembers the map it picked", MapRegistry.Current.displayName);
+
+        PhotonNetwork.LoadLevel(MapRegistry.Current.sceneName);
+        yield return Until(() => UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == zoo.sceneName,
+                           "load the zoo");
+        yield return Until(() => LocalPlayer() != null, "spawn in the zoo");
+
+        PlayerController player = LocalPlayer();
+        Check(player != null, "you spawn in the zoo", player != null ? "spawned" : "never appeared");
+
+        if (player == null)
+            yield break;
+
+        yield return null;
+        yield return null;
+
+        int huds = Object.FindObjectsByType<GameHud>(FindObjectsSortMode.None).Length;
+        Check(huds == 1, "the zoo gets exactly one HUD - the shared one", $"{huds} HUDs");
+        Check(player.Hud != null && player.Hud == GameHud.Instance, "the HUD is bound to you",
+              player.Hud != null ? "bound" : "not bound");
+
+        float nearest = float.MaxValue;
+        foreach (Spawnpoint point in Object.FindObjectsByType<Spawnpoint>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            nearest = Mathf.Min(nearest, Vector3.Distance(point.transform.position, player.transform.position));
+
+        Check(nearest < 1.5f, "you start on one of the zoo's spawnpoints", $"{nearest:F2}m from the nearest");
+
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+        yield return Until(() => movement != null && movement.Grounded, "land in the zoo");
+        Check(movement != null && movement.Grounded && player.transform.position.y > -1f,
+              "you're standing on the zoo's floor", $"y {player.transform.position.y:F2}");
     }
 
     // Everything about a match is measured in minutes, which is correct for playing it and

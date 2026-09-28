@@ -113,9 +113,9 @@ public static class HudPhotographer
             PhotonNetwork.CurrentRoom.SetCustomProperties(
                 new Hashtable { { MatchState.ModeKey, (int)mode } });
 
-            PhotonNetwork.LoadLevel(1);
+            PhotonNetwork.LoadLevel(MapRegistry.Default.sceneName);
             yield return new WaitUntil(() =>
-                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex == 1);
+                MapRegistry.InMap);
 
             PlayerController player = null;
             yield return new WaitUntil(() =>

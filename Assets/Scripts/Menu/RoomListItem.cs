@@ -42,8 +42,16 @@ public class RoomListItem : MonoBehaviour
         if (text != null)
             text.text = name.ToUpper();
 
+        // The map beside the mode, from the same lobby-visible properties. A room from before
+        // there was a choice of map has none and reads as the default.
+        string map = info.CustomProperties != null
+                     && info.CustomProperties.TryGetValue(MapRegistry.RoomKey, out object mapValue)
+                     && mapValue is string mapKey
+            ? MapRegistry.Find(mapKey).displayName
+            : MapRegistry.Default.displayName;
+
         if (modeText != null)
-            modeText.text = MatchModes.Of(mode).DisplayName;
+            modeText.text = $"{MatchModes.Of(mode).DisplayName} / {map}";
 
         if (playersText != null)
             playersText.text = count;
