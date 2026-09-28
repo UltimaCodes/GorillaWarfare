@@ -222,11 +222,18 @@ public class SingleShotGun : Item
             visual = new GameObject("~model");
             visual.transform.SetParent(transform, false);
 
-            GameObject model = Instantiate(prefab, visual.transform);
+            // A node between the holder and the model that only ever turns about the forward
+            // axis - Purple Haze's barrel, spinning up. The model is centred on it below, so it
+            // turns about its own middle rather than swinging round the grip.
+            Transform spinNode = new GameObject("~spin").transform;
+            spinNode.SetParent(visual.transform, false);
+
+            GameObject model = Instantiate(prefab, spinNode);
             model.transform.localRotation = Quaternion.Euler(Info.modelRotation);
             model.transform.localScale = model.transform.localScale * Info.modelScale;
 
-            tip = AnchorPosed(visual.transform);
+            tip = AnchorPosed(visual.transform, model.transform);
+            barrel = spinNode;
         }
         else
         {
@@ -327,7 +334,7 @@ public class SingleShotGun : Item
     /// AnchorGrip for a model turned inside its holder: the bounds come from all eight corners of
     /// every mesh, carried through the turn - AnchorGrip moves only the centre, which is fine for a
     /// model that isn't turned and wrong the moment one is.
-    static float AnchorPosed(Transform holder)
+    static float AnchorPosed(Transform holder, Transform moved)
     {
         Bounds local = new Bounds();
         bool started = false;
@@ -360,9 +367,11 @@ public class SingleShotGun : Item
         if (!started)
             return 0.35f;
 
-        // Moves the model, not the holder, so the holder stays the weapon's own origin.
-        foreach (Transform child in holder)
-            child.localPosition -= new Vector3(local.center.x, local.center.y, local.min.z);
+        // Moves the model, not the holder, so the holder stays the weapon's own origin - and not
+        // the spin node between them either, whose axis has to stay through the model's middle.
+        // The spin node is unturned at this point, so a move in the holder's space is the same
+        // move in its.
+        moved.localPosition -= new Vector3(local.center.x, local.center.y, local.min.z);
 
         return local.size.z;
     }
@@ -439,11 +448,22 @@ public class SingleShotGun : Item
 
         if (Info.spinUp > 0f)
         {
-            bool winding = owned && (triggerHeld || aimHeld) && !reloading;
+            // Everyone else's copy winds its own barrel off the owner's replicated flag, so you
+            // can see (and, once it has a sound, hear) a gatling revving round a corner - TF2's
+            // tell that the heavy is waiting for you.
+            bool winding = owned ? (triggerHeld || aimHeld) && !reloading : RemoteRevving;
+            Revving = owned && winding;
             spin = Mathf.MoveTowards(spin, winding ? 1f : 0f, Time.deltaTime / Info.spinUp);
 
             if (ownerMovement != null)
                 ownerMovement.WeaponSpeedMultiplier = Mathf.Lerp(1f, Info.spinMoveMultiplier, spin);
+
+            // Eased in, so the bunch visibly winds up rather than snapping to speed.
+            if (barrel != null)
+            {
+                barrelAngle = Mathf.Repeat(barrelAngle + BarrelTopSpeed * spin * spin * Time.deltaTime, 360f);
+                barrel.localRotation = Quaternion.Euler(0f, 0f, barrelAngle);
+            }
         }
 
         Flaming = Info.flame && owned && triggerHeld && Ammo > 0 && !reloading;
@@ -458,15 +478,61 @@ public class SingleShotGun : Item
     /// frame, since a copy's own Flaming only ever describes a trigger it doesn't have.
     public bool RemoteFlaming { get; set; }
 
+    /// Whether the owner is winding the barrel this frame - replicated, see RemoteRevving.
+    public bool Revving { get; private set; }
+
+    /// A remote copy's barrel, from its owner's replicated Revving.
+    public bool RemoteRevving { get; set; }
+
+    // The spin node a posed model sits in (see BuildVisual), and how fast it turns flat out -
+    // a bit over three turns a second, fast enough to blur the grapes without strobing.
+    Transform barrel;
+    float barrelAngle;
+    const float BarrelTopSpeed = 1200f;
+
     const float FlameVolume = 0.55f;
     AudioSource flameLoop;
+    Light nozzleGlow;
+
+    /// <summary>
+    /// Fire lights things up. A flickering orange light a little way out along the stream, so the
+    /// ground, the walls and whoever's in front of you glow while it's going - most of what makes
+    /// a stream of sprites read as fire rather than as orange decals.
+    /// </summary>
+    void UpdateNozzleGlow(bool on)
+    {
+        if (nozzleGlow == null)
+        {
+            if (!on)
+                return;
+
+            GameObject host = new GameObject("~nozzleGlow");
+            host.transform.SetParent(transform, false);
+            nozzleGlow = host.AddComponent<Light>();
+            nozzleGlow.type = LightType.Point;
+            nozzleGlow.color = new Color(1f, 0.55f, 0.18f);
+            nozzleGlow.range = 7f;
+            nozzleGlow.shadows = LightShadows.None;
+            nozzleGlow.intensity = 0f;
+        }
+
+        Vector3 along = owned && cam != null ? cam.transform.forward : transform.forward;
+        Vector3 from = owned ? DrawnTipPosition : TipPosition;
+        nozzleGlow.transform.position = from + along * 1.2f;
+
+        float flicker = Mathf.PerlinNoise(Time.time * 14f, 3.1f) * 0.7f + Mathf.PerlinNoise(Time.time * 31f, 8.7f) * 0.3f;
+        nozzleGlow.intensity = Mathf.MoveTowards(nozzleGlow.intensity, on ? Mathf.Lerp(1.6f, 3f, flicker) : 0f,
+                                                 Time.deltaTime * 14f);
+        nozzleGlow.enabled = nozzleGlow.intensity > 0.01f;
+    }
 
     /// <summary>
     /// The stream's roar, one looping source eased in and out rather than a sound per puff.
     ///
-    /// Its own bank, Audio/Shoot/Flamer, when one is sourced. Until then the air brake's thruster
-    /// burst, pitched down and looped - a short one-shot by design (see its SOURCES.txt), so the
-    /// loop point is audible, but a flamethrower that makes no sound at all is worse.
+    /// Its own bank, Audio/Shoot/Flamer, when one is sourced. Until then its stand-in
+    /// (GunInfo.standInSound) - the air brake's thruster burst, pitched down and looped. That's a
+    /// short one-shot by design (see its SOURCES.txt), so the loop point is audible, but a
+    /// flamethrower that makes no sound at all is worse.
     /// </summary>
     void UpdateFlameSound()
     {
@@ -475,18 +541,15 @@ public class SingleShotGun : Item
 
         bool on = owned ? Flaming : RemoteFlaming;
 
+        UpdateNozzleGlow(on);
+
         if (flameLoop == null)
         {
             if (!on)
                 return;
 
-            float pitch = 1f;
-            AudioClip[] clips = Resources.LoadAll<AudioClip>($"Audio/{GameAudio.Shoot}/{gameObject.name}");
-            if (clips.Length == 0)
-            {
-                clips = Resources.LoadAll<AudioClip>($"Audio/{GameAudio.AirBrake}");
-                pitch = 0.7f;
-            }
+            string bank = GameAudio.ShotBank(gameObject.name, Info, out float pitch);
+            AudioClip[] clips = Resources.LoadAll<AudioClip>($"Audio/{bank}");
 
             if (clips.Length == 0)
                 return;
@@ -517,11 +580,19 @@ public class SingleShotGun : Item
         spin = 0f;
         Flaming = false;
         RemoteFlaming = false;
+        Revving = false;
+        RemoteRevving = false;
 
         if (flameLoop != null)
         {
             flameLoop.volume = 0f;
             flameLoop.Stop();
+        }
+
+        if (nozzleGlow != null)
+        {
+            nozzleGlow.intensity = 0f;
+            nozzleGlow.enabled = false;
         }
 
         if (ownerMovement != null && Info != null && Info.spinUp > 0f)
@@ -837,14 +908,39 @@ public class SingleShotGun : Item
             from = wall.point + wall.normal * 0.05f;
 
         Vector3 inherited = ownerMovement != null ? ownerMovement.Velocity : Vector3.zero;
-        LightProjectile.FireFlame(Info, from, cam.transform.forward, inherited, owner, this);
+        Vector3 aim = cam.transform.forward;
+
+        // The puff that burns, scattered a little round the aim, and a second, looser one that only
+        // draws - so the stream is thick and billows out rather than being one line of identical
+        // puffs. Reported: "too straight coming out of the weapon, they dont spread out like an
+        // actual flamethrower".
+        LightProjectile.FireFlame(Info, from, Scatter(aim, Info.flameSpread), inherited, owner, this);
+        LightProjectile.FireFlame(Info, from, Scatter(aim, Info.flameSpread * 1.8f), inherited, owner, null);
+
+        // A rumble the whole time it's going - a hose under pressure, not a laser pointer.
+        Juice.Shake(0.12f);
     }
 
     /// A remote copy's stream: same puffs, no burning - the shooter's own client did that.
     public void EmitFlameVisual(Vector3 direction)
     {
-        if (Info != null && Info.flame)
-            LightProjectile.FireFlame(Info, TipPosition, direction, Vector3.zero, owner, null);
+        if (Info == null || !Info.flame)
+            return;
+
+        LightProjectile.FireFlame(Info, TipPosition, Scatter(direction, Info.flameSpread), Vector3.zero, owner, null);
+        LightProjectile.FireFlame(Info, TipPosition, Scatter(direction, Info.flameSpread * 1.8f), Vector3.zero, owner, null);
+    }
+
+    /// A direction up to `degrees` off `direction`, anywhere round it - evenly over the disc, not
+    /// bunched in the middle the way two independent angle rolls would be.
+    static Vector3 Scatter(Vector3 direction, float degrees)
+    {
+        if (degrees <= 0f)
+            return direction;
+
+        Vector2 disc = Random.insideUnitCircle * degrees;
+        Quaternion look = Quaternion.LookRotation(direction);
+        return look * Quaternion.Euler(disc.y, disc.x, 0f) * Vector3.forward;
     }
 
     /// <summary>
@@ -866,27 +962,51 @@ public class SingleShotGun : Item
         Vector3 forward = cam.transform.forward;
         Vector3 shove = (forward + Vector3.up * 0.35f).normalized * Info.airblastKnockback;
 
-        System.Collections.Generic.HashSet<PlayerController> pushed = new System.Collections.Generic.HashSet<PlayerController>();
+        System.Collections.Generic.HashSet<Object> pushed = new System.Collections.Generic.HashSet<Object>();
 
         foreach (Collider collider in Physics.OverlapSphere(origin, Info.airblastRange,
                                                             1 << LayerMask.NameToLayer(Hitbox.LayerName),
                                                             QueryTriggerInteraction.Ignore))
         {
+            // Players, and the sandbox's dummies - reported: "it doesnt work on dummies". It
+            // didn't: this only ever looked for a PlayerController, and a dummy couldn't be moved
+            // at all until TrainingDummy.Shove. Explicit checks, not ??, for Unity's fake null.
             PlayerController target = collider.GetComponentInParent<PlayerController>();
-            if (target == null || target == owner || owner.IsTeammate(target) || pushed.Contains(target))
+            TrainingDummy dummy = target == null ? collider.GetComponentInParent<TrainingDummy>() : null;
+            Transform body = target != null ? target.transform : dummy != null ? dummy.transform : null;
+
+            if (body == null || target == owner || pushed.Contains(body))
+                continue;
+
+            if (target != null && owner.IsTeammate(target))
                 continue;
 
             // A cone, not a sphere - it's aimed.
-            Vector3 toward = target.transform.position + Vector3.up - origin;
+            Vector3 toward = body.position + (target != null ? Vector3.up : Vector3.zero) - origin;
             if (Vector3.Angle(forward, toward) > 35f)
                 continue;
 
-            pushed.Add(target);
-            target.Shove(shove);
+            pushed.Add(body);
+
+            if (target != null)
+                target.Shove(shove);
+            else
+                dummy.Shove(shove);
         }
 
-        owner.ReportAirblast(TipPosition, forward);
-        Juice.Shake(0.35f);
+        // It pushes both ways. Reported: the chili "has no weight" - a blast of air that moves
+        // someone else and not you is a button, not a weapon going off in your hands. Straight back
+        // along the look, so blasting the floor lifts you.
+        if (Info.airblastSelfKnockback > 0f)
+            owner.Launch(-forward * Info.airblastSelfKnockback);
+
+        owner.ReportAirblast(DrawnTipPosition, forward);
+
+        // The gun jolts back hard, the view kicks and widens for a beat - the same three things the
+        // heavy guns do on a shot, all turned up, because this is the chili's big moment.
+        owner.AddRecoil(new Vector2(4f, 0f), 0.9f, 7f, 2.5f);
+        owner.AddFirePunch(1f);
+        Juice.Shake(0.6f);
     }
 
     /// <summary>

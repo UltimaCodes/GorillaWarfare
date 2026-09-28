@@ -34,6 +34,104 @@ public class TrainingDummy : MonoBehaviour, IDamageable
     /// What's left of it - the probe reads this to see a weapon (or a burn) actually landed.
     public float Health => health;
 
+    // ---- being thrown about ----
+    //
+    // The airblast and the Grenada push a player through their own movement; a dummy has none,
+    // so it couldn't be moved at all - reported as the airblast "doesnt work on dummies". This is
+    // the smallest thing that answers "how far does that throw someone": a ballistic flight with
+    // the players' own gravity, a slide to a stop, and a walk home once it's been lying there.
+    const float Gravity = 20.3f;       // PlayerMovement's
+    const float GroundFriction = 14f;
+    const float HomeAfter = 2.5f;
+    const float HomeSpeed = 6f;
+
+    Vector3 flying;
+    bool thrown;
+    float restedAt = -1f;
+
+    /// Whether it's in the air or sliding from a shove right now.
+    public bool Thrown => thrown;
+
+    /// Knocked about by an airblast or a blast - the same impulse a player would get.
+    public void Shove(Vector3 impulse)
+    {
+        if (down)
+            return;
+
+        flying += impulse;
+        thrown = true;
+        restedAt = -1f;
+    }
+
+    void Update()
+    {
+        if (down)
+            return;
+
+        if (thrown)
+            Fly(Time.deltaTime);
+        else if (restedAt >= 0f && Time.time - restedAt > HomeAfter)
+            WalkHome(Time.deltaTime);
+    }
+
+    void Fly(float dt)
+    {
+        flying.y -= Gravity * dt;
+        Vector3 step = flying * dt;
+        float length = step.magnitude;
+
+        // Walls stop it rather than letting it pass through; it keeps what runs along the wall.
+        if (length > 0.0001f && Physics.SphereCast(transform.position, 0.4f, step / length, out RaycastHit wall,
+                                                   length, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+            && wall.normal.y < 0.5f)
+        {
+            step = step / length * Mathf.Max(0f, wall.distance - 0.02f);
+            flying = Vector3.ProjectOnPlane(flying, wall.normal) * 0.5f;
+        }
+
+        transform.position += step;
+
+        // The origin stands a metre off the floor (see RoomManager's placement), so that's where
+        // it lands.
+        if (flying.y <= 0f && Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit ground,
+                                               1.6f, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            float stand = ground.point.y + 1f;
+            if (transform.position.y <= stand)
+            {
+                transform.position = new Vector3(transform.position.x, stand, transform.position.z);
+                flying.y = 0f;
+
+                float speed = Mathf.MoveTowards(flying.magnitude, 0f, GroundFriction * dt);
+                flying = flying.sqrMagnitude > 0.0001f ? flying.normalized * speed : Vector3.zero;
+
+                if (speed <= 0.05f)
+                {
+                    flying = Vector3.zero;
+                    thrown = false;
+                    restedAt = Time.time;
+                }
+            }
+        }
+
+        // Off the edge of the world: straight back home rather than falling forever.
+        if (transform.position.y < home.y - 40f)
+        {
+            transform.SetPositionAndRotation(home, homeRotation);
+            flying = Vector3.zero;
+            thrown = false;
+            restedAt = -1f;
+        }
+    }
+
+    void WalkHome(float dt)
+    {
+        transform.position = Vector3.MoveTowards(transform.position, home, HomeSpeed * dt);
+
+        if ((transform.position - home).sqrMagnitude < 0.0001f)
+            restedAt = -1f;
+    }
+
     public static TrainingDummy Build(Vector3 where, Quaternion facing, Color colour)
     {
         GameObject host = new GameObject("~Dummy");
@@ -133,6 +231,9 @@ public class TrainingDummy : MonoBehaviour, IDamageable
 
         transform.SetPositionAndRotation(home, homeRotation);
         health = maxHealth;
+        flying = Vector3.zero;
+        thrown = false;
+        restedAt = -1f;
 
         foreach (Renderer r in GetComponentsInChildren<Renderer>(true))
             r.enabled = true;

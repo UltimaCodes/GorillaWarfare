@@ -152,6 +152,16 @@ public class PlayerMovement : MonoBehaviour
     /// Set by the weapon in your hands - Purple Haze spun up walks you at 60%. 1 otherwise.
     public float WeaponSpeedMultiplier { get; set; } = 1f;
 
+    /// Rises toward `upTo` metres per second at `accel`, never past it - a swing's takeoff from
+    /// standing, eased in rather than the one-frame hop that replaced (see VineGrapple.liftSpeed).
+    public void Lift(float upTo, float accel, float dt)
+    {
+        if (velocity.y < upTo)
+            velocity.y = Mathf.Min(upTo, velocity.y + accel * dt);
+
+        grounded = false;
+    }
+
     public void AddImpulse(Vector3 impulse)
     {
         velocity += impulse;
@@ -268,13 +278,28 @@ public class PlayerMovement : MonoBehaviour
     /// Steering pushes a little along the ground plane, enough to pump a swing higher or bend its
     /// line, the way a real swing is driven by shifting your weight.
     ///
+    /// Made less of a simulation 2026-09-28 - reported: "grappling isnt fun anymore, its too
+    /// physics based now". A true pendulum hangs you at the bottom of the arc, heavy and slow, and
+    /// throws away speed every time the rope goes taut. Three things take it back toward the fun
+    /// of the old pull while keeping the arc:
+    /// - `gravityScale` - you're lighter on the rope, so a swing carries rather than sags;
+    /// - `drive` - a push toward where you're looking, taken along the swing (across the rope, never
+    ///   along it), so you steer the arc with the mouse instead of waiting on it;
+    /// - `keep` - a taut rope turns most of what it takes away into the swing instead of deleting
+    ///   it, so going round the bottom doesn't bleed you dry.
+    ///
     /// `pivot` is where the rope ends, already offset for where the rope meets the body. Returns
     /// true once the body is on the ground, which ends the swing.
     /// </summary>
-    public bool Swing(Vector3 pivot, float ropeLength, float steer, float maxSpeed, float dt)
+    public bool Swing(Vector3 pivot, float ropeLength, float steer, float maxSpeed, float gravityScale,
+                      Vector3 drive, float keep, float dt)
     {
-        velocity.y -= gravity * dt;
+        velocity.y -= gravity * gravityScale * dt;
         velocity += WishDirection() * steer * dt;
+
+        Vector3 hanging = transform.position - pivot;
+        if (hanging.sqrMagnitude > 0.0001f)
+            velocity += Vector3.ProjectOnPlane(drive, hanging.normalized) * dt;
 
         Vector3 from = transform.position;
         Vector3 next = from + velocity * dt;
@@ -288,7 +313,14 @@ public class PlayerMovement : MonoBehaviour
 
             float outward = Vector3.Dot(velocity, along);
             if (outward > 0f)
+            {
+                float speed = velocity.magnitude;
                 velocity -= along * outward;
+
+                float turned = velocity.magnitude;
+                if (turned > 0.001f)
+                    velocity *= Mathf.Lerp(turned, speed, keep) / turned;
+            }
         }
 
         if (velocity.sqrMagnitude > maxSpeed * maxSpeed)

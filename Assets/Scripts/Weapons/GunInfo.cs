@@ -135,6 +135,10 @@ public class GunInfo : ItemInfo
     public float flameRadiusStart = 0.2f;
     public float flameRadiusEnd = 0.8f;
 
+    [Tooltip("How far each puff can stray from where you aim, in degrees. A real flamethrower's "
+             + "stream spreads and billows; a straight line of identical puffs read as a laser.")]
+    public float flameSpread;
+
     [Tooltip("Damage at the tip of the flame, as a fraction of point blank.")]
     [Range(0f, 1f)] public float flameTipDamage = 0.4f;
 
@@ -150,6 +154,18 @@ public class GunInfo : ItemInfo
     public int airblastCost = 20;
     public float airblastCooldown = 0.75f;
     public float airblastRange = 5f;
+
+    [Tooltip("The airblast's kick back into you, metres per second - it pushes both ways. Blast "
+             + "the floor and it lifts you.")]
+    public float airblastSelfKnockback;
+
+    [Header("Sound")]
+    [Tooltip("A bank to borrow until this weapon has clips of its own in Audio/Shoot/<key> - "
+             + "without it, a weapon with no bank played a random clip from every other weapon's "
+             + "(the lookup falls back to the whole Shoot folder), the Grenada's launch included.")]
+    public string standInSound;
+
+    public float standInPitch = 1f;
 
     [Header("Ammo")]
     [Tooltip("Shots per banana.")]

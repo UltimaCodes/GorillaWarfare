@@ -37,6 +37,23 @@ camera draws from its tip - fire, smoke - comes out of a point in front of your 
 `SingleShotGun.DrawnTipPosition` for those. Tracers still start from the real tip; nobody's
 noticed, because they last a twentieth of a second.
 
+**`Mathf.SmoothStep(a, b, t)` is not GLSL's smoothstep.** It blends from `a` to `b` by `t`; it
+doesn't turn `t` into a 0-to-1 edge between `a` and `b`. BulletDecal's splat used it that way and
+never reached zero, so every mark carried a faint square. For an edge: `InverseLerp`, then
+`e * e * (3 - 2e)`.
+
+**`Legacy Shaders/Particles/Multiply` has no tint.** Setting `_TintColor` or `_Color` on it does
+nothing - the colour comes from vertex colour times texture. That's why bullet impacts never faded
+(they pop out). Anything that needs a coloured or fading multiply uses `Custom/CharDecal`.
+
+**A sound bank with no clips of its own isn't silent - it's everyone's.** `GameAudio.Pick` falls back
+to the parent folder, and `Shoot` holds every weapon's clips, so a new weapon with no `Shoot/<key>`
+played all of them at random. A fallback bank passed after it never runs. Give a new weapon its own
+clips or a `GunInfo.standInSound`.
+
+**A global shader array's size is fixed by the first set.** `GrassChar` and `BodyChar` always send
+the full array (64, 16) and a count, never a shorter one.
+
 **In the probe, aim the player, not the camera.** Setting `LocalCamera.transform.rotation` turns
 the view but not the weapon, which follows the body's yaw and the look pitch - shots go the right
 way and every screenshot shows a gun slanted across the frame. `PlayModeProbe.Face` sets the look
@@ -483,9 +500,10 @@ Closed since, and worth recording why:
   at full shield. `WeaponCheck` plays the roster through the rule rather than dividing.
 - **No `Music/over` track** was never a bug. `MusicPlayer` picks `over ?? lobby ?? menu`, and the
   lobby track is a holding pen, which is exactly what a results screen is.
-- **`AppVersion` empty** is fixed — it's `0.7` now (`0.6` on 2026-08-22 for the vine's
+- **`AppVersion` empty** is fixed — it's `0.8` now (`0.6` on 2026-08-22 for the vine's
   `RPC_Attach`/`RPC_Detach`; `0.7` on 2026-09-28 for Purple Haze and Red Hot Chili Pepper's four
-  RPCs and the two flags they added to the player's stream), so mismatched builds can't see each
+  RPCs and the two flags they added to the player's stream; `0.8` on 2026-09-29 for the gatling's
+  rev flag on the same stream), so mismatched builds can't see each
   other's rooms. Bump it whenever the RPC list or a replicated property changes. `SceneCheck` now
   fails on any `[PunRPC]` missing from `RpcList` - which is how the four were caught, since a
   missing one still works and says nothing.

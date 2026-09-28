@@ -171,8 +171,16 @@ public static class AudioCheck
     {
         foreach (string weapon in WeaponLoadout.GunGameLadder)
         {
+            // Its own, or a stand-in it declares (GunInfo.standInSound) and names here. Never the
+            // lookup's own fallback to the whole Shoot folder - that plays every weapon's clips at
+            // random, which is what made Purple Haze sound like a string of explosions.
             AudioClip[] clips = Bank($"Shoot/{weapon}");
-            Check(clips.Length > 0, $"{weapon} has a firing sound", $"{clips.Length} clip(s)");
+            GunInfo info = Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + weapon);
+            string standIn = clips.Length == 0 && info != null ? info.standInSound : null;
+            int borrowed = string.IsNullOrEmpty(standIn) ? 0 : Bank(standIn).Length;
+
+            Check(clips.Length > 0 || borrowed > 0, $"{weapon} has a firing sound",
+                  clips.Length > 0 ? $"{clips.Length} clip(s)" : $"STAND-IN {standIn}, {borrowed} clip(s)");
         }
     }
 

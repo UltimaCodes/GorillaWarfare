@@ -54,6 +54,15 @@ public class LightProjectile : MonoBehaviour
     MaterialPropertyBlock block;
     float spin;
 
+    // A flame puff's own drift and size, where it last charred the world, and the bodies it's
+    // already marked.
+    Vector3 wobble;
+    float sizeJitter = 1f;
+    bool charred;
+    Vector3 lastChar;
+    readonly System.Collections.Generic.HashSet<MonkeyRig> sooted = new System.Collections.Generic.HashSet<MonkeyRig>();
+    static readonly Collider[] touching = new Collider[16];
+
     /// A grape. `resolver` is the gun that fired it, on the shooter's own client only.
     public static void FirePellet(GunInfo from, Vector3 origin, Vector3 direction, PlayerController by,
                                   SingleShotGun resolver)
@@ -107,6 +116,10 @@ public class LightProjectile : MonoBehaviour
         burned.Clear();
         transform.position = origin;
         spin = Random.Range(0f, 360f);
+        wobble = Random.onUnitSphere;
+        sizeJitter = Random.Range(0.8f, 1.3f);
+        charred = false;
+        sooted.Clear();
         Live++;
 
         if (kind == Kind.Pellet)
@@ -195,7 +208,13 @@ public class LightProjectile : MonoBehaviour
 
         // Fire slows as it spreads, rather than holding its muzzle speed out to the tip.
         velocity *= Mathf.Max(0f, 1f - 1.6f * step);
-        velocity += Vector3.up * 1.5f * step;
+
+        // Weight: the stream sags under itself for the first part of its flight, then the fire
+        // rises off it as it burns out - reported as flames that "dont have weight". And each
+        // puff drifts its own way, more the further out it gets, so the stream billows rather
+        // than running in a tube.
+        velocity.y += Mathf.Lerp(-6f, 3f, t) * step;
+        velocity += wobble * (4f * t) * step;
 
         Vector3 move = velocity * step;
         float distance = move.magnitude;
@@ -206,16 +225,103 @@ public class LightProjectile : MonoBehaviour
         {
             transform.position = wall.point + wall.normal * radius * 0.5f;
             velocity = Vector3.ProjectOnPlane(velocity, wall.normal) * 0.3f;
+            CharAt(wall.point, wall.normal, radius);
         }
         else
         {
             transform.position += move;
         }
 
+        // The floor under a low stream - it's rarely hit head on, the fire rolls along it. Far
+        // enough to reach the tops of the grass, which is what's actually touched first.
+        if (t > 0.1f
+            && Physics.Raycast(transform.position, Vector3.down, out RaycastHit floor, radius + 0.6f,
+                               Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            CharAt(floor.point, floor.normal, radius);
+
+        SootBodies(radius);
+
         if (resolver != null)
             BurnWhatItTouches(radius, t);
 
         Draw(radius, t);
+    }
+
+    /// <summary>
+    /// Chars the world where the puff touches it: a scorch on the surface (BulletDecal.Char) and
+    /// the grass round it (GrassChar), since on grassy ground a mark under the blades is hidden.
+    /// Where it first touches, and again each time it's rolled a little further along - so a
+    /// stream played over the floor leaves a trail rather than one blot per puff. On every client,
+    /// since every client flies the puffs. A spot that's already black is renewed, not stacked.
+    /// </summary>
+    void CharAt(Vector3 point, Vector3 normal, float radius)
+    {
+        // Sized to the fire you can see, not the radius it burns people in - near the nozzle,
+        // where a stream aimed at the floor meets it, that radius is a fraction of the flame, and
+        // the first version's char came out as a few browned blade tips.
+        float size = Mathf.Max(0.9f, radius * 3f);
+
+        if (charred && (point - lastChar).sqrMagnitude < size * size)
+            return;
+
+        charred = true;
+        lastChar = point;
+        BulletDecal.Char(point, normal, size);
+
+        // Wider in the grass than on the ground under it - the fire rolls through the blades
+        // round where it lands. At the same size only the blades right at the mark went dark.
+        GrassChar.Touch(point, size * 1.5f);
+    }
+
+    /// <summary>
+    /// Chars the bodies the puff passes through, on the spot it reached them - BodyChar keeps
+    /// it on that hitbox, so it stays where the flame hit as the body moves. Once a body per puff,
+    /// at the hitbox nearest the puff. Everyone's puffs, like the world's char: the burning damage
+    /// is the shooter's to decide, what it looks like isn't.
+    /// </summary>
+    void SootBodies(float radius)
+    {
+        int count = Physics.OverlapSphereNonAlloc(transform.position, radius, touching, HitboxMask,
+                                                  QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider collider = touching[i];
+            if (collider == null || OwnBody(collider))
+                continue;
+
+            MonkeyRig rig = collider.GetComponentInParent<MonkeyRig>();
+            if (rig == null || sooted.Contains(rig))
+                continue;
+
+            // The nearest of this body's hitboxes the puff is touching.
+            Collider nearest = collider;
+            float best = (collider.bounds.center - transform.position).sqrMagnitude;
+            for (int j = i + 1; j < count; j++)
+            {
+                if (touching[j] == null || touching[j].GetComponentInParent<MonkeyRig>() != rig)
+                    continue;
+
+                float d = (touching[j].bounds.center - transform.position).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    nearest = touching[j];
+                }
+            }
+
+            sooted.Add(rig);
+
+            // A point on the hitbox's surface on the side facing the puff - ClosestPoint from
+            // inside a collider is just the point itself, which would put the mark in the body.
+            Vector3 centre = nearest.bounds.center;
+            Vector3 toward = transform.position - centre;
+            if (toward.sqrMagnitude < 0.0001f)
+                toward = Vector3.up;
+            Vector3 surface = nearest.ClosestPoint(centre + toward.normalized * 3f);
+
+            BodyChar.On(rig.gameObject).Touch(nearest.transform, surface, Mathf.Clamp(radius, 0.25f, 0.45f));
+        }
     }
 
     /// Each person (or dummy) once per puff, harder close to the nozzle.
@@ -262,8 +368,9 @@ public class LightProjectile : MonoBehaviour
         }
 
         // Drawn well past the radius it burns in: the sprites are thin licks of flame with a lot of
-        // clear space round them, and at the burn radius the stream read as a pencil line.
-        transform.localScale = Vector3.one * radius * 3.2f;
+        // clear space round them, and at the burn radius the stream read as a pencil line. Each
+        // puff a slightly different size, so the stream's edge is ragged.
+        transform.localScale = Vector3.one * radius * 3.6f * sizeJitter;
 
         // Yellow-white at the nozzle, orange, then a dark red as it dies - and fading out.
         Color hot = Color.Lerp(new Color(1f, 0.85f, 0.45f), new Color(1f, 0.35f, 0.05f), Mathf.Clamp01(t * 1.6f));

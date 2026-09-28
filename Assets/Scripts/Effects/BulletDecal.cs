@@ -54,6 +54,7 @@ public class BulletDecal : MonoBehaviour
     static Texture2D splat;
     static Material worldMaterial;
     static Material bloodMaterial;
+    static Material charMaterial;
     static Mesh quad;
     static Sprite[] boomShapes;
 
@@ -62,6 +63,9 @@ public class BulletDecal : MonoBehaviour
     MaterialPropertyBlock block;
     Color tint;
     float diesAt;
+    float lifetime;
+    float fadeSeconds = FadeSeconds;
+    bool charred;
 
     /// <summary>
     /// Places a mark at a reported hit. Returns null when there is nothing there to mark.
@@ -96,7 +100,88 @@ public class BulletDecal : MonoBehaviour
 
         Puff(hit.point, hit.normal, bloody);
 
-        GameObject host = new GameObject(bloody ? "~blood" : "~impact");
+        float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.09f, 0.16f);
+        GameObject host = PlaceOn(hit, size, bloody ? "~blood" : "~impact");
+
+        BulletDecal decal = host.AddComponent<BulletDecal>();
+        decal.Build(hit.collider.transform, bloody ? Blood : Scorch, bloody ? BloodLifetime : WorldLifetime, FadeSeconds);
+
+        return decal;
+    }
+
+    // ---- Red Hot Chili Pepper's char ----
+
+    static readonly Color Charcoal = new Color(0.12f, 0.1f, 0.09f, 1f);
+    const float CharHold = 1f;
+    const float CharFade = 3f;
+    const int MaxChars = 60;
+    static readonly System.Collections.Generic.List<BulletDecal> chars = new System.Collections.Generic.List<BulletDecal>();
+
+    /// <summary>
+    /// A burn where the flame touched a surface - darkest at first, fading back over a few seconds.
+    /// Reported: "make the weapon char whatever it touches (make it go back to normal over like 3-5
+    /// seconds)". Four seconds all told: one held, three fading.
+    ///
+    /// Flame on a spot that's already charred renews that mark instead of stacking another, so
+    /// holding the stream on a wall keeps one patch black rather than piling up sixty decals; the
+    /// cap is for everywhere else at once. Bodies char through MonkeyRig, not here - a decal on a
+    /// moving gorilla would slide off it.
+    /// </summary>
+    public static void Char(Vector3 point, Vector3 normal, float size)
+    {
+        for (int i = chars.Count - 1; i >= 0; i--)
+        {
+            BulletDecal existing = chars[i];
+            if (existing == null)
+            {
+                chars.RemoveAt(i);
+                continue;
+            }
+
+            if ((existing.transform.position - point).sqrMagnitude < size * size * 0.16f)
+            {
+                existing.Renew();
+                return;
+            }
+        }
+
+        if (chars.Count >= MaxChars)
+            return;
+
+        Vector3 from = point + normal * SearchDistance;
+        if (!Physics.Raycast(from, -normal, out RaycastHit hit, SearchDistance * 2f, Hitbox.WorldMask,
+                             QueryTriggerInteraction.Ignore))
+            return;
+
+        GameObject host = PlaceOn(hit, size * Random.Range(0.85f, 1.15f), "~char");
+        BulletDecal decal = host.AddComponent<BulletDecal>();
+        decal.Build(hit.collider.transform, Charcoal, CharHold + CharFade, CharFade);
+        chars.Add(decal);
+    }
+
+    /// Live char marks - for the probe.
+    public static int CharCount
+    {
+        get
+        {
+            chars.RemoveAll(c => c == null);
+            return chars.Count;
+        }
+    }
+
+    void Renew()
+    {
+        diesAt = Time.time + lifetime;
+        Apply(1f);
+    }
+
+    /// <summary>
+    /// A quad on the surface a ray hit, facing out of it, `size` across in the world whatever the
+    /// surface's own scale.
+    /// </summary>
+    static GameObject PlaceOn(RaycastHit hit, float size, string name)
+    {
+        GameObject host = new GameObject(name);
 
         // The decal never actually rendered at a visible size on world geometry with a
         // non-uniform scale, which is most of it - confirmed by firing a real shot at a real
@@ -124,8 +209,6 @@ public class BulletDecal : MonoBehaviour
         Quaternion worldRot = Quaternion.LookRotation(-hit.normal, Vector3.up)
                               * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
 
-        float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.09f, 0.16f);
-
         Matrix4x4 worldMatrix = Matrix4x4.TRS(worldPos, worldRot, Vector3.one * size);
         Matrix4x4 localMatrix = hit.collider.transform.worldToLocalMatrix * worldMatrix;
 
@@ -133,25 +216,25 @@ public class BulletDecal : MonoBehaviour
         host.transform.localRotation = localMatrix.rotation;
         host.transform.localScale = localMatrix.lossyScale;
 
-        BulletDecal decal = host.AddComponent<BulletDecal>();
-        decal.Build(hit.collider.transform, bloody);
-
-        return decal;
+        return host;
     }
 
-    void Build(Transform surface, bool bloody)
+    void Build(Transform surface, Color colour, float seconds, float fade)
     {
         EnsureShared();
 
         anchor = surface;
-        tint = bloody ? Blood : Scorch;
-        diesAt = Time.time + (bloody ? BloodLifetime : WorldLifetime);
+        tint = colour;
+        lifetime = seconds;
+        fadeSeconds = fade;
+        diesAt = Time.time + seconds;
 
         MeshFilter filter = gameObject.AddComponent<MeshFilter>();
         filter.sharedMesh = quad;
 
         view = gameObject.AddComponent<MeshRenderer>();
-        view.sharedMaterial = bloody ? bloodMaterial : worldMaterial;
+        charred = colour == Charcoal && charMaterial != null;
+        view.sharedMaterial = charred ? charMaterial : colour == Blood ? bloodMaterial : worldMaterial;
         view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         view.receiveShadows = false;
         view.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -178,8 +261,8 @@ public class BulletDecal : MonoBehaviour
             return;
         }
 
-        if (left < FadeSeconds)
-            Apply(left / FadeSeconds);
+        if (left < fadeSeconds)
+            Apply(left / fadeSeconds);
     }
 
     // A multiply decal fades by going white - white multiplied over anything leaves it alone.
@@ -189,6 +272,16 @@ public class BulletDecal : MonoBehaviour
             return;
 
         view.GetPropertyBlock(block);
+
+        // A char's shader takes its colour and strength separately (CharDecal.shader).
+        if (charred)
+        {
+            block.SetColor("_Color", tint);
+            block.SetFloat("_Strength", strength);
+            view.SetPropertyBlock(block);
+            return;
+        }
+
         block.SetColor("_TintColor", Color.Lerp(Color.white, tint, strength));
         block.SetColor("_Color", Color.Lerp(Color.white, tint, strength));
         view.SetPropertyBlock(block);
@@ -351,6 +444,14 @@ public class BulletDecal : MonoBehaviour
 
         if (bloodMaterial == null)
             bloodMaterial = BuildMaterial();
+
+        // The chili's char - its own shader, since Particles/Multiply ignores a tint and a fade.
+        if (charMaterial == null)
+        {
+            Shader shader = Shader.Find("Custom/CharDecal");
+            if (shader != null)
+                charMaterial = new Material(shader) { name = "~char", mainTexture = splat };
+        }
     }
 
     // Multiply blending, so the mark darkens whatever it sits on rather than painting a colour
@@ -389,7 +490,12 @@ public class BulletDecal : MonoBehaviour
                 float wobble = Mathf.PerlinNoise(Mathf.Cos(angle) * 2f + seed, Mathf.Sin(angle) * 2f + seed);
                 float radius = 0.62f + wobble * 0.3f;
 
-                float density = Mathf.Clamp01(1f - Mathf.SmoothStep(radius * 0.45f, radius, distance));
+                // A real smoothstep of the distance between the inner and outer radius. This was
+                // Mathf.SmoothStep(inner, outer, distance) - which isn't that: it blends from its
+                // first argument to its second, so outside the blotch it came to 1 - outer, never
+                // 0, and every mark was a faint square with the blotch in the middle of it.
+                float edge = Mathf.InverseLerp(radius * 0.45f, radius, distance);
+                float density = 1f - edge * edge * (3f - 2f * edge);
 
                 // Speckle, so the middle isn't a flat disc.
                 density *= 0.65f + Mathf.PerlinNoise(x * 0.22f + seed, y * 0.22f + seed) * 0.35f;

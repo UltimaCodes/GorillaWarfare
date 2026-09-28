@@ -179,6 +179,39 @@ public static class GameAudio
         return clips.Length == 0 ? null : clips[Random.Range(0, clips.Length)];
     }
 
+    static readonly Dictionary<string, bool> ownClips = new Dictionary<string, bool>();
+
+    /// <summary>
+    /// Whether a bank has clips of its own - not counting Pick's fall back to the parent folder.
+    /// That fallback is right for a reload (every weapon shares one) and wrong for a weapon's
+    /// shot: "Shoot" is every weapon's clips at once, so a gun with no bank of its own played a
+    /// random one of everybody's, launcher included. Ask this first and pick a stand-in.
+    /// </summary>
+    public static bool HasOwnClips(string bank)
+    {
+        if (!ownClips.TryGetValue(bank, out bool has))
+        {
+            has = Resources.LoadAll<AudioClip>($"Audio/{bank}").Length > 0;
+            ownClips[bank] = has;
+        }
+
+        return has;
+    }
+
+    /// The bank a weapon's shot comes from: its own if it has one, otherwise its declared
+    /// stand-in (GunInfo.standInSound), with the pitch to play it at.
+    public static string ShotBank(string weapon, GunInfo info, out float pitch)
+    {
+        string own = $"{Shoot}/{weapon}";
+        pitch = 1f;
+
+        if (HasOwnClips(own) || info == null || string.IsNullOrEmpty(info.standInSound))
+            return own;
+
+        pitch = info.standInPitch;
+        return info.standInSound;
+    }
+
     // Named clip, for when it matters which one you get (UI mostly).
     static AudioClip Pick(string bank, string clipName)
     {

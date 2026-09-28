@@ -48,11 +48,11 @@ MonoBehaviour:
   flameSpeed: 14
   flameLife: 0.5
   flameRadiusStart: 0.2
-  flameRadiusEnd: 0.8
+  flameRadiusEnd: 1
   flameTipDamage: 0.4
   burnPerSecond: 8
   burnSeconds: 4
-  airblastKnockback: 12
+  airblastKnockback: 15
   airblastCost: 20
   airblastCooldown: 0.75
   airblastRange: 5
@@ -72,4 +72,8 @@ MonoBehaviour:
   patternLength: 8
   recoilRecovery: 0
   recoverySpeed: 6
-  viewKick: 0
+  viewKick: 0.12
+  flameSpread: 7
+  airblastSelfKnockback: 7
+  standInSound: AirBrake
+  standInPitch: 0.7

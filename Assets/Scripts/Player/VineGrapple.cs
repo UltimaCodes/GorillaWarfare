@@ -66,12 +66,26 @@ public class VineGrapple : MonoBehaviour
     [SerializeField] float maxDuration = 3.5f;
 
     [Header("Swing")]
-    [Tooltip("Upward speed, in metres per second, given when a swing starts from the ground. "
-             + "Without it a grapple fired standing up just hangs you where you already were - "
-             + "reported by players: 'they should get some starting airtime so they can then "
-             + "swing further from branch to branch'. 8 against gravity's 20.3 is about 1.6m of "
-             + "lift before the rope takes over.")]
-    [SerializeField] float swingKick = 8f;
+    [Tooltip("How fast a swing started from standing rises off the ground, in metres per second - "
+             + "reached over liftTime rather than in one frame. Players asked for 'some starting "
+             + "airtime', and it used to be an instant 8 m/s hop, reported 2026-09-28 as janky.")]
+    [SerializeField] float liftSpeed = 7f;
+
+    [Tooltip("Seconds the takeoff takes to reach liftSpeed.")]
+    [SerializeField] float liftTime = 0.3f;
+
+    [Tooltip("Gravity on the rope, as a fraction of normal. At full weight a swing sagged to the "
+             + "bottom and hung there - 'too physics based'.")]
+    [Range(0.1f, 1f)] [SerializeField] float swingGravity = 0.55f;
+
+    [Tooltip("Metres per second squared of push toward where you're looking, along the swing - "
+             + "you steer the arc with the mouse instead of waiting for it.")]
+    [SerializeField] float swingDrive = 16f;
+
+    [Tooltip("How much of its speed a taut rope keeps when it turns you, 0 to 1. A real rope keeps "
+             + "none of what points outward along it; this keeps most, so the bottom of the arc "
+             + "doesn't bleed you dry.")]
+    [Range(0f, 1f)] [SerializeField] float swingKeep = 0.85f;
 
     [Tooltip("How fast the rope reels in, in metres per second, when it latched further out than it "
              + "can swing from. A far grapple pulls you in at this rate, then swings.")]
@@ -103,6 +117,7 @@ public class VineGrapple : MonoBehaviour
     bool swinging;
     float ropeLength;
     float ropeTarget;
+    float liftingUntil;
 
     [Header("Damage")]
     [Tooltip("Base damage on contact with an enemy, before the same speed scaling every "
@@ -207,12 +222,25 @@ public class VineGrapple : MonoBehaviour
             movement.Grappling = true;
             ropeLength = Mathf.MoveTowards(ropeLength, ropeTarget, swingReelSpeed * Time.deltaTime);
 
+            // Off the ground smoothly, when it started there.
+            if (Time.time < liftingUntil)
+                movement.Lift(liftSpeed, liftSpeed / Mathf.Max(0.05f, liftTime) + 20.3f * swingGravity, Time.deltaTime);
+
+            // Where you're facing, flat. With the look's own pitch, looking up at the branch you're
+            // hanging from - which you do - pushed you up and back round the arc instead of on
+            // along it; the probe caught a swing climbing 7.7m straight up and never going forward.
+            Camera eye = PlayerController.LocalCamera;
+            Vector3 look = eye != null ? eye.transform.forward : transform.forward;
+            look.y = 0f;
+            look = look.sqrMagnitude > 0.0001f ? look.normalized : transform.forward;
+
             bool landed = movement.Swing(anchor - Vector3.up * HandHeight, ropeLength, swingSteer,
-                                         maxSwingSpeed, Time.deltaTime);
+                                         maxSwingSpeed, swingGravity, look * swingDrive, swingKeep,
+                                         Time.deltaTime);
 
             // Touching down ends it - you've landed, and a rope dragging you round in a circle
             // along the floor is nobody's idea of a swing. Not in the first moments, while the
-            // kick is still lifting you off the spot you fired from.
+            // takeoff is still lifting you off the spot you fired from.
             if (landed && Time.time - attachedAt > 0.4f)
                 Detach();
 
@@ -348,11 +376,11 @@ public class VineGrapple : MonoBehaviour
 
         PlanRope(hit, target != null || anchorDummy != null);
 
-        // Off the ground, so there's an arc to ride rather than a rope to stand under.
+        // Off the ground, so there's an arc to ride rather than a rope to stand under - eased up
+        // over the first moments of the swing (see liftSpeed), not a hop on this frame.
         PlayerMovement movement = GetComponent<PlayerMovement>();
 
-        if (swinging && movement != null && movement.Grounded)
-            movement.AddImpulse(Vector3.up * Mathf.Max(0f, swingKick - movement.Velocity.y));
+        liftingUntil = swinging && movement != null && movement.Grounded ? Time.time + liftTime : 0f;
 
         Begin(targetViewID, hit.point);
     }

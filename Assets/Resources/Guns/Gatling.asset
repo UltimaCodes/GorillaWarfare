@@ -39,7 +39,7 @@ MonoBehaviour:
   selfDamageScale: 0
   modelRotation: {x: -90, y: 0, z: 0}
   modelScale: 1.4
-  spinUp: 0.6
+  spinUp: 1.2
   spinMoveMultiplier: 0.6
   spreadMax: 2.5
   spreadGrowSeconds: 3
@@ -73,3 +73,5 @@ MonoBehaviour:
   recoilRecovery: 0.5
   recoverySpeed: 6
   viewKick: 0.35
+  standInSound: Shoot/Rifle
+  standInPitch: 1.35

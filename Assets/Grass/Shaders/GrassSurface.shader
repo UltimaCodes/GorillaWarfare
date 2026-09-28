@@ -62,14 +62,38 @@ Shader "Custom/GrassComputeSurface"
 		float3 _OrthographicCamPosTerrain;
 		uniform sampler2D _TerrainDiffuse;
 
-		struct Input 
+		struct Input
 		{
 			float2 uv_MainTex;
-			float3 diffuseColor;			
+			float3 diffuseColor;
 			float3 worldPos;
 			float2 texcoord;
-			
+			float burnt;
+
 		};
+
+		// Gorilla Warfare: Red Hot Chili Pepper chars the grass it touches. GrassChar.cs sends up to
+		// 64 burn points (xyz position, w radius) with strengths that fade, packed from the start,
+		// and how many are live - zero most of the time, when none of this runs.
+		float4 _GrassCharPoints[64];
+		float _GrassCharStrength[64];
+		float _GrassCharCount;
+
+		float GrassBurn(float3 p)
+		{
+			float burnt = 0;
+			int count = (int)_GrassCharCount;
+			for (int k = 0; k < count; k++)
+			{
+				float radius = max(_GrassCharPoints[k].w, 0.001);
+				// Mostly sideways: a blade chars root to tip, rather than going dark at the root and
+				// staying green at the top because the tip's half a metre further from the point.
+				float3 away = p - _GrassCharPoints[k].xyz;
+				away.y *= 0.35;
+				burnt = max(burnt, _GrassCharStrength[k] * saturate(1.5 - length(away) / radius));
+			}
+			return saturate(burnt);
+		}
 		struct appdata_id
 		{
 			float4 vertex : POSITION;
@@ -111,10 +135,13 @@ Shader "Custom/GrassComputeSurface"
 				o.texcoord = input.uv;
 				
 				o.diffuseColor = tri.diffuseColor;
-			#endif	
-			
+			#endif
+
 			v.vertex = v.vertex;
-			
+
+			// Gorilla Warfare: per blade vertex, from where it is in the world - see GrassBurn.
+			o.burnt = _GrassCharCount > 0.5 ? GrassBurn(o.worldPos) : 0;
+
 		}
 
 		half _Glossiness;
@@ -150,9 +177,13 @@ Shader "Custom/GrassComputeSurface"
 				final = lerp(terrainForBlending,terrainForBlending+ ( _TopTint* float4(IN.diffuseColor, 1) * _AmbientAdjustmentColor) , verticalFade);
 			#endif			
 			float outside = saturate(abs(IN.texcoord.x - 0.5) + _Edge)* IN.texcoord.y;
-			
+
+			// Gorilla Warfare: burnt blades go to soot, and lose their sheen with it.
+			final.rgb = lerp(final.rgb, float3(0.05, 0.035, 0.02), IN.burnt);
+			outside *= 1 - IN.burnt;
+
 			o.Albedo = final;
-			
+
 			// Metallic and smoothness come from slider variables
 			o.Metallic = _Metallic * outside;
 			o.Smoothness = _Glossiness * outside;

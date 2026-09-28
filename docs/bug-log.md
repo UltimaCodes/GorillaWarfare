@@ -3611,3 +3611,111 @@ inside the cooldown costs nothing. Looked at: `viewmodel-gatling`/`-flamer`, `si
 
 Not verified: two people. The burn crossing the network (`RPC_Ignite` credited to the sender), the
 airblast shove, and everyone else seeing the stream from the replicated flag have only run offline.
+
+# Forty-first pass — the chili gets weight and char, the gatling slows down, the vine gets fun again, 2026-09-29
+
+First play of Purple Haze and Red Hot Chili Pepper, and the vine since its swing went in.
+
+## Red Hot Chili Pepper
+
+- **"The weapon has no weight."** The airblast now kicks you back 7 m/s along your aim (blast the
+  floor and it lifts you; `GunInfo.airblastSelfKnockback`), with a hard jolt of the gun, a view kick,
+  a widen and a shake. Its shove on others went 12 to 15 m/s. The stream rumbles the camera the whole
+  time and jolts the gun a little (`viewKick` 0.12), and throws an orange light that flickers on
+  everything in front of you. The airblast's visual was six sprites picked at random from the particle
+  sheet with every non-smoke one skipped - one or two puffs most times. It's a real gust now: a cone
+  of pale air that brakes hard and spreads.
+- **"It doesnt work on dummies."** It didn't - the airblast only looked for players, and a dummy
+  couldn't be moved by anything. `TrainingDummy.Shove` throws one ballistically with the players'
+  gravity, slides it to a stop and walks it home after 2.5s. The Grenada throws them too now.
+- **"Too small and too straight... they dont have weight."** Each puff strays up to 7° from the aim
+  (`flameSpread`), a second, looser draw-only puff goes with it, and every puff drifts its own way.
+  The stream sags under itself early and rises as it burns out. Drawn 3.6x its burn radius with a
+  size jitter, and the end radius went 0.8 to 1.0.
+- **"When an enemy is on fire... its VERY subtle."** It was a few static sprites. A burning body now
+  has flames rising off it (a particle system), smoke above them and a flickering orange light; if
+  it's you, the flames lick up from the bottom of your own view, placed from your field of view
+  setting. The probe counts 26-31 flames on a burning dummy and 26 in your own view.
+- **Char where the flame touches.** Asked for once as "char whatever it touches", then corrected:
+  "charring should not just turn the entire enemy monkey black, it should char the areas where the
+  flame hits". Three parts, all worked out on each client from its own puffs, none networked, all
+  held a second and faded over three:
+  - **Bodies** - `BodyChar`. A touch is a point on the hitbox the puff reached, kept in that hitbox's
+    space (a hitbox is a child of its bone), so a burnt forearm stays burnt as the arm swings.
+    `CharOverlay.shader` draws the body a second time as a multiply pass that darkens only round
+    those points - up to 16 a body - and only while any are showing. The first version darkened the
+    whole body through MonkeyRig's tint; that's gone.
+  - **Surfaces** - `BulletDecal.Char`: a soot decal where a puff first touches, and again each time
+    it rolls a little further, so a stream played along the floor leaves a trail. A spot already
+    black is renewed, not stacked.
+  - **Grass** - `GrassChar` and `GrassSurface.shader`: on grassy ground a decal under the blades is
+    hidden, so up to 64 burn points go to the grass shader, which turns blades near them to soot, root
+    to tip. Sized to the fire you see, not the radius it burns people in - at that size the first
+    version came out as a few browned blade tips. Confirmed the shader wasn't at fault first, with one
+    large hand-placed point: every blade inside it went black.
+
+## Purple Haze
+
+- **"Make the windup much slower."** 0.6s to 1.2s. And you can see it now: the grape bunch sits on a
+  spin node and turns as it winds, easing up to three turns a second - on everyone else's screen too,
+  from a new `Revving` flag on the player's stream, so a gatling revving round a corner is visible.
+- **"Decrease mag size to 120."** It was already 120 - left as it is (see the roadmap).
+- **"Why do i hear so many explosions."** A weapon with no sound bank of its own fell back to the whole
+  `Shoot` folder - every weapon's clips at random, the Grenada's launch among them. The "use the
+  Bunch's shot" fallback written for it never ran, because the lookup falls back to the parent folder
+  before it ever returns nothing. `GunInfo.standInSound` names a borrowed bank on purpose;
+  `GameAudio.ShotBank` uses it. Both new weapons declare one, and WeaponCheck and AudioCheck name it
+  in their output, so a borrowed sound can't pass quietly.
+
+## The vine
+
+"Grappling isnt fun anymore, its too physics based now and the small jump you do when you initially
+grapple from the ground is janky too."
+
+- The 8 m/s hop on the frame the rope caught is gone. A swing from standing eases up to 7 m/s over
+  0.3s (`liftSpeed`, `liftTime`) instead.
+- Less of a simulation: gravity at 55% on the rope, a push toward where you're facing taken along the
+  swing (`swingDrive`), and a taut rope keeps 85% of the speed it used to throw away (`swingKeep`).
+- The drive uses your facing flat. With the look's pitch in it, looking up at the branch - which you
+  do - pushed you up and back round the arc. The probe caught that: a swing climbing 7.7m and never
+  going forward. The same check had failed the same way once before this rework ("-4.26m past it"),
+  which was written off as spawn noise; this time the number repeated, and it wasn't noise.
+- Probe, three runs in a row: 1.2-2.3m of lift, 3.4-3.5m past the point under the branch, letting
+  go at 12-13 m/s.
+
+## Gun game
+
+Both on the ladder: Pineapple, Sniper, **Gatling**, Shotgun, **Flamer**, Rifle, Pistol, Peel - 15
+kills to win, up from 11. Putting them there exposed three ladder-wide checks that were quietly wrong:
+
+- "Every weapon has its own colour" compared material tints. The food kit's models share a white tint
+  and get their colour from one colour-map texture, so the Grenada and both new weapons were "the same
+  colour". It measures the colour the mesh shows now, area-weighted - a per-vertex average called the
+  red chili beige, because its little stem has as many vertices as its body.
+- The shape checks (the sniper is obnoxiously long, and so on) were guarded by `lengths.Count == 5`,
+  true only for the original five bananas, so none had run since the Grenada. By name now; they pass.
+- Both sound checks wanted a bank of its own; a declared stand-in counts, and says so.
+
+## Found on the way
+
+- **`Mathf.SmoothStep` isn't smoothstep.** `BulletDecal`'s splat texture used it for its edge, and it
+  blends from its first argument to its second - so the splat never reached zero, and every impact and
+  char mark carried a faint square round it. Visible on the first char render.
+- **`Legacy Particles/Multiply` ignores a tint.** BulletDecal sets a colour and a fade on it that do
+  nothing - an impact is only ever its texture's grey, and it pops out at the end instead of fading.
+  Char has its own shader (`CharDecal.shader`) that takes both. Bullet impacts are unchanged.
+- **The legacy particle shaders weren't in Always Included.** Every flash, explosion, flame, smoke and
+  decal makes its material from them by name, which a build strips. Added (with the two char shaders)
+  through `AlwaysIncludeShaders`. Nobody's tested a build since, so this is a fix nobody's seen fail.
+- `AppVersion` 0.8, for the new stream flag.
+
+## Verified
+
+All nine suites pass; the probe three times running. Looked at: `flamer-char-body` (a soot patch on
+the dummy's belly and side where the stream landed, fire on it), `flamer-char-grass` (a ring of burnt
+blades round the scorch), `flamer-char-ground-after`, `flamer-stream`, `burning-self`,
+`gatling-firing`, `side-gatling`.
+
+Not verified: two people, again - the rev and burn flags on the stream, the shove, and what the char
+looks like on a remote player (the same code as a dummy, but a player's hitboxes have never been
+charred in front of anyone). Nothing here has been played.

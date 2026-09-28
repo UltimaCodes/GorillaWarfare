@@ -169,16 +169,18 @@ public static class WeaponCheck
             Material wm = Weapon<Material>(name, "Mat");
             Check(sb, wm != null, $"{name} has its own material", wm == null ? "missing" : wm.name);
 
+            GameObject bmesh = Weapon<GameObject>(name);
+
             if (wm != null)
             {
+                Color shown = ShownColour(wm, bmesh);
                 bool unique = true;
                 foreach (Color c in seenColours)
-                    if (Vector4.Distance(c, wm.color) < 0.12f) unique = false;
-                Check(sb, unique, $"{name} colour is distinct", ColorToStr(wm.color));
-                seenColours.Add(wm.color);
+                    if (Vector4.Distance(c, shown) < 0.12f) unique = false;
+                Check(sb, unique, $"{name} colour is distinct", ColorToStr(shown));
+                seenColours.Add(shown);
             }
 
-            GameObject bmesh = Weapon<GameObject>(name);
             MeshFilter bmf = bmesh != null ? bmesh.GetComponentInChildren<MeshFilter>(true) : null;
             if (bmf != null)
                 seenVerts.Add(bmf.sharedMesh.vertexCount);
@@ -305,8 +307,16 @@ public static class WeaponCheck
         // ---- every weapon has its own voice ----
         foreach (string name in WeaponLoadout.GunGameLadder)
         {
+            // Its own bank, or a stand-in it declares on purpose (GunInfo.standInSound) - named in
+            // the detail, so a borrowed sound stays visible here rather than passing quietly.
             AudioClip[] clips = Resources.LoadAll<AudioClip>($"Audio/Shoot/{name}");
-            Check(sb, clips.Length > 0, $"{name} has its own sound", $"{clips.Length} clip(s)");
+            GunInfo g = Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + name);
+            string standIn = clips.Length == 0 && g != null ? g.standInSound : null;
+            int borrowed = string.IsNullOrEmpty(standIn) ? 0 : Resources.LoadAll<AudioClip>($"Audio/{standIn}").Length;
+
+            Check(sb, clips.Length > 0 || borrowed > 0, $"{name} has a sound",
+                  clips.Length > 0 ? $"{clips.Length} clip(s) of its own"
+                                   : $"STAND-IN: {standIn} ({borrowed} clip(s)) until it has its own");
         }
 
         // ---- can the owner actually SEE their weapon ----
@@ -630,7 +640,10 @@ public static class WeaponCheck
             lengths[name] = b3.size.z;
             sb.AppendLine($"[gun]       {name,-9} {b3.size.z:F2}m long, {mf3.sharedMesh.vertexCount} verts");
         }
-        if (lengths.Count == 5)
+        // By name, not by count. This was `lengths.Count == 5`, true only for the original five
+        // bananas - so from the day the Grenada made the ladder six long, none of the checks below
+        // had run at all, and nothing said so.
+        if (lengths.ContainsKey("Sniper") && lengths.ContainsKey("Rifle") && lengths.ContainsKey("Pistol"))
         {
             // Was 1.8x. Big Mike came down from 1.45m to 1.18m because at full length it cut
             // across the crosshair, which is a real cost for a joke about a long banana. It has
@@ -754,6 +767,65 @@ public static class WeaponCheck
     }
 
     static string ColorToStr(Color c) => $"({c.r:F2}, {c.g:F2}, {c.b:F2})";
+
+    /// <summary>
+    /// The colour a weapon actually shows. The bananas share one texture and are told apart by
+    /// their material's tint. The food kit's models all have a white tint and get their colour
+    /// from one shared colour-map texture - so compared by tint, the Grenada, Purple Haze and Red
+    /// Hot Chili Pepper were "the same colour" as each other. For a white-tinted material this is
+    /// the texture averaged over the UVs the mesh actually uses: the grapes' purple, the chili's red.
+    /// </summary>
+    static Color ShownColour(Material material, GameObject model)
+    {
+        Color tint = material.color;
+        bool white = tint.r > 0.98f && tint.g > 0.98f && tint.b > 0.98f;
+
+        MeshFilter filter = model != null ? model.GetComponentInChildren<MeshFilter>(true) : null;
+        Texture texture = material.mainTexture;
+
+        if (!white || texture == null || filter == null || filter.sharedMesh == null)
+            return tint;
+
+        // The imported texture isn't readable, so read its source file instead.
+        string path = AssetDatabase.GetAssetPath(texture);
+        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+            return tint;
+
+        Texture2D readable = new Texture2D(2, 2);
+        Color average = tint;
+
+        // By area, not by vertex: the chili's little green stem has as many vertices as its whole
+        // red body, and a per-vertex average called it beige.
+        if (readable.LoadImage(System.IO.File.ReadAllBytes(path)))
+        {
+            Mesh mesh = filter.sharedMesh;
+            Vector2[] uvs = mesh.uv;
+            Vector3[] vertices = mesh.vertices;
+            int[] triangles = mesh.triangles;
+
+            Color sum = Color.clear;
+            float area = 0f;
+
+            for (int i = 0; i + 2 < triangles.Length && uvs.Length == vertices.Length; i += 3)
+            {
+                int a = triangles[i], b = triangles[i + 1], c = triangles[i + 2];
+                float size = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]).magnitude;
+                Vector2 uv = (uvs[a] + uvs[b] + uvs[c]) / 3f;
+
+                sum += readable.GetPixelBilinear(uv.x, uv.y) * size;
+                area += size;
+            }
+
+            if (area > 0f)
+            {
+                average = sum / area;
+                average.a = 1f;
+            }
+        }
+
+        Object.DestroyImmediate(readable);
+        return average;
+    }
 
     static void Finish(StringBuilder sb)
     {

@@ -467,6 +467,15 @@ public class Projectile : MonoBehaviour
             if (damage <= 0.5f)
                 continue;
 
+            // Thrown the way a player would be - TrainingDummy's own doc has always said the sandbox
+            // is for "how far does a pineapple actually throw a body", and until it could be shoved
+            // the answer was nowhere. Before the damage, so a dummy that dies still gets the push.
+            if (other is TrainingDummy dummy)
+            {
+                Vector3 push = ((toward.sqrMagnitude > 0.01f ? toward.normalized : Vector3.up) + Vector3.up * 0.6f).normalized;
+                dummy.Shove(push * info.knockback * strength);
+            }
+
             bool fatal = other.TakeDamage(damage, info.name, false);
 
             // Same reasoning as SingleShotGun's own dummy branch - this never reaches

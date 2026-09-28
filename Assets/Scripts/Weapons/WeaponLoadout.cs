@@ -36,8 +36,7 @@ public class WeaponLoadout : MonoBehaviour
     public static string[] AllWeapons => (string[])allWeapons.Clone();
 
     // Gatling is Purple Haze, Flamer is Red Hot Chili Pepper - roles for keys, names on the assets,
-    // like the rest. Both in the deathmatch pool; neither on the gun game ladder yet, since a longer
-    // ladder is a longer gun game and that's a call of its own.
+    // like the rest.
     static readonly string[] allWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple", "Gatling", "Flamer" };
 
     /// Gun game order - weakest first, melee last. Killing with the peel wins the match.
@@ -82,9 +81,16 @@ public class WeaponLoadout : MonoBehaviour
     ///
     /// The peel stays last regardless of any of this. Winning on the melee is the shape of gun
     /// game, and it is meant to be the hard rung rather than the strong one.
+    ///
+    /// Purple Haze and Red Hot Chili Pepper joined 2026-09-28. Purple Haze under Big Mike: it
+    /// does its damage at every range and holds a lane nothing else can, but it's slow to bring
+    /// up and slows you down. The chili under the Split, for the same reason the Split sits
+    /// under Big Mike - it only works close, and inside six metres rather than twenty. Eight rungs:
+    /// two kills on each of the first seven and one with the peel is fifteen kills to win, up from
+    /// eleven.
     /// </summary>
     public static readonly string[] GunGameLadder =
-        { "Pineapple", "Sniper", "Shotgun", "Rifle", "Pistol", "Peel" };
+        { "Pineapple", "Sniper", "Gatling", "Shotgun", "Flamer", "Rifle", "Pistol", "Peel" };
 
     // Resolved from the asset the first time anything asks, then kept. The HUD asks every
     // frame and Resources.Load is not free.

@@ -76,7 +76,7 @@ dodged at range - which is what separates it from the Bunch's hitscan.
 
 | | value | why |
 |---|---|---|
-| spin-up | 0.6s from holding fire (or holding aim) | the commitment - you can't peek with it |
+| spin-up | 1.2s from holding fire (or holding aim) - 0.6s in this plan, doubled after first play ("much slower") | the commitment - you can't peek with it |
 | fire rate | 14 grapes/s at full spin | |
 | damage | 11 per grape, falloff from 20m | 154 DPS, a little under the Bunch's 178 - it trades raw damage for a bigger magazine and a lane it can hold, and every grape still has to reach you |
 | grape speed / drop | 55 m/s, gravity x0.25 | fast enough to track, slow enough to lead at 30m+ |

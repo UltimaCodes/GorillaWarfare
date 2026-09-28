@@ -277,6 +277,7 @@ public class ProbeRunner : MonoBehaviour
         yield return CheckPurpleHazeFires(player);
         yield return CheckPurpleHazeRevsOnAim(player);
         yield return CheckRedHotChiliPepper(player);
+        yield return CheckChiliChars(player);
 
         // ---- what an enemy looks like ----
         // Two weapons, because the pose is different: a pistol is one fist, everything longer
@@ -841,17 +842,24 @@ public class ProbeRunner : MonoBehaviour
         int mostInTheAir = 0;
         float spunSpeed = 1f;
         bool captured = false;
+        bool barrelTurned = false;
 
         // Scaled time throughout - the spin winds on it, and so does the hit freeze every grape
-        // that lands sets off.
+        // that lands sets off. Timed off the asset's own spin-up, so retuning it doesn't break this.
+        float spinUp = gun.Info.spinUp;
+        float quiet = spinUp * 0.8f;
+        float firing = spinUp + 1f;
+        Transform barrel = FindChild(gun.transform, "~spin");
+        Quaternion barrelAtRest = barrel != null ? barrel.localRotation : Quaternion.identity;
+
         float began = Time.time;
-        while (Time.time - began < 1.6f)
+        while (Time.time - began < firing)
         {
             Face(player, cam, ChestOf(dummy));
             gun.Hold(true, false);
             gun.UseHeld();
 
-            if (Time.time - began < 0.45f && gun.Ammo != startAmmo)
+            if (Time.time - began < quiet && gun.Ammo != startAmmo)
                 firedEarly = true;
 
             mostInTheAir = Mathf.Max(mostInTheAir, LightProjectile.Live);
@@ -859,7 +867,10 @@ public class ProbeRunner : MonoBehaviour
             if (gun.Spin >= 1f)
                 spunSpeed = movement.WeaponSpeedMultiplier;
 
-            if (!captured && Time.time - began > 1.1f)
+            if (barrel != null && Quaternion.Angle(barrel.localRotation, barrelAtRest) > 20f)
+                barrelTurned = true;
+
+            if (!captured && Time.time - began > spinUp + 0.5f)
             {
                 captured = true;
                 CaptureComposite("gatling-firing");
@@ -871,8 +882,10 @@ public class ProbeRunner : MonoBehaviour
         int spent = startAmmo - gun.Ammo;
         float dealt = startHealth - dummy.Health;
 
-        Check(!firedEarly, "Purple Haze waits for its barrel", firedEarly ? "fired inside 0.45s" : "nothing before the spin-up");
-        Check(spent > 5, "then it fires", $"{spent} grapes in 1.6s");
+        Check(!firedEarly, "Purple Haze waits for its barrel",
+              firedEarly ? $"fired inside {quiet:F2}s" : $"nothing for {quiet:F2}s of a {spinUp:F1}s spin-up");
+        Check(barrelTurned, "and you can see it winding up", barrel == null ? "no spin node on the model" : "the bunch turns");
+        Check(spent > 5, "then it fires", $"{spent} grapes in {firing:F1}s");
         Check(mostInTheAir > 3, "grapes are real things in the air", $"{mostInTheAir} at once at most");
         Check(dealt > 0f, "grapes hurt what they reach", $"{dealt:F0} damage to a dummy 15m out");
         Check(Mathf.Abs(spunSpeed - gun.Info.spinMoveMultiplier) < 0.05f, "spun up, you walk slowly",
@@ -886,7 +899,7 @@ public class ProbeRunner : MonoBehaviour
     /// already spun - and letting go of everything winds it back down and gives you your legs back.
     IEnumerator CheckPurpleHazeRevsOnAim(PlayerController player)
     {
-        yield return LiveWithTimeLeft(2.5f);
+        yield return LiveWithTimeLeft(3.5f);
 
         // A fresh one - the barrel starts at rest.
         PlayerController.PublishLoadout(new[] { "Gatling" });
@@ -903,8 +916,9 @@ public class ProbeRunner : MonoBehaviour
         }
 
         int ammo = gun.Ammo;
+        float settle = gun.Info.spinUp + 0.2f;
         float began = Time.time;
-        while (Time.time - began < 0.8f)
+        while (Time.time - began < settle)
         {
             gun.Hold(false, true);
             yield return null;
@@ -912,9 +926,10 @@ public class ProbeRunner : MonoBehaviour
 
         Check(gun.Spin >= 1f && gun.Ammo == ammo, "holding aim spins Purple Haze without firing",
               $"spin {gun.Spin:F2}, {ammo - gun.Ammo} grapes spent");
+        Check(gun.Revving, "and everyone else is told it's revving", "Revving rides the player's stream");
 
         began = Time.time;
-        while (Time.time - began < 0.8f)
+        while (Time.time - began < settle)
             yield return null;
 
         Check(gun.Spin <= 0f && Mathf.Approximately(movement.WeaponSpeedMultiplier, 1f),
@@ -997,6 +1012,30 @@ public class ProbeRunner : MonoBehaviour
         Check(nearAfterStream < nearStart, "the flame burns a dummy 4m out", $"{nearStart - nearAfterStream:F0} damage in 1s");
         Check(Mathf.Approximately(far.Health, farStart), "and can't reach one 10m out", $"{farStart - far.Health:F0} damage");
 
+        // Charred where the flame touched it, and only there: some marks, on the near dummy,
+        // none on the far one.
+        BodyChar sootNear = near.GetComponent<BodyChar>();
+        BodyChar sootFar = far.GetComponent<BodyChar>();
+        Check(sootNear != null && sootNear.Showing > 0, "the flame chars the body where it hits",
+              sootNear == null ? "no char on the dummy" : $"{sootNear.Showing} of {BodyChar.Points} marks");
+        Check(sootFar == null || sootFar.Showing == 0, "and not a body it never reached",
+              sootFar == null ? "clean" : $"{sootFar.Showing} marks");
+
+        Afterburn burn = near.GetComponent<Afterburn>();
+        int flames = burn != null && burn.Fire != null ? burn.Fire.particleCount : 0;
+        Check(flames > 10 && burn.Glow != null && burn.Glow.enabled, "a burning body is plainly on fire",
+              burn == null ? "never lit" : $"{flames} flames on it, light {(burn.Glow != null && burn.Glow.enabled ? "on" : "off")}");
+
+        // Close enough to see the char and the fire on it.
+        Vector3 standBack = near.transform.position - direction * 2.2f + Vector3.up * 0.9f;
+        Camera close = new GameObject("~close").AddComponent<Camera>();
+        close.enabled = false;
+        close.fieldOfView = 50f;
+        close.nearClipPlane = 0.05f;
+        close.transform.SetPositionAndRotation(standBack, Quaternion.LookRotation(ChestOf(near) - standBack));
+        SavePixels(ReadPixels(960, 540, close), "flamer-char-body.png", 960, 540);
+        Object.DestroyImmediate(close.gameObject);
+
         // Puffs already in the air still land for half a second, so the afterburn is measured
         // after they're gone.
         began = Time.time;
@@ -1004,7 +1043,6 @@ public class ProbeRunner : MonoBehaviour
             yield return null;
 
         float afterPuffs = near.Health;
-        Afterburn burn = near.GetComponent<Afterburn>();
 
         began = Time.time;
         while (Time.time - began < 2f)
@@ -1013,18 +1051,161 @@ public class ProbeRunner : MonoBehaviour
         Check(burn != null && near.Health < afterPuffs, "afterburn keeps burning after the flame stops",
               burn == null ? "never lit" : $"{afterPuffs - near.Health:F0} more over 2s");
 
-        int fuel = gun.Ammo;
-        gun.Airblast();
-        int afterOne = gun.Ammo;
-        gun.Airblast();
-
-        Check(fuel - afterOne == gun.Info.airblastCost && gun.Ammo == afterOne,
-              "airblast costs its fuel, once per cooldown",
-              $"{fuel} -> {afterOne} -> {gun.Ammo}");
-
         Object.Destroy(near.gameObject);
         Object.Destroy(far.gameObject);
         yield return null;
+    }
+
+    /// <summary>
+    /// Red Hot Chili Pepper's other half. Played along the floor it chars the ground and the grass
+    /// wherever it touches; the airblast throws a dummy - it used to do nothing to one - and kicks
+    /// you back ("the airblast should give you some knockback"), spends its fuel once and not
+    /// again inside its cooldown.
+    /// </summary>
+    IEnumerator CheckChiliChars(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(3.5f);
+
+        PlayerController.PublishLoadout(new[] { "Flamer" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+
+        if (cam == null || gun == null || gun.name != "Flamer" || movement == null)
+        {
+            Check(false, "Red Hot Chili Pepper is in hand again", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        if (!ClearLine(cam, 6f, out Vector3 direction))
+        {
+            Check(false, "room to play the flame on the floor", "every direction is blocked");
+            yield break;
+        }
+
+        // The floor two and a half metres out.
+        Vector3 floor = cam.transform.position + direction * 2.5f;
+        if (Physics.Raycast(floor + Vector3.up * 2f, Vector3.down, out RaycastHit ground, 10f, Hitbox.WorldMask,
+                            QueryTriggerInteraction.Ignore))
+            floor = ground.point;
+
+        int charsBefore = BulletDecal.CharCount;
+        int grassBefore = GrassChar.Live;
+
+        float began = Time.time;
+        while (Time.time - began < 0.7f)
+        {
+            Face(player, cam, floor);
+            gun.Hold(true, false);
+            gun.UseHeld();
+            yield return null;
+        }
+
+        yield return null;
+        CaptureComposite("flamer-char-ground");
+
+        Check(BulletDecal.CharCount > charsBefore, "the flame chars the ground it touches",
+              $"{BulletDecal.CharCount} char marks, {charsBefore} before");
+        Check(GrassChar.Live > grassBefore, "and burns the grass there",
+              $"{GrassChar.Live} burnt patches, {grassBefore} before");
+
+        // Once the flames have gone and the char is still at full strength - the moment the
+        // stream stops, the fire and its light are on top of whatever's under them.
+        began = Time.time;
+        while (Time.time - began < 0.6f)
+            yield return null;
+
+        Vector4[] sent = Shader.GetGlobalVectorArray("_GrassCharPoints");
+        float nearestSent = float.MaxValue;
+        if (sent != null)
+        {
+            for (int i = 0; i < (int)Shader.GetGlobalFloat("_GrassCharCount"); i++)
+                nearestSent = Mathf.Min(nearestSent, Vector3.Distance(sent[i], floor));
+        }
+
+        log.AppendLine($"  ..    grass char sent: {Shader.GetGlobalFloat("_GrassCharCount"):F0} points, nearest "
+                       + $"{nearestSent:F2}m from where the flame was aimed, radius {(sent != null && sent.Length > 0 ? sent[0].w : 0f):F2}");
+        CaptureComposite("flamer-char-ground-after");
+
+        // And close up on the burnt patch itself, from a little above and to one side.
+        if (sent != null && Shader.GetGlobalFloat("_GrassCharCount") > 0.5f)
+        {
+            Vector3 patch = sent[0];
+            Vector3 side = Vector3.Cross(direction, Vector3.up).normalized;
+            Vector3 eye = patch - direction * 2.2f + side * 0.8f + Vector3.up * 1.6f;
+            Camera close = new GameObject("~closeGround").AddComponent<Camera>();
+            close.enabled = false;
+            close.fieldOfView = 55f;
+            close.nearClipPlane = 0.05f;
+            close.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(patch - eye));
+            SavePixels(ReadPixels(960, 540, close), "flamer-char-grass.png", 960, 540);
+            Object.DestroyImmediate(close.gameObject);
+        }
+
+        // Then the airblast, at a dummy 3m out.
+        TrainingDummy target = DummyAt(cam, cam.transform.position + direction * 3f);
+        if (target == null)
+        {
+            Check(false, "a dummy to airblast", "TrainingDummy.Build refused");
+            yield break;
+        }
+
+        yield return null;
+        Face(player, cam, ChestOf(target));
+        yield return null;
+
+        Vector3 dummyFrom = target.transform.position;
+        Vector3 before = movement.Velocity;
+        Vector3 back = -cam.transform.forward;
+
+        int fuel = gun.Ammo;
+        gun.Airblast();
+        int afterOne = gun.Ammo;
+        Vector3 kick = movement.Velocity - before;
+        gun.Airblast();
+
+        Check(fuel - afterOne == gun.Info.airblastCost && gun.Ammo == afterOne,
+              "airblast costs its fuel, once per cooldown", $"{fuel} -> {afterOne} -> {gun.Ammo}");
+        Check(Vector3.Dot(kick, back) > gun.Info.airblastSelfKnockback * 0.8f, "and kicks you back",
+              $"{Vector3.Dot(kick, back):F1} m/s back into you");
+
+        began = Time.time;
+        while (Time.time - began < 0.5f)
+            yield return null;
+
+        float thrown = Vector3.Distance(dummyFrom, target.transform.position);
+        Check(thrown > 1f, "airblast throws a dummy", $"moved {thrown:F1}m in 0.5s");
+
+        Object.Destroy(target.gameObject);
+        movement.ResetVelocity();
+
+        // What it looks like when it's you on fire - your own body isn't drawn, so the flames come
+        // up from the bottom of your view instead. Lit harmlessly: no damage a second.
+        Afterburn self = Afterburn.On(player.gameObject);
+        self.Ignite(1f, 0f, null);
+
+        began = Time.time;
+        while (Time.time - began < 0.5f)
+            yield return null;
+
+        int licks = self.Fire != null ? self.Fire.particleCount : 0;
+        Check(licks > 3, "you can tell you're on fire", $"{licks} flames in your view");
+        CaptureComposite("burning-self");
+        yield return null;
+    }
+
+    static Transform FindChild(Transform root, string name)
+    {
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == name)
+                return t;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -2207,7 +2388,13 @@ public class ProbeRunner : MonoBehaviour
         KeyBinds.HeldOverride.Add(KeyBinds.Action.Grapple);
         typeof(VineGrapple).GetMethod("TryAttach", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(vine, null);
 
+        // Reported 2026-09-28: "the small jump you do when you initially grapple from the ground is
+        // janky". It was an 8 m/s kick on the frame the rope caught; the takeoff is eased in now.
+        float riseAtAttach = movement.Velocity.y;
+
         Check(vine.Attached, "the vine catches a branch", $"clear run {bestClear:F1}m");
+        Check(riseAtAttach < 2f, "the swing lifts off smoothly, not with a hop",
+              $"{riseAtAttach:F1} m/s upward the moment it caught");
 
         // Where the rope actually caught - a point on the branch's surface, not its centre.
         FieldInfo anchorField = typeof(VineGrapple).GetField("anchorWorldPoint", BindingFlags.NonPublic | BindingFlags.Instance);

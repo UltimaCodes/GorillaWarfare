@@ -26,6 +26,20 @@ public static class AlwaysIncludeShaders
         // VineGrapple's rope. Without it a build falls back to Sprites/Default, which is
         // transparent, so the rope silently drops out of the toon outline.
         "Custom/UnlitVertexColor",
+
+        // Built in, but still stripped when no material in the build uses them - and nothing
+        // does: every flash, explosion, impact, flame, burn and scorch in the game makes its
+        // material at runtime from these by name. Missing, each falls back to Sprites/Default,
+        // which blends normally - no additive glow on fire, no darkening on a scorch. Added
+        // 2026-09-28 with the chili's burn and char.
+        "Legacy Shaders/Particles/Additive",
+        "Legacy Shaders/Particles/Alpha Blended",
+        "Legacy Shaders/Particles/Multiply",
+
+        // The chili's char on a body (BodyChar adds it as an extra pass while anything's burnt),
+        // and on the world (BulletDecal.Char).
+        "Custom/CharOverlay",
+        "Custom/CharDecal",
     };
 
     [MenuItem("Tools/Gorilla Warfare/Always-include the custom shaders")]

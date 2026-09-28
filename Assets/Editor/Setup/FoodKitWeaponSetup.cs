@@ -162,8 +162,10 @@ public static class FoodKitWeaponSetup
         gun.projectileSpeed = 55f;
         gun.projectileGravity = 0.25f;
 
-        gun.spinUp = 0.6f;
+        gun.spinUp = 1.2f;   // doubled from the plan's 0.6 on 2026-09-28 - "much slower, its too fast"
         gun.spinMoveMultiplier = 0.6f;
+        gun.standInSound = "Shoot/Rifle";
+        gun.standInPitch = 1.35f;
 
         gun.twoHanded = true;
         gun.canAim = false;   // aim spins the barrel instead
@@ -206,15 +208,20 @@ public static class FoodKitWeaponSetup
         gun.flameSpeed = 14f;
         gun.flameLife = 0.5f;
         gun.flameRadiusStart = 0.2f;
-        gun.flameRadiusEnd = 0.8f;
+        gun.flameRadiusEnd = 1f;
+        gun.flameSpread = 7f;
         gun.flameTipDamage = 0.4f;
         gun.burnPerSecond = 8f;
         gun.burnSeconds = 4f;
 
-        gun.airblastKnockback = 12f;
+        gun.airblastKnockback = 15f;
+        gun.airblastSelfKnockback = 7f;
         gun.airblastCost = 20;
         gun.airblastCooldown = 0.75f;
         gun.airblastRange = 5f;
+
+        gun.standInSound = "AirBrake";
+        gun.standInPitch = 0.7f;
 
         gun.twoHanded = true;
         gun.canAim = false;   // aim is the airblast
@@ -229,7 +236,7 @@ public static class FoodKitWeaponSetup
         gun.verticalKick = 0f;
         gun.horizontalKick = 0f;
         gun.recoilRecovery = 0f;
-        gun.viewKick = 0f;   // a stream, not a string of shots
+        gun.viewKick = 0.12f;   // a rumble while it runs - at 0 it "has no weight"
 
         // The kit's chili lies along Z stem first; turned round so the stem's in your hand and
         // the tip is the nozzle.

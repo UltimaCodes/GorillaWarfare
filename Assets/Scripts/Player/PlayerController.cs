@@ -516,15 +516,20 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
 
     Afterburn afterburn;
 
-    // A remote copy's stream, drawn from the replicated flag rather than sent puff by puff.
+    // A remote copy's stream, drawn from the replicated flag rather than sent puff by puff, and
+    // its gatling's barrel, wound from another.
     bool remoteFlaming;
+    bool remoteRevving;
     float nextRemotePuff;
 
     void EmitRemoteFlame()
     {
         SingleShotGun gun = ActiveGun;
         if (gun != null)
+        {
             gun.RemoteFlaming = remoteFlaming;
+            gun.RemoteRevving = remoteRevving;
+        }
 
         if (!remoteFlaming || gun == null || gun.Info == null || !gun.Info.flame || Time.time < nextRemotePuff)
             return;
@@ -1126,9 +1131,13 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         if (gun == null)
             return;
 
-        // Its own bank when one is sourced; until then the Bunch's shot, pitched up to a pop.
-        GameAudio.PlayAtShaped($"{GameAudio.Shoot}/{weaponName}", origin, GameAudio.ShotVolume * 0.55f, 1f,
-                               $"{GameAudio.Shoot}/Rifle", 1.45f);
+        // Its own bank when one is sourced; until then its stand-in (the Bunch's shot, pitched up).
+        // This used to pass the stand-in as PlayAtShaped's fallback, which never ran: the lookup
+        // falls back to the whole Shoot folder first, so every grape was a random clip from every
+        // weapon - "why do i hear so many explosions" was the Grenada's launch.
+        string bank = GameAudio.ShotBank(weaponName, gun, out float pitch);
+        GameAudio.PlayAtShaped(bank, origin, GameAudio.ShotVolume * 0.4f, pitch * Random.Range(0.96f, 1.04f),
+                               bank, pitch);
 
         SingleShotGun fired = WeaponNamed(weaponName);
         if (fired != null)
@@ -1157,18 +1166,95 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     [PunRPC]
     void RPC_Airblast(Vector3 origin, Vector3 direction)
     {
-        GameAudio.PlayAtShaped(GameAudio.Vine, origin, 0.9f, 0.55f, GameAudio.Wind, 1.6f);
+        GameAudio.PlayAtShaped(GameAudio.Vine, origin, 1f, 0.5f, GameAudio.Wind, 1.6f);
+        Gust(origin, direction);
+    }
 
-        Sprite[] smoke = Resources.LoadAll<Sprite>("Particles/Boom");
-        for (int i = 0; i < 6 && smoke.Length > 0; i++)
+    static Material gustMaterial;
+    static Texture gustTexture;
+
+    /// <summary>
+    /// The airblast you can see: a cone of pale air thrown out along the aim, fast and then
+    /// braking hard, spreading as it goes. It used to be six sprites picked at random from the
+    /// particle sheet with every one that wasn't smoke skipped - one or two puffs, most shots.
+    /// </summary>
+    static void Gust(Vector3 origin, Vector3 direction)
+    {
+        if (gustMaterial == null)
         {
-            Sprite shape = smoke[Random.Range(0, smoke.Length)];
-            if (!shape.name.StartsWith("smoke"))
-                continue;
+            Shader shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended")
+                            ?? Shader.Find("Particles/Alpha Blended")
+                            ?? Shader.Find("Sprites/Default");
+            gustMaterial = new Material(shader) { name = "~gust", enableInstancing = true };
 
-            Vector3 at = origin + direction * (0.5f + i * 0.6f) + Random.insideUnitSphere * 0.25f;
-            FlashSprite.Spawn(shape, at, 0.3f, 1.4f, 0.35f, new Color(1f, 1f, 1f, 0.35f));
+            foreach (Sprite sprite in Resources.LoadAll<Sprite>("Particles/Boom"))
+            {
+                if (sprite.name.StartsWith("smoke"))
+                {
+                    gustTexture = sprite.texture;
+                    break;
+                }
+            }
         }
+
+        GameObject host = new GameObject("~gust");
+        host.transform.SetPositionAndRotation(origin, Quaternion.LookRotation(direction));
+
+        ParticleSystem ps = host.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = false;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(12f, 22f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 2f * Mathf.PI);
+        main.startColor = new Color(0.95f, 0.95f, 0.92f, 1f);
+        main.maxParticles = 40;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)28) });
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 28f;
+        shape.radius = 0.15f;
+
+        ParticleSystem.LimitVelocityOverLifetimeModule brake = ps.limitVelocityOverLifetime;
+        brake.enabled = true;
+        brake.limit = 2f;
+        brake.dampen = 0.3f;
+
+        ParticleSystem.SizeOverLifetimeModule grow = ps.sizeOverLifetime;
+        grow.enabled = true;
+        grow.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.5f), new Keyframe(1f, 2.4f)));
+
+        ParticleSystem.ColorOverLifetimeModule fade = ps.colorOverLifetime;
+        fade.enabled = true;
+        Gradient alpha = new Gradient();
+        alpha.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(0.6f, 0f), new GradientAlphaKey(0f, 1f) });
+        fade.color = alpha;
+
+        ParticleSystemRenderer view = host.GetComponent<ParticleSystemRenderer>();
+        view.renderMode = ParticleSystemRenderMode.Billboard;
+        view.sharedMaterial = gustMaterial;
+        view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        view.receiveShadows = false;
+
+        if (gustTexture != null)
+        {
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            block.SetTexture("_MainTex", gustTexture);
+            view.SetPropertyBlock(block);
+        }
+
+        ps.Play();
     }
 
     /// Thrown by somebody else's airblast. Applied by this body's owner - movement is local.
@@ -1510,6 +1596,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             SingleShotGun gun = ActiveGun;
             stream.SendNext(gun != null && gun.Flaming);
             stream.SendNext(afterburn != null && afterburn.Burning);
+            stream.SendNext(gun != null && gun.Revving);
         }
         else
         {
@@ -1520,6 +1607,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
             bool burning = (bool)stream.ReceiveNext();
             if (afterburn != null)
                 afterburn.ShowBurning(burning);
+
+            remoteRevving = (bool)stream.ReceiveNext();
         }
     }
 

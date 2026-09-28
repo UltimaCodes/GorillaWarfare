@@ -87,6 +87,12 @@ The first round of feedback from people playing it. Worked through in this order
       kick off the ground; letting go keeps the swing's speed. People, dummies and ledge-tops stay a
       pull. Probe-checked (bug-log.md, thirty-sixth pass). **The feel is unplayed** - kick 8 m/s,
       reel 16 m/s, steer 9 m/s², clearance 1.3m are all first guesses, on `VineGrapple`'s inspector.
+- [x] **"Grappling isnt fun anymore, its too physics based now"**, and the takeoff hop was janky
+      (2026-09-29, bug-log.md, forty-first pass). No hop - a takeoff eased up over 0.3s; lighter on the
+      rope (55% gravity); a push the way you're facing along the swing; a taut rope keeps most of its
+      speed instead of throwing it away. **Unplayed** - `swingGravity`, `swingDrive`, `swingKeep`,
+      `liftSpeed` and `liftTime` are the knobs, on `VineGrapple`'s inspector. If it's still wrong,
+      say which way: too floaty, too fast, not enough control.
 - [x] **Buttons that don't work, especially in the crate section.** `MenuButtonAudit` clicked all
       222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
       listener saved into the prefab. Fixed. At 4:3 a few controls fell off the right edge; the
@@ -95,7 +101,7 @@ The first round of feedback from people playing it. Worked through in this order
       section 0): titles, kill effects and wearables - not weapon skins - with a Locker and
       CS2-style collections, earned tokens only. Kept for later.
 - [x] **Purple Haze and Red Hot Chili Pepper** (2026-09-28) - the grape gatling and the chili
-      flamethrower, named after JoJo Stands. Purple Haze fires real grapes after a 0.6s spin-up
+      flamethrower, named after JoJo Stands. Purple Haze fires real grapes after a spin-up (1.2s since 2026-09-29)
       (aim alone revs it) and walks you at 60% while spun; Red Hot Chili Pepper is a 7m stream
       that sets you alight (8/s for 4s, credited to whoever lit you) with an airblast on aim. Both
       in the deathmatch pool and the sandbox. Probe-checked (bug-log.md, fortieth pass). **Unplayed,
@@ -103,8 +109,18 @@ The first round of feedback from people playing it. Worked through in this order
       airblast crossing the network have only run offline. Models are the Food Kit's grapes and
       chili (placeholders like the rest); sounds are stand-ins until real ones are sourced into
       `Audio/Shoot/Gatling` and `Audio/Shoot/Flamer`.
-- [ ] **On the gun game ladder?** Neither is. A longer ladder is a longer gun game - at 2 kills a
-      rung, 8 rungs is 16 kills to win a 10 minute match. Ryaan's call.
+- [x] **First play of both, 2026-09-29** (bug-log.md, forty-first pass). The chili: an airblast
+      that kicks you back and throws dummies, a stream that spreads and sags, a burning body that's
+      plainly on fire, and char where the flame touches - bodies, surfaces and grass - fading back
+      over about 4s. Purple Haze: a 1.2s windup you can see (the bunch spins, for everyone), and the
+      "explosions" were every weapon's clips at random - it borrows the Bunch's shot on purpose now.
+      Still unplayed after the changes, and still unplayed by two people.
+- [ ] **"Decrease mag size to 120"** - Purple Haze's magazine was already 120 (120 in the magazine,
+      one spare). Left as it is; say if a different number was meant.
+- [x] **On the gun game ladder** (2026-09-29): Pineapple, Sniper, Gatling, Shotgun, Flamer, Rifle,
+      Pistol, Peel. 15 kills to win, up from 11.
+- [ ] **Real sounds for both** - still stand-ins (the Bunch's shot pitched up; the air brake's
+      thruster burst, looped). Wants a gatling shot, a spin-up whine and a flamethrower roar.
 - [ ] **The Pomo-Grenade** - the third of the picked weapons, still a plan (ideas.md section 0).
 - [x] **New maps - the plumbing, and a greybox Zoo** (2026-09-28). A map list
       (`Resources/Maps.asset`), a map card in the lobby for the host, Start and late joiners
