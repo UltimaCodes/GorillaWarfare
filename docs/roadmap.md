@@ -94,10 +94,18 @@ The first round of feedback from people playing it. Worked through in this order
 - [ ] **The crates themselves want reworking** - opening one wins nothing yet. Picked (ideas.md
       section 0): titles, kill effects and wearables - not weapon skins - with a Locker and
       CS2-style collections, earned tokens only. Kept for later.
-- [ ] **New weapons** - picked 2026-09-28: a grape gatling with physical projectiles, a TF2-style
-      chili flamethrower with afterburn, a pomegranate cluster grenade, the first two named after
-      JoJo Stands. Planned in ideas.md section 0 (design, names, files, checks, build order). Not
-      started.
+- [x] **Purple Haze and Red Hot Chili Pepper** (2026-09-28) - the grape gatling and the chili
+      flamethrower, named after JoJo Stands. Purple Haze fires real grapes after a 0.6s spin-up
+      (aim alone revs it) and walks you at 60% while spun; Red Hot Chili Pepper is a 7m stream
+      that sets you alight (8/s for 4s, credited to whoever lit you) with an airblast on aim. Both
+      in the deathmatch pool and the sandbox. Probe-checked (bug-log.md, fortieth pass). **Unplayed,
+      and unplayed by two people** - every number is ideas.md's first pass, and the burn and the
+      airblast crossing the network have only run offline. Models are the Food Kit's grapes and
+      chili (placeholders like the rest); sounds are stand-ins until real ones are sourced into
+      `Audio/Shoot/Gatling` and `Audio/Shoot/Flamer`.
+- [ ] **On the gun game ladder?** Neither is. A longer ladder is a longer gun game - at 2 kills a
+      rung, 8 rungs is 16 kills to win a 10 minute match. Ryaan's call.
+- [ ] **The Pomo-Grenade** - the third of the picked weapons, still a plan (ideas.md section 0).
 - [x] **New maps - the plumbing, and a greybox Zoo** (2026-09-28). A map list
       (`Resources/Maps.asset`), a map card in the lobby for the host, Start and late joiners
       loading the room's pick, and the HUD moved into one shared prefab every map gets. The Zoo is
@@ -163,6 +171,8 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
       no two may overlap, and anything that can one-pull a full health player has to pay for it
       in fire rate or range.
 - [x] Melee weapon (Peel) - gun game's final rung
+- [x] Purple Haze (`Gatling`) and Red Hot Chili Pepper (`Flamer`), 2026-09-28 - the first two not
+      made of bananas. See "Player feedback" above.
 - [x] Runtime loadout, so a gamemode can hand out whatever it likes
 - [ ] Per-weapon sounds (the bank-by-name lookup already supports this)
 - [ ] **Better gun audio.** Current clips are thin and clicky - they read as a click, not a bang.
@@ -175,7 +185,9 @@ Banana-shaped guns. Plural — the point is variety, not one gun.
       noticeably louder than a pistol tap (Weight 0.3) rather than identically loud. Muzzle flash
       got the same treatment - `MuzzleFlash.Scale(weight)` sizes the burst, the light and its
       range per weapon, where every gun previously built an identically sized flash regardless of
-      what it fired. The recordings themselves are still thin .22s; a mix-level fix can make the
+      what it fired. (**It didn't actually run until 2026-09-28** - a runtime-built weapon's Awake
+      comes before it's told its GunInfo, so Scale was skipped for every gun; see bug-log.md,
+      fortieth pass. The flashes changed size that day.) The recordings themselves are still thin .22s; a mix-level fix can make the
       big guns louder and flashier than the small ones, it can't make the sample itself sound
       like a shotgun. That still needs bigger source material.
 - [x] **Pistol is the default weapon** (currently index 0 is whatever the prefab ordered)
@@ -208,6 +220,8 @@ read lives in `itemName` on each `GunInfo` asset:
 | Rifle | **The Bunch** | a lot of bananas at once, which is also what it does |
 | Sniper | **Big Mike** | Gros Michel, the cultivar wiped out in the fifties, and longer than a Cavendish |
 | Peel | **Slip Hazard** | what's left after you eat one, and what everyone does about it |
+| Gatling | **Purple Haze** | Fugo's Stand, purple like the grapes, and it fights with virus capsules - a stream of grapes |
+| Flamer | **Red Hot Chili Pepper** | a Part 4 Stand, named after the band, and literally a chili |
 
 ### M2 landed
 

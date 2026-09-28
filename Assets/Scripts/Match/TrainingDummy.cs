@@ -31,6 +31,9 @@ public class TrainingDummy : MonoBehaviour, IDamageable
     Quaternion homeRotation;
     Color tint;
 
+    /// What's left of it - the probe reads this to see a weapon (or a burn) actually landed.
+    public float Health => health;
+
     public static TrainingDummy Build(Vector3 where, Quaternion facing, Color colour)
     {
         GameObject host = new GameObject("~Dummy");

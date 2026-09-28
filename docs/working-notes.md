@@ -25,6 +25,23 @@ then-current default into the prefab immediately, and later changes to the defau
 **`Awake` does not run on `AddComponent` outside play mode.** Anything built by an editor check
 must have an explicit public `Build()`. `MuzzleFlash` and `MonkeyRig` both have one for this.
 
+**In play mode it's the other way round: `AddComponent` runs `Awake` before you can configure
+anything.** `WeaponLoadout` adds a `SingleShotGun` and then calls `Configure` - so the weapon's
+Awake built its model and flash without a GunInfo. `MuzzleFlash.Scale` was skipped for every gun
+for a month, and the food kit models came out unturned. `Configure` now finishes whatever needed
+the GunInfo; anything new in Awake that reads `Info` belongs there too.
+
+**Your weapon is drawn by a second, narrower camera** (`ViewModelCamera`, 55° against the world's
+wider view). On screen it sits lower and further out than where it really is, so anything the world
+camera draws from its tip - fire, smoke - comes out of a point in front of your face. Use
+`SingleShotGun.DrawnTipPosition` for those. Tracers still start from the real tip; nobody's
+noticed, because they last a twentieth of a second.
+
+**In the probe, aim the player, not the camera.** Setting `LocalCamera.transform.rotation` turns
+the view but not the weapon, which follows the body's yaw and the look pitch - shots go the right
+way and every screenshot shows a gun slanted across the frame. `PlayModeProbe.Face` sets the look
+angles the way the mouse does.
+
 **`SetCustomProperties` does not update the local cache in an online room.** It sends an op and
 waits for the server to echo. Read-modify-write inside one round trip silently loses data —
 that's why the master keeps its own score tally in `MatchState` rather than incrementing the
@@ -466,9 +483,12 @@ Closed since, and worth recording why:
   at full shield. `WeaponCheck` plays the roster through the rule rather than dividing.
 - **No `Music/over` track** was never a bug. `MusicPlayer` picks `over ?? lobby ?? menu`, and the
   lobby track is a holding pen, which is exactly what a results screen is.
-- **`AppVersion` empty** is fixed — it's `0.6` now (bumped from `0.5` on 2026-08-22, when the
-  vine's `RPC_Attach`/`RPC_Detach` got added to `RpcList`), so mismatched builds can't see each
-  other's rooms. Bump it whenever the RPC list or a replicated property changes.
+- **`AppVersion` empty** is fixed — it's `0.7` now (`0.6` on 2026-08-22 for the vine's
+  `RPC_Attach`/`RPC_Detach`; `0.7` on 2026-09-28 for Purple Haze and Red Hot Chili Pepper's four
+  RPCs and the two flags they added to the player's stream), so mismatched builds can't see each
+  other's rooms. Bump it whenever the RPC list or a replicated property changes. `SceneCheck` now
+  fails on any `[PunRPC]` missing from `RpcList` - which is how the four were caught, since a
+  missing one still works and says nothing.
 - **"Third-person banana sits at hip height"** was never true, or stopped being true when the
   two-handed poses landed. It measures at 73–77% of body height, which is chest level. Worth
   knowing how that was nearly "fixed": the first measurement used the stand-in's transform as

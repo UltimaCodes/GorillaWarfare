@@ -652,6 +652,69 @@ public static class WeaponCheck
             }
         }
 
+        // ---- Purple Haze and Red Hot Chili Pepper ----
+        //
+        // In the deathmatch pool and the sandbox, not on the ladder - so nothing above, which
+        // walks the ladder, has looked at them.
+        sb.AppendLine("[gun] ---------- purple haze, red hot chili pepper ----------");
+        GunInfo haze = Resources.Load<GunInfo>("Guns/Gatling");
+        GunInfo chili = Resources.Load<GunInfo>("Guns/Flamer");
+        Check(sb, haze != null, "Purple Haze asset loads", haze != null ? haze.itemName : "missing");
+        Check(sb, chili != null, "Red Hot Chili Pepper asset loads", chili != null ? chili.itemName : "missing");
+
+        foreach (string key in new[] { "Gatling", "Flamer" })
+        {
+            Check(sb, System.Array.IndexOf(WeaponLoadout.AllWeapons, key) >= 0, $"{key} is in the deathmatch pool", "");
+            Check(sb, System.Array.IndexOf(WeaponLoadout.Everything, key) >= 0, $"{key} is in the sandbox", "");
+            Check(sb, Weapon<GameObject>(key) != null, $"{key} has a model", $"Models/Weapons/{key}");
+            Check(sb, Weapon<Material>(key, "Mat") != null, $"{key} has a material", $"Models/Weapons/{key}Mat");
+        }
+
+        // The jolt back at you is the same size every shot and recovers at one rate, so it piles
+        // up with fire rate. At the Bunch's rate it settles at a few centimetres; Purple Haze at
+        // full kick held the model in your face and Red Hot Chili Pepper swung it up 25 degrees.
+        foreach (string key in WeaponLoadout.Everything)
+        {
+            GunInfo g = Resources.Load<GunInfo>(WeaponLoadout.GunResourcePath + key);
+            if (g == null || g.melee || !g.automatic)
+                continue;
+
+            float kicksPerSecond = g.fireRate * g.viewKick;
+            Check(sb, kicksPerSecond <= 9f, $"{key}'s kick doesn't pile up",
+                  $"{g.fireRate:F1}/s x {g.viewKick:F2} = {kicksPerSecond:F1} full kicks a second");
+        }
+
+        if (haze != null && rifle != null)
+        {
+            // It trades raw damage for the magazine and a lane it can hold - it has to lose the
+            // straight damage race to the Bunch, but not by so much it's the worse gun outright.
+            float hazeDps = haze.DamageAtRange(10f) * haze.fireRate;
+            float bunchDps = rifle.DamageAtRange(10f) * rifle.fireRate;
+            float ratio = hazeDps / bunchDps;
+            Check(sb, ratio >= 0.8f && ratio <= 1f, "Purple Haze sits just under the Bunch",
+                  $"{hazeDps:F0} DPS at 10m vs {bunchDps:F0} ({ratio:P0})");
+            Check(sb, haze.magazineSize >= 100, "Purple Haze has the big magazine", $"{haze.magazineSize}");
+            Check(sb, haze.spinUp >= 0.4f, "Purple Haze has to spin up", $"{haze.spinUp:F2}s");
+            Check(sb, haze.spinMoveMultiplier < 0.8f, "spun up, it walks slowly", $"x{haze.spinMoveMultiplier:F2}");
+            Check(sb, haze.pelletProjectile && !haze.projectile, "grapes fly, and don't explode",
+                  $"pellet {haze.pelletProjectile}, shell {haze.projectile}");
+        }
+
+        if (chili != null)
+        {
+            // A close-range weapon that can't be used at range at all.
+            float reach = chili.flameSpeed * chili.flameLife;
+            Check(sb, reach < 8f && reach > 4f, "the flame is short", $"{reach:F1}m");
+            Check(sb, chili.flame && chili.burnPerSecond > 0f && chili.burnSeconds > 0f,
+                  "the flame sets you alight", $"{chili.burnPerSecond:F0}/s for {chili.burnSeconds:F0}s");
+            Check(sb, chili.airblastKnockback > 0f && chili.airblastCost < chili.magazineSize,
+                  "it has an airblast", $"{chili.airblastKnockback:F0} m/s for {chili.airblastCost} fuel");
+
+            float pointBlank = chili.damage * chili.fireRate;
+            Check(sb, pointBlank > 80f && pointBlank < 140f, "point blank it wins a fight",
+                  $"{pointBlank:F0} DPS, {pointBlank * chili.flameTipDamage:F0} at the tip");
+        }
+
         Finish(sb);
     }
 

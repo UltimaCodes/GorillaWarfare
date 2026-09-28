@@ -149,6 +149,9 @@ public class PlayerMovement : MonoBehaviour
     /// The multiplier currently applied to ground speed.
     public float AdrenalineSpeed => 1f + adrenaline * 0.28f;
 
+    /// Set by the weapon in your hands - Purple Haze spun up walks you at 60%. 1 otherwise.
+    public float WeaponSpeedMultiplier { get; set; } = 1f;
+
     public void AddImpulse(Vector3 impulse)
     {
         velocity += impulse;
@@ -599,7 +602,7 @@ public class PlayerMovement : MonoBehaviour
 
         Vector3 wishDir = WishDirection();
 
-        float wishSpeed = (crouching ? crouchSpeed : maxGroundSpeed) * AdrenalineSpeed;
+        float wishSpeed = (crouching ? crouchSpeed : maxGroundSpeed) * AdrenalineSpeed * WeaponSpeedMultiplier;
 
         if (grounded)
         {

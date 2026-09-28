@@ -29,7 +29,24 @@ The bugs and the vine swing from that round are done (roadmap.md, "Player feedba
 are design calls, so they're written up as options with a recommendation rather than built on a
 guess.
 
-### New weapons - picked 2026-09-28, planned, not built
+### New weapons - picked 2026-09-28; the gatling and the flamethrower built the same day
+
+**Built:** Purple Haze and Red Hot Chili Pepper, with the numbers below (roadmap.md, "Player
+feedback"; bug-log.md, fortieth pass). **Still a plan:** the Pomo-Grenade, and with it `Blast`
+(task 1 below - nothing else needed it). Where the build went a different way from this plan:
+
+- No `GatlingSpin.cs` or `FlameStream.cs`: the spin, the stream and the airblast are a few dozen
+  lines each inside `SingleShotGun`, next to the fire paths they branch from, and the triggers
+  arrive through a new `SingleShotGun.Hold(fire, aim)` from PlayerController every frame.
+- **One message a grape**, not a batched `RPC_GrapesFired` - 14 a second against the Bunch's 8.5.
+  Batching is the step if a full room ever shows it.
+- The fuel is the magazine: 200, one a puff, 25 puffs a second; "3s refill" is a 3s reload with
+  5 spare tanks.
+- Airblast shoves players only - a dummy has no movement to shove. Reflecting projectiles is still
+  the second step.
+- Flames don't headshot and don't hit-freeze; the marker and the number come four times a second.
+- The models are the Food Kit's grapes and pepper (CC0), turned into the hand by two new GunInfo
+  fields, `modelRotation` and `modelScale`.
 
 The first candidate list (Peel Slick, Chest Beat and so on) was turned down: "gimmick abilities
 youd use", not weapons you can win a free-for-all with. Picked instead: **a grape gatling with
@@ -41,7 +58,8 @@ scoped, and reaches across the whole arena; the Grenada is 105 on a direct hit b
 time, and does its best work against someone with a wall behind them. A flat open field is Big Mike's
 ideal map and the Grenada's worst - new maps with cover and height fix more of it than any number.
 
-**Names: JoJo references** (Ryaan's call, 2026-09-28 - still a plan). Suggestions:
+**Names: JoJo references** (Ryaan's call, 2026-09-28 - Purple Haze and Red Hot Chili Pepper are
+in the game under those names). The suggestions:
 
 - the gatling: **Purple Haze** - Fugo's Stand, purple like the grapes, and it fights by firing the
   virus capsules on its knuckles, which is what a stream of grapes looks like. Runner-up: **Hermit

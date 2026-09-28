@@ -505,10 +505,32 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // anybody carries. Publishing from here as well meant two writers to one property, and
         // a late joiner's spawn would land on top of the loadout the master had just sent them.
 
+        // Both copies: the owner's burns, everyone else's shows the flames.
+        afterburn = Afterburn.On(gameObject);
+
         // Both copies. Everyone needs the models - it is how you tell what someone is holding -
         // and only the owner's are allowed to fire. This used to run for the owner alone, so
         // remote players were left carrying whatever the prefab happened to ship with.
         BuildLoadout();
+    }
+
+    Afterburn afterburn;
+
+    // A remote copy's stream, drawn from the replicated flag rather than sent puff by puff.
+    bool remoteFlaming;
+    float nextRemotePuff;
+
+    void EmitRemoteFlame()
+    {
+        SingleShotGun gun = ActiveGun;
+        if (gun != null)
+            gun.RemoteFlaming = remoteFlaming;
+
+        if (!remoteFlaming || gun == null || gun.Info == null || !gun.Info.flame || Time.time < nextRemotePuff)
+            return;
+
+        nextRemotePuff = Time.time + gun.Info.SecondsBetweenShots;
+        gun.EmitFlameVisual(cameraHolder != null ? cameraHolder.transform.forward : transform.forward);
     }
 
     void OnDestroy()
@@ -535,6 +557,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             ApplyRemoteLook();
             FeedRig();
+            EmitRemoteFlame();
             return;
         }
 
@@ -625,6 +648,16 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         // state, which is what broke "the weapon is out of the way" while scoped.
         if (grappling && held is SingleShotGun heldVisual)
             heldVisual.SetVisible(false);
+
+        // Purple Haze winds up on either trigger; Red Hot Chili Pepper's aim is its airblast.
+        if (held is SingleShotGun active)
+        {
+            active.Hold(!grappling && KeyBinds.Held(KeyBinds.Action.Fire), !grappling && (AimInputOverride ?? aimInput));
+
+            if (!grappling && KeyBinds.Pressed(KeyBinds.Action.Aim)
+                && active.Info != null && active.Info.airblastKnockback > 0f)
+                active.Airblast();
+        }
 
         if (!grappling && KeyBinds.Pressed(KeyBinds.Action.Fire))
         {
@@ -1075,6 +1108,113 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         PV.RPC(nameof(RPC_ProjectileFired), RpcTarget.All, weaponName, origin, direction);
     }
 
+    /// <summary>
+    /// One of Purple Haze's grapes: sent like a shell, flown by everyone, resolved only by the
+    /// shooter. One message a grape - fourteen a second, against the Bunch's eight and a half per
+    /// bullet - which is fine for the rooms this game runs; batching them is the next step if it
+    /// ever isn't.
+    /// </summary>
+    public void ReportPellet(string weaponName, Vector3 origin, Vector3 direction)
+    {
+        PV.RPC(nameof(RPC_PelletFired), RpcTarget.All, weaponName, origin, direction);
+    }
+
+    [PunRPC]
+    void RPC_PelletFired(string weaponName, Vector3 origin, Vector3 direction)
+    {
+        GunInfo gun = Resources.Load<GunInfo>($"Guns/{weaponName}");
+        if (gun == null)
+            return;
+
+        // Its own bank when one is sourced; until then the Bunch's shot, pitched up to a pop.
+        GameAudio.PlayAtShaped($"{GameAudio.Shoot}/{weaponName}", origin, GameAudio.ShotVolume * 0.55f, 1f,
+                               $"{GameAudio.Shoot}/Rifle", 1.45f);
+
+        SingleShotGun fired = WeaponNamed(weaponName);
+        if (fired != null)
+            fired.FlashMuzzle();
+
+        LightProjectile.FirePellet(gun, origin, direction, this, PV.IsMine ? fired : null);
+    }
+
+    SingleShotGun WeaponNamed(string weaponName)
+    {
+        foreach (SingleShotGun gun in GetComponentsInChildren<SingleShotGun>(true))
+        {
+            if (gun.name == weaponName)
+                return gun;
+        }
+
+        return null;
+    }
+
+    /// Red Hot Chili Pepper's airblast went off - everyone sees the gust and hears it.
+    public void ReportAirblast(Vector3 origin, Vector3 direction)
+    {
+        PV.RPC(nameof(RPC_Airblast), RpcTarget.All, origin, direction);
+    }
+
+    [PunRPC]
+    void RPC_Airblast(Vector3 origin, Vector3 direction)
+    {
+        GameAudio.PlayAtShaped(GameAudio.Vine, origin, 0.9f, 0.55f, GameAudio.Wind, 1.6f);
+
+        Sprite[] smoke = Resources.LoadAll<Sprite>("Particles/Boom");
+        for (int i = 0; i < 6 && smoke.Length > 0; i++)
+        {
+            Sprite shape = smoke[Random.Range(0, smoke.Length)];
+            if (!shape.name.StartsWith("smoke"))
+                continue;
+
+            Vector3 at = origin + direction * (0.5f + i * 0.6f) + Random.insideUnitSphere * 0.25f;
+            FlashSprite.Spawn(shape, at, 0.3f, 1.4f, 0.35f, new Color(1f, 1f, 1f, 0.35f));
+        }
+    }
+
+    /// Thrown by somebody else's airblast. Applied by this body's owner - movement is local.
+    public void Shove(Vector3 impulse)
+    {
+        PV.RPC(nameof(RPC_Shove), PV.Owner, impulse);
+    }
+
+    [PunRPC]
+    void RPC_Shove(Vector3 impulse)
+    {
+        if (PV.IsMine && !dead)
+            Launch(impulse);
+    }
+
+    /// Set alight by Red Hot Chili Pepper. The burn runs on this body's owner, who keeps its health.
+    public void Ignite(float seconds, float perSecond)
+    {
+        PV.RPC(nameof(RPC_Ignite), PV.Owner, seconds, perSecond);
+    }
+
+    [PunRPC]
+    void RPC_Ignite(float seconds, float perSecond, PhotonMessageInfo info)
+    {
+        if (PV.IsMine && !dead && afterburn != null)
+            afterburn.Ignite(seconds, perSecond, info.Sender);
+    }
+
+    /// <summary>
+    /// A tick of afterburn, on the owner's own client. Like RPC_TakeDamage but lighter - no
+    /// stagger, no damage arrow, a quieter hurt - and the kill goes to whoever lit you, so a burn
+    /// that finishes someone after they broke away still counts.
+    /// </summary>
+    public void TakeBurn(float damage, Player igniter)
+    {
+        if (!PV.IsMine || dead || IsProtected)
+            return;
+
+        currentHealth = Absorb(currentHealth, damage);
+        GameAudio.Play2D(GameAudio.Hurt, GameAudio.HurtVolume * 0.4f, 0.1f);
+        Juice.Shake(0.08f);
+
+        if (currentHealth <= 0f)
+            Die(igniter, "Flamer", false);
+    }
+
     [PunRPC]
     void RPC_ProjectileFired(string weaponName, Vector3 origin, Vector3 direction, PhotonMessageInfo info)
     {
@@ -1185,10 +1325,10 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
     const float kickPitch = 9f;
     const float kickRecovery = 9f;
 
-    public void AddRecoil(Vector2 kick, float recovery, float speed)
+    public void AddRecoil(Vector2 kick, float recovery, float speed, float jolt = 1f)
     {
-        viewKick += new Vector3(0f, kickRise, -kickBack);
-        rotationKick += new Vector3(-kickPitch, 0f, 0f);
+        viewKick += new Vector3(0f, kickRise, -kickBack) * jolt;
+        rotationKick += new Vector3(-kickPitch, 0f, 0f) * jolt;
 
         recoilTarget += kick;
         recoilRecovery = recovery;
@@ -1364,11 +1504,22 @@ public class PlayerController : MonoBehaviourPunCallbacks, IDamageable, IPunObse
         {
             stream.SendNext(verticalLookRotation);
             stream.SendNext(IsProtected);
+
+            // Red Hot Chili Pepper's stream and anyone's afterburn - two bools on the existing
+            // stream, instead of a message per puff or per tick.
+            SingleShotGun gun = ActiveGun;
+            stream.SendNext(gun != null && gun.Flaming);
+            stream.SendNext(afterburn != null && afterburn.Burning);
         }
         else
         {
             remoteVerticalLook = (float)stream.ReceiveNext();
             remoteProtected = (bool)stream.ReceiveNext();
+            remoteFlaming = (bool)stream.ReceiveNext();
+
+            bool burning = (bool)stream.ReceiveNext();
+            if (afterburn != null)
+                afterburn.ShowBurning(burning);
         }
     }
 

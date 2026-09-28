@@ -38,6 +38,16 @@ public class Hitbox : MonoBehaviour
         return target.TakeDamage(baseDamage * multiplier, weapon, IsHead);
     }
 
+    /// The same damage wherever it lands, never a headshot - for fire, which doesn't aim and
+    /// shouldn't do double on whoever's head it happened to touch first.
+    public bool ApplyFlat(float damage, string weapon)
+    {
+        if (target == null)
+            return false;
+
+        return target.TakeDamage(damage, weapon, false);
+    }
+
     /// <summary>
     /// Builds a set of hitboxes onto a rig. Sphere colliders because the gorilla's limbs are
     /// short and thick - a capsule per bone would be more accurate and much fiddlier to aim at,

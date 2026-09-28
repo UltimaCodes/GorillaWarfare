@@ -17,7 +17,7 @@ MonoBehaviour:
     AppIdFusion: 
     AppIdChat: 
     AppIdVoice: 
-    AppVersion: 0.6
+    AppVersion: 0.7
     UseNameServer: 1
     FixedRegion: uae
     Server: 
@@ -46,6 +46,10 @@ MonoBehaviour:
   - RPC_AirBrakeImpact
   - RPC_LedgeHopImpact
   - RPC_WallSmashImpact
+  - RPC_PelletFired
+  - RPC_Airblast
+  - RPC_Shove
+  - RPC_Ignite
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

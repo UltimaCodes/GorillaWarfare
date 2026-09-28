@@ -376,6 +376,28 @@ public static class SceneCheck
 
         if (string.IsNullOrEmpty(PhotonNetwork.PhotonServerSettings.AppSettings.AppVersion))
             Failures.Add("AppVersion is empty - mismatched builds will share rooms and desync");
+
+        // Every RPC the game declares is in the shortcut list. One that isn't still works - PUN
+        // sends its name as a string instead - which is exactly why four went in without anyone
+        // noticing, and why nobody bumped AppVersion for them either. Adding one here is the
+        // reminder: append it (never insert - the list's order is the wire format) and bump
+        // AppVersion so a build without it can't share a room with one that has it.
+        List<string> listed = PhotonNetwork.PhotonServerSettings.RpcList;
+        foreach (System.Type type in typeof(PlayerController).Assembly.GetTypes())
+        {
+            if (type.Namespace != null && type.Namespace.StartsWith("Photon"))
+                continue;
+
+            foreach (System.Reflection.MethodInfo method in type.GetMethods(
+                         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+                         | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+                         | System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                if (method.IsDefined(typeof(PunRPC), false) && !listed.Contains(method.Name))
+                    Failures.Add($"{type.Name}.{method.Name} is an RPC missing from PhotonServerSettings' RpcList "
+                                 + "- append it and bump AppVersion");
+            }
+        }
     }
 
     static void CheckMenuScene()

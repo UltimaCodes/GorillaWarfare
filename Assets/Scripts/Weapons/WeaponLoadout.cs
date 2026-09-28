@@ -35,7 +35,10 @@ public class WeaponLoadout : MonoBehaviour
     /// </summary>
     public static string[] AllWeapons => (string[])allWeapons.Clone();
 
-    static readonly string[] allWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple" };
+    // Gatling is Purple Haze, Flamer is Red Hot Chili Pepper - roles for keys, names on the assets,
+    // like the rest. Both in the deathmatch pool; neither on the gun game ladder yet, since a longer
+    // ladder is a longer gun game and that's a call of its own.
+    static readonly string[] allWeapons = { "Pistol", "Shotgun", "Rifle", "Sniper", "Pineapple", "Gatling", "Flamer" };
 
     /// Gun game order - weakest first, melee last. Killing with the peel wins the match.
     // The launcher sits second from the top: harder than everything before it and a genuine
@@ -44,11 +47,25 @@ public class WeaponLoadout : MonoBehaviour
     /// <summary>
     /// Literally everything, melee included. Only the sandbox uses this.
     ///
-    /// Built from the ladder rather than listed again, so a weapon added to the game turns up
-    /// here without anybody remembering to add it - which is exactly the sort of thing nobody
-    /// remembers.
+    /// Built from the ladder and the deathmatch pool rather than listed again, so a weapon added
+    /// to the game turns up here without anybody remembering to add it - which is exactly the sort
+    /// of thing nobody remembers. The pool as well as the ladder: a weapon can be in the game
+    /// before it's on the ladder, and the sandbox is where it gets tried.
     /// </summary>
-    public static string[] Everything => (string[])GunGameLadder.Clone();
+    public static string[] Everything
+    {
+        get
+        {
+            List<string> all = new List<string>(GunGameLadder);
+            foreach (string weapon in allWeapons)
+            {
+                if (!all.Contains(weapon))
+                    all.Add(weapon);
+            }
+
+            return all.ToArray();
+        }
+    }
 
     /// <summary>
     /// The gun game ladder, strongest first.

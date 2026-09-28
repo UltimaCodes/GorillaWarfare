@@ -273,11 +273,21 @@ public class ProbeRunner : MonoBehaviour
         // ---- aiming down the banana ----
         yield return CheckAimingDownSights(player);
 
+        // ---- Purple Haze and Red Hot Chili Pepper ----
+        yield return CheckPurpleHazeFires(player);
+        yield return CheckPurpleHazeRevsOnAim(player);
+        yield return CheckRedHotChiliPepper(player);
+
         // ---- what an enemy looks like ----
         // Two weapons, because the pose is different: a pistol is one fist, everything longer
         // wants a second hand on it.
         yield return CheckEnemyIsVisible(player, "Rifle");
         yield return CheckEnemyIsVisible(player, "Pistol");
+
+        // The food kit's two, turned into the hand rather than modelled for it - the one view
+        // that shows from outside which way round they're held.
+        yield return CheckEnemyIsVisible(player, "Gatling");
+        yield return CheckEnemyIsVisible(player, "Flamer");
 
         // ---- dying ----
         yield return CheckDeathAndRespawn();
@@ -713,6 +723,340 @@ public class ProbeRunner : MonoBehaviour
         Capture(null, "firing");
 
         yield return null;
+    }
+
+    /// <summary>
+    /// A direction from the eye with nothing in the way for `distance` metres, flat - the probe
+    /// spawns wherever the match puts it, and a fixed direction points into a tree half the time.
+    /// </summary>
+    static bool ClearLine(Camera cam, float distance, out Vector3 direction)
+    {
+        for (int i = 0; i < 24; i++)
+        {
+            Vector3 candidate = Quaternion.Euler(0f, i * 15f, 0f) * cam.transform.forward;
+            candidate.y = 0f;
+            candidate.Normalize();
+
+            if (!Physics.SphereCast(cam.transform.position, 0.4f, candidate, out _, distance + 1.5f,
+                                    Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            {
+                direction = candidate;
+                return true;
+            }
+        }
+
+        direction = cam.transform.forward;
+        return false;
+    }
+
+    /// A dummy standing on whatever is under that point, facing the camera - dropped the way the
+    /// sandbox drops its own.
+    static TrainingDummy DummyAt(Camera cam, Vector3 point)
+    {
+        Vector3 at = point;
+        if (Physics.Raycast(point + Vector3.up * 4f, Vector3.down, out RaycastHit ground, 20f,
+                            Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            at = ground.point + Vector3.up;
+
+        Vector3 facing = cam.transform.position - at;
+        facing.y = 0f;
+        return TrainingDummy.Build(at, Quaternion.LookRotation(facing.sqrMagnitude > 0.01f ? facing : Vector3.forward),
+                                   Color.white);
+    }
+
+    // The chest of a dummy - its origin is a metre off the ground, about the hips.
+    static Vector3 ChestOf(TrainingDummy dummy) => dummy.transform.position + Vector3.up * 0.35f;
+
+    /// <summary>
+    /// Points the player at something the way the mouse does - body yaw and look pitch, which
+    /// Look() puts back every frame - rather than turning the camera on its own. The weapon
+    /// follows the body and the pitch, not the camera, so turning just the camera leaves it
+    /// pointing somewhere else: shots still go where the camera looks, but a render shows a gun
+    /// slanted across the screen in a way nobody playing ever sees.
+    /// </summary>
+    static void Face(PlayerController player, Camera cam, Vector3 target)
+    {
+        cam.transform.localRotation = Quaternion.identity;
+
+        Vector3 to = target - cam.transform.position;
+        Vector3 flat = new Vector3(to.x, 0f, to.z);
+        if (flat.sqrMagnitude < 0.0001f)
+            return;
+
+        float yaw = Quaternion.LookRotation(flat).eulerAngles.y;
+        float pitch = -Mathf.Atan2(to.y, flat.magnitude) * Mathf.Rad2Deg;
+
+        Set(player, "horizontalLookRotation", yaw);
+        Set(player, "verticalLookRotation", pitch);
+
+        // Now as well as on the next Look, so a shot this frame already goes the right way.
+        player.transform.localEulerAngles = new Vector3(0f, yaw, 0f);
+        GameObject holder = Get<GameObject>(player, "cameraHolder");
+        if (holder != null)
+            holder.transform.localEulerAngles = new Vector3(pitch, 0f, 0f);
+    }
+
+    /// <summary>
+    /// Purple Haze, driven the way PlayerController drives it - the triggers reported through Hold
+    /// every frame, the shot through UseHeld - at a dummy 15m out. Grapes have to wait for the
+    /// barrel, have to be real things in the air rather than a trace, have to hurt what they
+    /// reach, and while it's spun you walk at its slower speed.
+    /// </summary>
+    IEnumerator CheckPurpleHazeFires(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(4.5f);
+
+        PlayerController.PublishLoadout(new[] { "Gatling" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+
+        if (cam == null || gun == null || gun.name != "Gatling" || movement == null)
+        {
+            Check(false, "Purple Haze is in hand", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        if (!ClearLine(cam, 15f, out Vector3 direction))
+        {
+            Check(false, "room for a dummy 15m out", "every direction is blocked");
+            yield break;
+        }
+
+        TrainingDummy dummy = DummyAt(cam, cam.transform.position + direction * 15f);
+        if (dummy == null)
+        {
+            Check(false, "a dummy for Purple Haze", "TrainingDummy.Build refused");
+            yield break;
+        }
+
+        yield return null;
+
+        float startHealth = dummy.Health;
+        int startAmmo = gun.Ammo;
+        bool firedEarly = false;
+        int mostInTheAir = 0;
+        float spunSpeed = 1f;
+        bool captured = false;
+
+        // Scaled time throughout - the spin winds on it, and so does the hit freeze every grape
+        // that lands sets off.
+        float began = Time.time;
+        while (Time.time - began < 1.6f)
+        {
+            Face(player, cam, ChestOf(dummy));
+            gun.Hold(true, false);
+            gun.UseHeld();
+
+            if (Time.time - began < 0.45f && gun.Ammo != startAmmo)
+                firedEarly = true;
+
+            mostInTheAir = Mathf.Max(mostInTheAir, LightProjectile.Live);
+
+            if (gun.Spin >= 1f)
+                spunSpeed = movement.WeaponSpeedMultiplier;
+
+            if (!captured && Time.time - began > 1.1f)
+            {
+                captured = true;
+                CaptureComposite("gatling-firing");
+            }
+
+            yield return null;
+        }
+
+        int spent = startAmmo - gun.Ammo;
+        float dealt = startHealth - dummy.Health;
+
+        Check(!firedEarly, "Purple Haze waits for its barrel", firedEarly ? "fired inside 0.45s" : "nothing before the spin-up");
+        Check(spent > 5, "then it fires", $"{spent} grapes in 1.6s");
+        Check(mostInTheAir > 3, "grapes are real things in the air", $"{mostInTheAir} at once at most");
+        Check(dealt > 0f, "grapes hurt what they reach", $"{dealt:F0} damage to a dummy 15m out");
+        Check(Mathf.Abs(spunSpeed - gun.Info.spinMoveMultiplier) < 0.05f, "spun up, you walk slowly",
+              $"x{spunSpeed:F2} move speed");
+
+        Object.Destroy(dummy.gameObject);
+        yield return null;
+    }
+
+    /// Holding aim alone winds the barrel without spending a grape - TF2's rev, waiting at a corner
+    /// already spun - and letting go of everything winds it back down and gives you your legs back.
+    IEnumerator CheckPurpleHazeRevsOnAim(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(2.5f);
+
+        // A fresh one - the barrel starts at rest.
+        PlayerController.PublishLoadout(new[] { "Gatling" });
+        yield return null;
+        yield return null;
+
+        SingleShotGun gun = player.ActiveGun;
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+
+        if (gun == null || gun.name != "Gatling" || movement == null)
+        {
+            Check(false, "Purple Haze is in hand to rev", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        int ammo = gun.Ammo;
+        float began = Time.time;
+        while (Time.time - began < 0.8f)
+        {
+            gun.Hold(false, true);
+            yield return null;
+        }
+
+        Check(gun.Spin >= 1f && gun.Ammo == ammo, "holding aim spins Purple Haze without firing",
+              $"spin {gun.Spin:F2}, {ammo - gun.Ammo} grapes spent");
+
+        began = Time.time;
+        while (Time.time - began < 0.8f)
+            yield return null;
+
+        Check(gun.Spin <= 0f && Mathf.Approximately(movement.WeaponSpeedMultiplier, 1f),
+              "letting go winds it down", $"spin {gun.Spin:F2}, x{movement.WeaponSpeedMultiplier:F2} move speed");
+    }
+
+    /// <summary>
+    /// Red Hot Chili Pepper: a second of flame at two dummies on one line, 4m and 10m out. The
+    /// near one burns and the far one is out of reach; after the stream stops, the near one keeps
+    /// burning (afterburn). Then the airblast spends its fuel once, and not again inside its
+    /// cooldown.
+    /// </summary>
+    IEnumerator CheckRedHotChiliPepper(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(4.5f);
+
+        PlayerController.PublishLoadout(new[] { "Flamer" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+
+        if (cam == null || gun == null || gun.name != "Flamer")
+        {
+            Check(false, "Red Hot Chili Pepper is in hand", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        if (!ClearLine(cam, 10f, out Vector3 direction))
+        {
+            Check(false, "room for dummies 10m out", "every direction is blocked");
+            yield break;
+        }
+
+        TrainingDummy near = DummyAt(cam, cam.transform.position + direction * 4f);
+        TrainingDummy far = DummyAt(cam, cam.transform.position + direction * 10f);
+        if (near == null || far == null)
+        {
+            Check(false, "dummies for Red Hot Chili Pepper", "TrainingDummy.Build refused");
+            yield break;
+        }
+
+        yield return null;
+
+        float nearStart = near.Health;
+        float farStart = far.Health;
+        bool flamingSeen = false;
+        bool captured = false;
+
+        float began = Time.time;
+        while (Time.time - began < 1f)
+        {
+            Face(player, cam, ChestOf(near));
+            gun.Hold(true, false);
+            gun.UseHeld();
+            flamingSeen |= gun.Flaming;
+
+            if (!captured && Time.time - began > 0.6f)
+            {
+                captured = true;
+                CaptureComposite("flamer-stream");
+                CheckStreamLeavesTheNozzle(cam, gun);
+
+                // Volume rather than isPlaying - the probe's audio is muted and a batch run may
+                // have no device, but the source still eases up when the stream is on.
+                AudioSource roar = gun.GetComponent<AudioSource>();
+                Check(roar != null && roar.volume > 0.05f, "the stream roars",
+                      roar == null ? "no sound on the weapon" : $"{roar.clip.name} at {roar.volume:F2}");
+            }
+
+            yield return null;
+        }
+
+        // A frame for the last puffs to stop counting as the stream.
+        yield return null;
+        float nearAfterStream = near.Health;
+
+        Check(flamingSeen, "holding fire lights the stream", "Flaming went true");
+        Check(nearAfterStream < nearStart, "the flame burns a dummy 4m out", $"{nearStart - nearAfterStream:F0} damage in 1s");
+        Check(Mathf.Approximately(far.Health, farStart), "and can't reach one 10m out", $"{farStart - far.Health:F0} damage");
+
+        // Puffs already in the air still land for half a second, so the afterburn is measured
+        // after they're gone.
+        began = Time.time;
+        while (Time.time - began < 0.6f)
+            yield return null;
+
+        float afterPuffs = near.Health;
+        Afterburn burn = near.GetComponent<Afterburn>();
+
+        began = Time.time;
+        while (Time.time - began < 2f)
+            yield return null;
+
+        Check(burn != null && near.Health < afterPuffs, "afterburn keeps burning after the flame stops",
+              burn == null ? "never lit" : $"{afterPuffs - near.Health:F0} more over 2s");
+
+        int fuel = gun.Ammo;
+        gun.Airblast();
+        int afterOne = gun.Ammo;
+        gun.Airblast();
+
+        Check(fuel - afterOne == gun.Info.airblastCost && gun.Ammo == afterOne,
+              "airblast costs its fuel, once per cooldown",
+              $"{fuel} -> {afterOne} -> {gun.Ammo}");
+
+        Object.Destroy(near.gameObject);
+        Object.Destroy(far.gameObject);
+        yield return null;
+    }
+
+    /// <summary>
+    /// The newest puff of flame is on screen where the chili's tip is drawn. The weapon is drawn
+    /// by a second, narrower camera, so fire started from the tip's real position came out of a
+    /// point dead centre, in front of your face - the stream passed every other check and looked
+    /// like it came from nowhere.
+    /// </summary>
+    void CheckStreamLeavesTheNozzle(Camera cam, SingleShotGun gun)
+    {
+        ViewModelCamera viewModel = cam.GetComponent<ViewModelCamera>();
+        Camera weaponCam = viewModel != null ? viewModel.WeaponCamera : null;
+
+        LightProjectile newest = null;
+        foreach (LightProjectile puff in Object.FindObjectsByType<LightProjectile>(FindObjectsSortMode.None))
+        {
+            if (newest == null || puff.transform.localScale.x < newest.transform.localScale.x)
+                newest = puff;
+        }
+
+        if (weaponCam == null || newest == null)
+        {
+            Check(false, "the stream leaves the nozzle", weaponCam == null ? "no weapon camera" : "no puffs in the air");
+            return;
+        }
+
+        Vector2 puffOnScreen = cam.WorldToViewportPoint(newest.transform.position);
+        Vector2 tipOnScreen = weaponCam.WorldToViewportPoint(gun.TipPosition);
+        float apart = Vector2.Distance(puffOnScreen, tipOnScreen);
+
+        Check(apart < 0.12f, "the stream leaves the nozzle",
+              $"newest puff at {puffOnScreen.x:F2},{puffOnScreen.y:F2}, tip drawn at {tipOnScreen.x:F2},{tipOnScreen.y:F2}");
     }
 
     // Right click on Big Mike. Driven straight through UpdateAim, because batch mode has no
@@ -1215,8 +1559,48 @@ public class ProbeRunner : MonoBehaviour
             yield return null;
 
             ReportViewport(player, weapon);
-            Capture(player, "viewmodel-" + weapon.ToLower());
+            CaptureComposite("viewmodel-" + weapon.ToLower());
+            CaptureSide(player, "side-" + weapon.ToLower());
         }
+    }
+
+    /// <summary>
+    /// The weapon in your hands seen from its right, on its own layer against grey - the camera's
+    /// forward runs left to right across the picture. Down the barrel, a model turned into the
+    /// hand can look right both ways round; from the side it can't.
+    /// </summary>
+    void CaptureSide(PlayerController player, string name)
+    {
+        SingleShotGun gun = player.ActiveGun;
+        Camera eye = PlayerController.LocalCamera;
+        int layer = LayerMask.NameToLayer(ViewModelCamera.LayerName);
+
+        if (gun == null || eye == null || layer < 0
+            || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+            return;
+
+        Bounds bounds = new Bounds(gun.transform.position, Vector3.zero);
+        foreach (Renderer r in gun.GetComponentsInChildren<Renderer>())
+        {
+            if (r.enabled)
+                bounds.Encapsulate(r.bounds);
+        }
+
+        GameObject host = new GameObject("~side camera");
+        Camera side = host.AddComponent<Camera>();
+        side.enabled = false;
+        side.cullingMask = 1 << layer;
+        side.clearFlags = CameraClearFlags.SolidColor;
+        side.backgroundColor = new Color(0.35f, 0.35f, 0.38f);
+        side.fieldOfView = 30f;
+        side.nearClipPlane = 0.01f;
+
+        float reach = Mathf.Max(0.3f, bounds.extents.magnitude) / Mathf.Tan(15f * Mathf.Deg2Rad) * 1.2f;
+        host.transform.position = bounds.center + eye.transform.right * reach;
+        host.transform.rotation = Quaternion.LookRotation(bounds.center - host.transform.position, eye.transform.up);
+
+        SavePixels(ReadPixels(side), name + ".png");
+        Object.DestroyImmediate(host);
     }
 
     void ReportViewport(PlayerController player, string weapon)
@@ -1236,6 +1620,17 @@ public class ProbeRunner : MonoBehaviour
             Vector3 centre = cam.WorldToViewportPoint(b.center);
 
             log.AppendLine($"  ..    {weapon,-9} '{child.name,-16}' centre {centre.x:F2},{centre.y:F2} depth {centre.z:F2} nearest {NearestDepth(cam, b):F2} len {b.size.magnitude:F2}");
+
+            // Which way round it's held: the grip end and the muzzle end on screen, with depth. A
+            // model turned into the hand (the food kit's) can come out backwards, and one render
+            // from behind doesn't say which end is nearer.
+            SingleShotGun gun = child.GetComponent<SingleShotGun>();
+            if (gun != null)
+            {
+                Vector3 grip = cam.WorldToViewportPoint(child.position);
+                Vector3 tip = cam.WorldToViewportPoint(gun.TipPosition);
+                log.AppendLine($"  ..    {weapon,-9} grip {grip.x:F2},{grip.y:F2} depth {grip.z:F2} -> tip {tip.x:F2},{tip.y:F2} depth {tip.z:F2}");
+            }
         }
     }
 
@@ -2353,6 +2748,14 @@ public class ProbeRunner : MonoBehaviour
     /// </summary>
     IEnumerator CheckPsxFilterVisiblyChangesTheImage()
     {
+        // Always the Bunch. This used to measure whatever the random loadout had handed out, and
+        // the thresholds below were set against bananas - once the flat purple grapes joined the
+        // pool, a run that happened to hold them moved the gun's pixels less and failed a check
+        // about the filter, not the weapon.
+        PlayerController.PublishLoadout(new[] { "Rifle" });
+        yield return null;
+        yield return null;
+
         Camera world = PlayerController.LocalCamera;
         ViewModelCamera viewModel = world != null ? world.GetComponent<ViewModelCamera>() : null;
         Camera weapon = viewModel != null ? viewModel.WeaponCamera : null;
@@ -2437,9 +2840,11 @@ public class ProbeRunner : MonoBehaviour
 
     /// Renders each camera in order into one black-cleared target - world first, then the gun
     /// camera on top of it, the same way a real frame is composited.
-    static Color32[] ReadPixels(params Camera[] cameras)
+    static Color32[] ReadPixels(params Camera[] cameras) => ReadPixels(ReadWidth, ReadHeight, cameras);
+
+    static Color32[] ReadPixels(int width, int height, params Camera[] cameras)
     {
-        RenderTexture target = new RenderTexture(ReadWidth, ReadHeight, 24);
+        RenderTexture target = new RenderTexture(width, height, 24);
         RenderTexture previousActive = RenderTexture.active;
 
         RenderTexture.active = target;
@@ -2455,8 +2860,8 @@ public class ProbeRunner : MonoBehaviour
         }
 
         RenderTexture.active = target;
-        Texture2D shot = new Texture2D(ReadWidth, ReadHeight, TextureFormat.RGB24, false);
-        shot.ReadPixels(new Rect(0, 0, ReadWidth, ReadHeight), 0, 0);
+        Texture2D shot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        shot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         shot.Apply();
         RenderTexture.active = previousActive;
 
@@ -2469,9 +2874,9 @@ public class ProbeRunner : MonoBehaviour
         return pixels;
     }
 
-    static void SavePixels(Color32[] pixels, string name)
+    static void SavePixels(Color32[] pixels, string name, int width = ReadWidth, int height = ReadHeight)
     {
-        Texture2D shot = new Texture2D(ReadWidth, ReadHeight, TextureFormat.RGB24, false);
+        Texture2D shot = new Texture2D(width, height, TextureFormat.RGB24, false);
         shot.SetPixels32(pixels);
         shot.Apply();
         System.IO.Directory.CreateDirectory(ShotFolder);
@@ -2481,6 +2886,31 @@ public class ProbeRunner : MonoBehaviour
 
     // Renders whatever the player is looking at to a PNG next to the log.
     void Capture(PlayerController ignored, string name) => CaptureWith(PlayerController.LocalCamera, name);
+
+    /// <summary>
+    /// The world and the gun together, the way a real frame is put together. Capture renders the
+    /// world camera alone, and the weapon is on its own camera - so the viewmodel shots this probe
+    /// had been taking since the second camera went in never had a weapon in them.
+    /// </summary>
+    void CaptureComposite(string name)
+    {
+        Camera world = PlayerController.LocalCamera;
+        ViewModelCamera viewModel = world != null ? world.GetComponent<ViewModelCamera>() : null;
+        Camera weapon = viewModel != null ? viewModel.WeaponCamera : null;
+
+        if (world == null || weapon == null
+            || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+        {
+            log.AppendLine($"  ..    screenshot '{name}'                             skipped, no cameras or graphics device");
+            return;
+        }
+
+        const int width = 960;
+        const int height = 540;
+
+        SavePixels(ReadPixels(width, height, world, weapon), name + ".png", width, height);
+        log.AppendLine($"  ..    screenshot '{name}'                             {System.IO.Path.Combine(ShotFolder, name + ".png")}");
+    }
 
     void CaptureWith(Camera camera, string name)
     {

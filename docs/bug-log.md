@@ -3528,3 +3528,86 @@ aswell." The title screen's is gone (PLAY, CRATES, SETTINGS, QUIT); the one on P
 Removed from MenuBuilder too, so a rebuild doesn't bring it back.
 
 All nine suites pass.
+
+# Fortieth pass — Purple Haze and Red Hot Chili Pepper, 2026-09-28
+
+"Add purple haze and red hot chilli pepper" - the grape gatling and the chili flamethrower planned
+in ideas.md section 0, built to that plan's numbers.
+
+## What they are
+
+- **Purple Haze** (`Gatling`). 11 a grape, 14 a second (154 DPS, 86% of the Bunch's), falloff from
+  20m, 120 grapes and one spare. Each grape is a real thing in the air - 55 m/s, a quarter gravity,
+  a sphere sweep a frame (`LightProjectile`, pooled, one shared mesh) - sent to everyone like a
+  shell and resolved only by the shooter. Nothing fires for 0.6s after you pull the trigger;
+  holding aim alone revs it; while it's spun you move at 60%. The cone opens from 0.4° to 2.5° over
+  a 3s burst.
+- **Red Hot Chili Pepper** (`Flamer`). 25 puffs a second out of the nozzle, each travelling out,
+  slowing, growing and fading over half a second - about 5-6m of reach. A puff burns each person it
+  touches once, 4.4 point blank down to 40% at the tip (110 DPS close), and sets them alight: 8/s
+  for 4s, refreshed by more flame, credited to whoever lit you if it kills (`Afterburn`, ticking on
+  the burning body's own client). Aim is the airblast - a 35° cone that throws players back at
+  12 m/s, 20 fuel, 0.75s cooldown. Fuel is the magazine: 200, a 3s reload, five spare tanks.
+- Both are in the deathmatch pool and the sandbox; neither is on the gun game ladder (roadmap.md).
+- The models are the Food Kit's grapes and pepper, imported by `FoodKitWeaponSetup`, turned and
+  sized into the hand by two new `GunInfo` fields (`modelRotation`, `modelScale`). Sounds are
+  stand-ins: a grape is the Bunch's shot pitched up, the flame loops the air brake's thruster burst.
+  A real bank in `Audio/Shoot/Gatling` or `Audio/Shoot/Flamer` takes over with no code change.
+- Network: four new RPCs (grape fired, airblast, shove, ignite) and two flags on the player's stream
+  (flaming, burning) - so `AppVersion` went to `0.7`.
+
+## Bugs found building it
+
+- **A runtime weapon's Awake ran before it knew what it was.** `WeaponLoadout` adds the
+  `SingleShotGun` and then calls `Configure`, and `AddComponent` runs Awake on the spot - so the
+  model and the muzzle flash were built with no GunInfo. The food kit models were never turned (the
+  grapes stood upright in your hand, which a render from behind can't show - the side-on one did),
+  and **`MuzzleFlash.Scale(Weight)` had never run for any gun since loadouts went runtime**. The
+  per-weapon flash sizing in roadmap.md's M2 was dead code. `Configure` now finishes both, so
+  **the heavy guns' flashes changed size today**: about 1.7x on the Split and 1.6x on Big Mike,
+  with more sparks; the Cavendish (1.09x) and the Bunch (0.98x) look about as they did. What it was
+  always meant to do - but it's a visible change nobody has looked at in play yet.
+- **The kick back at you piles up with fire rate.** Every shot adds the same 9cm and 9° jolt,
+  recovering at one rate: the Bunch settles at about 8cm. At 14 and 25 a second the gatling and the
+  chili were shoved into your face and held there - the chili swung up across half the screen.
+  `GunInfo.viewKick` scales it (1 by default, so the old guns are untouched; Purple Haze 0.35, the
+  chili 0), and WeaponCheck fails any automatic weapon over 9 full kicks a second.
+- **The fire came out of your face.** Your weapon is drawn by a second camera at a narrower field of
+  view, so the nozzle's real position is near the middle of the screen, a metre out - the stream
+  started there, nowhere near the chili. Flame now starts at `DrawnTipPosition`, the point the world
+  camera draws where the weapon camera draws the tip (both share one position, so it's exact), or
+  on this side of a wall if you're pressed against one. The probe checks the newest puff is within
+  0.12 of the screen of the drawn tip.
+- **Flames would have headshot.** A puff took the multiplier of whichever hitbox it touched first,
+  and every loud hit set off the hit freeze - four freezes a second while the stream was on someone.
+  Flames do flat damage now (`Hitbox.ApplyFlat`), never freeze, and show the marker, the tick and
+  one summed number four times a second.
+- **The probe's viewmodel screenshots never had a weapon in them** - they rendered the world camera
+  alone, and the weapon's been on its own camera since August. They're composites now, and there's a
+  side-on render of each held weapon (`side-<weapon>.png`), the angle that shows which way round a
+  turned model sits.
+- **The PSX check measured whatever the random loadout had rolled.** Its thresholds were set on
+  bananas; a run holding the flat purple grapes failed it (2.25 against 3.0). Pinned to the Bunch.
+- **The probe turned the camera to aim**, which leaves the weapon pointing where the body faces -
+  shots land, screenshots show a gun slanted across the frame. `Face` sets the look angles instead.
+- The fire sprites first restored for this were byte-identical copies of four already in
+  `Particles/Boom`. Recycled; the code uses Boom's.
+
+## Seen once, not this work
+
+- `CheckVineSwings` failed once - "-4.26m past it (a pull stops short of it)" - holding the
+  Pineapple, and passed on the rerun and every run either side. Spawn-dependent, like its "clear run"
+  search. Not chased; if it comes back, the spawn and the branch direction are the place to look.
+
+## Verified
+
+All nine suites pass. The probe fires both for real at `TrainingDummy`s: no grape inside 0.45s of
+the trigger; 14 grapes in 1.6s, 4 in the air at once, 108 damage to a dummy 15m out; x0.60 move
+speed spun and x1.00 once it winds down; aim alone spins it with no grape spent. The chili: 67-70
+damage in a second to a dummy 4m out, none to one 10m out, 16 more over two seconds after the stream
+stops; the stream starts at the drawn nozzle and roars; an airblast costs 20 fuel, and a second one
+inside the cooldown costs nothing. Looked at: `viewmodel-gatling`/`-flamer`, `side-gatling`/`-flamer`,
+`gatling-firing`, `flamer-stream`.
+
+Not verified: two people. The burn crossing the network (`RPC_Ignite` credited to the sender), the
+airblast shove, and everyone else seeing the stream from the replicated flag have only run offline.

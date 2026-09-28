@@ -129,7 +129,7 @@ public class FlashSprite : MonoBehaviour
     /// Particles/Additive is a built-in shader, which matters: it means there is no shader asset
     /// to include in the build and nothing to go missing.
     /// </summary>
-    static Material Additive()
+    public static Material Additive()
     {
         if (additive != null)
             return additive;
@@ -143,7 +143,7 @@ public class FlashSprite : MonoBehaviour
         return additive;
     }
 
-    static Mesh Quad()
+    public static Mesh Quad()
     {
         if (quad != null)
             return quad;

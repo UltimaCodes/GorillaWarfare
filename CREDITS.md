@@ -122,6 +122,9 @@ Jungle props — Kenney's Nature Kit, and particle sprites — Kenney's Particle
 (licence files in `Assets/Art/Jungle` and `Assets/Resources/Particles`). The health banana sprite
 is credited in `Assets/Textures/UI/BananaHealth-CREDIT.txt`.
 
+The Grenada's pineapple, Purple Haze's grapes and Red Hot Chili Pepper's chili — Kenney's Food Kit,
+**CC0** (licence file in `Assets/Resources/Models/Weapons`, with the shared `foodColormap.png`).
+
 ## Movement
 
 Quake 3 / CPM movement is based on

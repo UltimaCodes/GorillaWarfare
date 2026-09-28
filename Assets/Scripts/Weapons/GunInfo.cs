@@ -93,6 +93,64 @@ public class GunInfo : ItemInfo
              + "costs you nothing but commitment, which is the right trade for five friends.")]
     [Range(0f, 1f)] public float selfDamageScale;
 
+    [Header("Model")]
+    [Tooltip("Degrees to turn the model before it's put in the hand - for a model that wasn't built "
+             + "running along +Z the way the bananas are. The grapes and the chili came from a food "
+             + "kit, standing up and lying sideways.")]
+    public Vector3 modelRotation;
+
+    [Tooltip("Size of the model in the hand. The food kit's models are life size; a gun is not.")]
+    public float modelScale = 1f;
+
+    [Header("Spin-up")]
+    [Tooltip("Seconds of holding fire (or aim) before it shoots at all. The gatling's commitment - "
+             + "you can't peek with it. Zero fires straight away, like everything else.")]
+    public float spinUp;
+
+    [Tooltip("Move speed while spun up, as a fraction of normal. It holds a lane, it doesn't chase.")]
+    [Range(0.1f, 1f)] public float spinMoveMultiplier = 1f;
+
+    [Tooltip("The cone a long burst opens up to, in degrees. Starts at `spread` and grows over "
+             + "spreadGrowSeconds of holding the trigger. Zero means it never grows.")]
+    public float spreadMax;
+
+    public float spreadGrowSeconds = 3f;
+
+    [Header("Pellet projectiles")]
+    [Tooltip("Each shot is a small thing that flies and drops - it can be dodged at range - "
+             + "instead of a trace. Direct hits only, no blast. Purple Haze's grapes.")]
+    public bool pelletProjectile;
+
+    [Header("Flame")]
+    [Tooltip("A stream of flame instead of shots: each 'round' is a puff that travels out, grows "
+             + "and fades, burning whatever it touches. Red Hot Chili Pepper.")]
+    public bool flame;
+
+    [Tooltip("How fast a puff travels, metres per second. With flameLife, its reach.")]
+    public float flameSpeed = 14f;
+
+    [Tooltip("How long a puff lives, in seconds.")]
+    public float flameLife = 0.5f;
+
+    public float flameRadiusStart = 0.2f;
+    public float flameRadiusEnd = 0.8f;
+
+    [Tooltip("Damage at the tip of the flame, as a fraction of point blank.")]
+    [Range(0f, 1f)] public float flameTipDamage = 0.4f;
+
+    [Tooltip("Afterburn: damage per second after the flame has stopped touching you.")]
+    public float burnPerSecond = 8f;
+
+    [Tooltip("Afterburn length, in seconds - refreshed by more flame.")]
+    public float burnSeconds = 4f;
+
+    [Tooltip("The aim key's shove, metres per second. Zero means no airblast.")]
+    public float airblastKnockback;
+
+    public int airblastCost = 20;
+    public float airblastCooldown = 0.75f;
+    public float airblastRange = 5f;
+
     [Header("Ammo")]
     [Tooltip("Shots per banana.")]
     public int magazineSize = 30;
@@ -187,6 +245,12 @@ public class GunInfo : ItemInfo
 
     [Tooltip("How fast recovery happens, in units per second.")]
     public float recoverySpeed = 6f;
+
+    [Tooltip("How hard the weapon jolts back at you each shot, as a fraction of the standard kick. "
+             + "The kick is the same size every shot and recovers at one rate, so it piles up with "
+             + "fire rate - fine at the Bunch's 8.5 a second, but at fourteen or twenty-five a second "
+             + "it shoves the weapon into your face and holds it there.")]
+    [Range(0f, 1f)] public float viewKick = 1f;
 
     /// <summary>
     /// Damage after distance falloff. This is what stops a shotgun being a sniper - the pellets
