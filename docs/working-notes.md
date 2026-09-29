@@ -54,10 +54,19 @@ clips or a `GunInfo.standInSound`.
 **A global shader array's size is fixed by the first set.** `GrassMarks` and `BodyMarks` always send
 the full array (64, 16) and a count, never a shorter one.
 
+**A hitbox is not the skin.** A mark placed where a ray hit a hitbox is 1.5 to 7cm off the gorilla's
+actual surface (measured on a chest), in or out. Anything drawn on the body from a hit point has to
+reach that far - `BodyMarks.shader` projects along the shot and takes a window 30cm in, 15cm out,
+limited to skin facing the shot.
+
+**A multiply mark can only darken.** On grey fur, a dark red goes near black. Blood on a body has to be
+a bright red for the red to survive the multiply.
+
 **In the probe, aim the player, not the camera.** Setting `LocalCamera.transform.rotation` turns
 the view but not the weapon, which follows the body's yaw and the look pitch - shots go the right
 way and every screenshot shows a gun slanted across the frame. `PlayModeProbe.Face` sets the look
-angles the way the mouse does.
+angles the way the mouse does - and clears the recoil, which Look() adds on top: without that, a few
+shots into a test the gun was firing over the target's head.
 
 **`SetCustomProperties` does not update the local cache in an online room.** It sends an op and
 waits for the server to echo. Read-modify-write inside one round trip silently loses data —

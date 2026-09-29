@@ -697,7 +697,7 @@ public class ProbeRunner : MonoBehaviour
     /// </summary>
     IEnumerator CheckBulletMarks(PlayerController player)
     {
-        yield return LiveWithTimeLeft(3f);
+        yield return LiveWithTimeLeft(4.5f);
 
         PlayerController.PublishLoadout(new[] { "Rifle" });
         yield return null;
@@ -731,46 +731,128 @@ public class ProbeRunner : MonoBehaviour
                             QueryTriggerInteraction.Ignore))
             floorAim = floorHit.point;
 
-        TrainingDummy dummy = DummyAt(cam, cam.transform.position + open * 5f);
+        bool goreBefore = GameSettings.Gore;
+        TrainingDummy dummy = null;
 
         foreach ((string what, Vector3 aim) in new[]
                  {
-                     ("wall", wallAim), ("floor", floorAim),
-                     ("body", dummy != null ? ChestOf(dummy) : Vector3.zero),
+                     ("wall", wallAim), ("floor", floorAim), ("body-gore", Vector3.one), ("body-no-gore", Vector3.one),
                  })
         {
-            if (aim == Vector3.zero)
+            bool onBody = what.StartsWith("body");
+            Vector3 target = aim;
+
+            // A fresh dummy for each gore setting, so each close-up shows only its own marks.
+            if (onBody)
+            {
+                if (dummy != null)
+                    Object.Destroy(dummy.gameObject);
+
+                GameSettings.SetGore(what == "body-gore");
+                dummy = DummyAt(cam, cam.transform.position + open * 5f);
+                yield return null;
+
+                if (dummy == null)
+                {
+                    Check(false, $"a dummy for {what}", "TrainingDummy.Build refused");
+                    continue;
+                }
+
+                target = ChestOf(dummy);
+            }
+
+            if (target == Vector3.zero)
             {
                 log.AppendLine($"  ..    mark on the {what}: nothing to aim at");
                 continue;
             }
 
-            Face(player, cam, aim);
+            BulletDecal[] before = Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None);
+            int sprayBefore = CountNamed("~bloodSpray");
+            int grassBefore = GrassMarks.Live;
 
-            // Past the gun's own time between shots, or the trigger does nothing.
-            float settle = Time.time;
-            while (Time.time - settle < gun.Info.SecondsBetweenShots + 0.1f)
+            // Three into a body, one anywhere else - past the gun's own time between shots each
+            // time, or the trigger does nothing.
+            for (int shot = 0; shot < (onBody ? 3 : 1); shot++)
             {
-                Face(player, cam, aim);
+                Vector3 aimAt = target + (onBody ? Random.insideUnitSphere * 0.15f : Vector3.zero);
+                float settle = Time.time;
+                while (Time.time - settle < gun.Info.SecondsBetweenShots + 0.1f)
+                {
+                    Face(player, cam, aimAt);
+                    yield return null;
+                }
+
+                if (onBody && shot == 0)
+                    sprayBefore = CountNamed("~bloodSpray");
+
+                gun.Use();
                 yield return null;
             }
-
-            BulletDecal[] before = Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None);
-            int grassBefore = GrassMarks.Live;
-            gun.Use();
-            yield return null;
 
             Vector3 at;
             Vector3 facing;
 
-            if (what == "body")
+            if (onBody)
             {
-                // A shot on a gorilla is blood on the body where it landed, not a decal.
-                BodyMarks blood = dummy.GetComponent<BodyMarks>();
-                Check(blood != null && blood.Showing > 0, "a shot leaves blood on the body where it lands",
-                      blood == null ? "no mark on the dummy" : $"{blood.Showing} mark(s)");
+                // A shot on a gorilla goes on the body where it landed, not a decal on the hitbox.
+                BodyMarks marks = dummy.GetComponent<BodyMarks>();
+                int wounds = marks != null ? marks.CountOf(BodyMarks.Shape.Wound) : 0;
+                int holes = marks != null ? marks.CountOf(BodyMarks.Shape.Hole) : 0;
+                int sprays = CountNamed("~bloodSpray") - sprayBefore;
+                int newBlood = 0;
+                foreach (BulletDecal decal in Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None))
+                {
+                    if (System.Array.IndexOf(before, decal) < 0 && decal.name == "~blood")
+                        newBlood++;
+                }
+
+                if (what == "body-gore")
+                {
+                    Check(wounds > 0 && holes == 0, "with gore, a shot leaves a wound where it lands",
+                          $"{wounds} wound(s), {holes} plain hole(s)");
+                    Check(sprays > 0, "and blood sprays out of it", $"{sprays} spray(s)");
+                    log.AppendLine($"  ..    gore splatter: {newBlood} blood mark(s) on the world, {GrassMarks.Live - grassBefore} in the grass");
+                }
+                else
+                {
+                    Check(holes > 0 && wounds == 0 && sprays == 0 && newBlood == 0,
+                          "without gore, the same bullet hole a wall gets",
+                          $"{holes} hole(s), {wounds} wound(s), {sprays} spray(s), {newBlood} blood mark(s)");
+                }
+
                 at = ChestOf(dummy);
                 facing = (cam.transform.position - at).normalized;
+
+                // Framed on the newest mark itself, and how far the real skin is from it: the mark
+                // sits on the hitbox, and the mesh can be a way in or out of that.
+                if (marks != null && marks.TryGetNewest(out Vector3 markAt, out Vector3 markFacing))
+                {
+                    at = markAt;
+                    facing = markFacing;
+
+                    SkinnedMeshRenderer skin = dummy.GetComponentInChildren<SkinnedMeshRenderer>();
+                    if (skin != null)
+                    {
+                        Mesh baked = new Mesh();
+                        skin.BakeMesh(baked, true);
+                        float nearest = float.MaxValue;
+                        float along = 0f;
+                        foreach (Vector3 v in baked.vertices)
+                        {
+                            Vector3 world = skin.transform.position + skin.transform.rotation * v;
+                            float d = Vector3.Distance(world, markAt);
+                            if (d < nearest)
+                            {
+                                nearest = d;
+                                along = Vector3.Dot(world - markAt, markFacing);
+                            }
+                        }
+
+                        Object.DestroyImmediate(baked);
+                        log.AppendLine($"  ..    {what}: skin {nearest:F3}m from the mark, {along:+0.000;-0.000}m along its facing");
+                    }
+                }
             }
             else
             {
@@ -803,7 +885,7 @@ public class ProbeRunner : MonoBehaviour
                 facing = -made.transform.forward;
             }
 
-            Vector3 eye = at + facing * 1.1f + Vector3.up * 0.3f;
+            Vector3 eye = at + facing * (onBody ? 1.5f : 1.1f) + Vector3.up * 0.3f;
             Camera close = new GameObject("~closeMark").AddComponent<Camera>();
             close.enabled = false;
             close.fieldOfView = 45f;
@@ -813,9 +895,23 @@ public class ProbeRunner : MonoBehaviour
             Object.DestroyImmediate(close.gameObject);
         }
 
+        GameSettings.SetGore(goreBefore);
+
         if (dummy != null)
             Object.Destroy(dummy.gameObject);
         yield return null;
+    }
+
+    static int CountNamed(string name)
+    {
+        int count = 0;
+        foreach (ParticleSystem ps in Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None))
+        {
+            if (ps.name == name)
+                count++;
+        }
+
+        return count;
     }
 
     IEnumerator CheckFiringLeavesAStreak(PlayerController player)
@@ -920,6 +1016,11 @@ public class ProbeRunner : MonoBehaviour
 
         Set(player, "horizontalLookRotation", yaw);
         Set(player, "verticalLookRotation", pitch);
+
+        // And no recoil riding on top - Look() adds it to these angles, so a few shots in, a probe
+        // "aiming" at a chest was firing over its head.
+        Set(player, "recoilOffset", Vector2.zero);
+        Set(player, "recoilTarget", Vector2.zero);
 
         // Now as well as on the next Look, so a shot this frame already goes the right way.
         player.transform.localEulerAngles = new Vector3(0f, yaw, 0f);

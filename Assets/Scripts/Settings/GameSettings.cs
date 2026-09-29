@@ -100,6 +100,15 @@ public static class GameSettings
     /// strong enough to see. Everyone still gets the toggle to turn it back off.
     public static bool PsxFilter { get; private set; } = true;
 
+    /// <summary>
+    /// Blood. On, a shot on a gorilla is a wound - a dark-cored red hole where it landed, blood
+    /// sprayed out of it and splattered on what's behind and under them. Off, it's exactly the bullet
+    /// hole a wall gets, and nothing red appears anywhere. On by default ("make it a tiny bit gory i
+    /// dont mind") with the switch for anyone who'd rather not. Your own view only - what anyone else
+    /// sees is their setting.
+    /// </summary>
+    public static bool Gore { get; private set; } = true;
+
     // ---------------------------------------------------------------- joke settings
     //
     // "Add some joke settings too." Real PlayerPrefs-backed entries, same as everything else on
@@ -176,6 +185,7 @@ public static class GameSettings
         Shaders = (ShaderPreset)Get(nameof(Shaders), (int)ShaderPreset.Full);
         MotionBlur = Get(nameof(MotionBlur), false);
         PsxFilter = Get(nameof(PsxFilter), true);
+        Gore = Get(nameof(Gore), true);
 
         BelieveInBigfoot = Get(nameof(BelieveInBigfoot), false);
         MonkeyBusinessLevel = Get(nameof(MonkeyBusinessLevel), 50f);
@@ -321,6 +331,13 @@ public static class GameSettings
         Announce();
     }
 
+    public static void SetGore(bool value)
+    {
+        Gore = value;
+        Put(nameof(Gore), value);
+        Announce();
+    }
+
     public static void SetBelieveInBigfoot(bool value)
     {
         BelieveInBigfoot = value;
@@ -432,7 +449,7 @@ public static class GameSettings
     static readonly string[] VideoKeys =
     {
         nameof(Fov), nameof(Fullscreen), nameof(ScreenWidth), nameof(ScreenHeight),
-        nameof(QualityLevel), nameof(Shaders), nameof(MotionBlur), nameof(PsxFilter),
+        nameof(QualityLevel), nameof(Shaders), nameof(MotionBlur), nameof(PsxFilter), nameof(Gore),
         nameof(BelieveInBigfoot), nameof(MonkeyBusinessLevel),
     };
 

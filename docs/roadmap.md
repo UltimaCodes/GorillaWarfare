@@ -119,6 +119,10 @@ The first round of feedback from people playing it. Worked through in this order
       one spare). Left as it is; say if a different number was meant.
 - [x] **On the gun game ladder** (2026-09-29): Pineapple, Sniper, Gatling, Shotgun, Flamer, Rifle,
       Pistol, Peel. 15 kills to win, up from 11.
+- [x] **Bullet marks that show, and gore** (2026-09-29, bug-log.md, forty-second and forty-third
+      passes). Walls and floors get a real dark bullet hole; a shot on a gorilla is the same hole on
+      the body with gore off, and a bloody wound with spray and splatter with it on. A "gore" toggle
+      on the Video tab, on by default.
 - [ ] **Real sounds for both** - still stand-ins (the Bunch's shot pitched up; the air brake's
       thruster burst, looped). Wants a gatling shot, a spin-up whine and a flamethrower roar.
 - [ ] **The Pomo-Grenade** - the third of the picked weapons, still a plan (ideas.md section 0).

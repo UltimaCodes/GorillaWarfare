@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Marks in the grass: Red Hot Chili Pepper's burn, and a darkened scuff where a shot hit grassy
-/// ground.
+/// Marks in the grass: Red Hot Chili Pepper's burn, a darkened scuff where a shot hit grassy
+/// ground, and blood under someone who's been shot, with gore on.
 ///
 /// The jungle floor is mostly grass, and a mark on the ground under it (BulletDecal) is hidden by
 /// the blades - so flame on the floor looked like it did nothing, and a bullet into it left nothing
@@ -17,7 +17,13 @@ public class GrassMarks : MonoBehaviour
     // Keep in step with the arrays in GrassSurface.shader.
     const int Slots = 64;
 
+    /// What a mark turns the blades toward.
+    public static readonly Color Soot = new Color(0.05f, 0.035f, 0.02f);
+    public static readonly Color Dirt = new Color(0.12f, 0.1f, 0.08f);
+    public static readonly Color BloodRed = new Color(0.32f, 0.02f, 0.02f);
+
     static readonly Vector3[] at = new Vector3[Slots];
+    static readonly Color[] colour = new Color[Slots];
     static readonly float[] radius = new float[Slots];
     static readonly float[] depth = new float[Slots];
     static readonly float[] hold = new float[Slots];
@@ -25,9 +31,11 @@ public class GrassMarks : MonoBehaviour
     static readonly float[] placedAt = NewTimes();
 
     static readonly Vector4[] packedPoints = new Vector4[Slots];
+    static readonly Vector4[] packedColours = new Vector4[Slots];
     static readonly float[] packedStrength = new float[Slots];
 
     static readonly int PointsId = Shader.PropertyToID("_GrassMarkPoints");
+    static readonly int ColoursId = Shader.PropertyToID("_GrassMarkColours");
     static readonly int StrengthId = Shader.PropertyToID("_GrassMarkStrength");
     static readonly int CountId = Shader.PropertyToID("_GrassMarkCount");
 
@@ -54,9 +62,10 @@ public class GrassMarks : MonoBehaviour
     }
 
     /// <summary>
-    /// A mark `size` across round `point`. `darkness` 1 is burnt black; less for a scuff.
+    /// A mark `size` across round `point`, turning the blades toward `tone` - `darkness` 1 all the
+    /// way, less for a scuff.
     /// </summary>
-    public static void Add(Vector3 point, float size, float darkness, float holdSeconds, float fadeSeconds)
+    public static void Add(Vector3 point, float size, Color tone, float darkness, float holdSeconds, float fadeSeconds)
     {
         if (instance == null)
         {
@@ -81,7 +90,7 @@ public class GrassMarks : MonoBehaviour
                 continue;
             }
 
-            if ((at[i] - point).sqrMagnitude < size * size * 0.25f)
+            if (colour[i] == tone && (at[i] - point).sqrMagnitude < size * size * 0.25f)
             {
                 placedAt[i] = now;
                 radius[i] = Mathf.Max(radius[i], size);
@@ -100,6 +109,7 @@ public class GrassMarks : MonoBehaviour
 
         int slot = free >= 0 ? free : weakest;
         at[slot] = point;
+        colour[slot] = tone;
         radius[slot] = size;
         depth[slot] = darkness;
         hold[slot] = holdSeconds;
@@ -120,6 +130,7 @@ public class GrassMarks : MonoBehaviour
                 continue;
 
             packedPoints[count] = new Vector4(at[i].x, at[i].y, at[i].z, radius[i]);
+            packedColours[count] = colour[i];
             packedStrength[count] = s;
             count++;
         }
@@ -131,6 +142,7 @@ public class GrassMarks : MonoBehaviour
 
         // Always the full arrays: a global array's size is fixed by the first set.
         Shader.SetGlobalVectorArray(PointsId, packedPoints);
+        Shader.SetGlobalVectorArray(ColoursId, packedColours);
         Shader.SetGlobalFloatArray(StrengthId, packedStrength);
         Shader.SetGlobalFloat(CountId, count);
         lastCount = count;

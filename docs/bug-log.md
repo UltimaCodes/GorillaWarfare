@@ -3756,3 +3756,46 @@ shots, so two never went off.)
 All nine suites pass. Looked at: `mark-wall` (a dark bullet hole on a palm trunk), `mark-floor` (the
 same on the ground), `mark-body` (a blood patch where the shot landed - it caught the face), and the
 chili's char renders unchanged.
+
+# Forty-third pass — a shot on a gorilla looks like a shot, and a gore switch, 2026-09-29
+
+"The walls floor and all are great, looks like actual bullet impact, however the stuff on the enemies
+doesnt - it just tints that part somewhat red... make it a tiny bit gory i dont mind (add an option to
+turn gore off and when thats on just make bullet impacts look the same as they do on floors)."
+
+## What a hit on a body is now
+
+- **The walls' own bullet hole, laid on the body.** `BodyMarks.shader` takes a second shape besides
+  the chili's soft patch: BulletDecal's splat, projected onto the body along the way the shot came in,
+  spun at random, and kept on the hitbox bone it hit. With **gore off** that's the whole of it - the
+  same hole in the same colour a wall gets, the same impact puff, nothing red anywhere.
+- **With gore on** (the default): the hole is a wound - blood red with a near-black core - with a
+  lighter smear of blood round it; blood sprays out of it, some back toward the shooter and more out
+  through the far side, falling as it goes (dark, blended droplets from the particle pack's circle -
+  not the additive red sparks a hit used to throw, which glowed like embers); and it splatters on
+  whatever's behind them and on the ground underneath, into the grass as well. The grass marks took a
+  colour per mark to do that (`GrassMarks.BloodRed`, beside `Soot` for the chili and `Dirt` for a
+  bullet scuff).
+- **The setting**: Video, "gore", `GameSettings.Gore`, on by default. It only changes what you see;
+  anyone else sees their own setting.
+
+## Bugs found building it
+
+- **The skin isn't where the hitbox is.** A mark goes on the hitbox the ray hit, and the probe measured
+  the gorilla's actual skin 1.5 to 7cm inside it. The first depth window (12cm either side) turned a
+  hole 7cm off the skin into a 40% smudge - the gore-off dummy showed nothing at all. The window
+  reaches 30cm in and 15cm out now, and only skin facing the shot is marked, so a hole in the front of
+  an arm doesn't come out the back of it.
+- **Blood can't be dark red.** A mark multiplies the body's own colour, and grey fur times a dark red is
+  near black - the first wounds read as soot. The body's blood is a bright red; the wound's core is
+  darkened by the shader.
+- **The probe's aim ignored recoil.** `Face` set the look angles, and the game adds the gun's recoil on
+  top of them - five or six shots in, the Bunch was going over the dummy's head. `Face` clears it now.
+
+## Verified
+
+All nine suites pass. The probe fires three shots into a dummy with gore on (3 wounds, blood sprays,
+blood on the world and in the grass) and three into a fresh one with gore off (plain holes only, no
+spray, no blood anywhere). Looked at: `mark-body-gore` (red, dark-cored wounds across the chest and
+belly with a smear round them), `mark-body-no-gore` (a dark bullet hole on the forearm, as on a wall).
+Not played, and not seen on a remote player.

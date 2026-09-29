@@ -69,19 +69,23 @@ Shader "Custom/GrassComputeSurface"
 			float3 worldPos;
 			float2 texcoord;
 			float burnt;
+			float3 markColour;
 
 		};
 
-		// Gorilla Warfare: marks in the grass - Red Hot Chili Pepper's burn, a scuff where a shot hit.
-		// GrassMarks.cs sends up to 64 points (xyz position, w radius) with strengths that fade, packed
-		// from the start, and how many are live - zero most of the time, when none of this runs.
+		// Gorilla Warfare: marks in the grass - Red Hot Chili Pepper's burn, a scuff where a shot hit, blood.
+		// GrassMarks.cs sends up to 64 points (xyz position, w radius), each with a colour and a strength
+		// that fades, packed from the start, and how many are live - zero most of the time, when none of
+		// this runs. A blade takes the colour of the strongest mark on it.
 		float4 _GrassMarkPoints[64];
+		float4 _GrassMarkColours[64];
 		float _GrassMarkStrength[64];
 		float _GrassMarkCount;
 
-		float GrassMark(float3 p)
+		float GrassMark(float3 p, out float3 colour)
 		{
 			float burnt = 0;
+			colour = float3(0, 0, 0);
 			int count = (int)_GrassMarkCount;
 			for (int k = 0; k < count; k++)
 			{
@@ -90,7 +94,12 @@ Shader "Custom/GrassComputeSurface"
 				// staying green at the top because the tip's half a metre further from the point.
 				float3 away = p - _GrassMarkPoints[k].xyz;
 				away.y *= 0.35;
-				burnt = max(burnt, _GrassMarkStrength[k] * saturate(1.5 - length(away) / radius));
+				float amount = _GrassMarkStrength[k] * saturate(1.5 - length(away) / radius);
+				if (amount > burnt)
+				{
+					burnt = amount;
+					colour = _GrassMarkColours[k].rgb;
+				}
 			}
 			return saturate(burnt);
 		}
@@ -140,7 +149,9 @@ Shader "Custom/GrassComputeSurface"
 			v.vertex = v.vertex;
 
 			// Gorilla Warfare: per blade vertex, from where it is in the world - see GrassMark.
-			o.burnt = _GrassMarkCount > 0.5 ? GrassMark(o.worldPos) : 0;
+			float3 markColour = float3(0, 0, 0);
+			o.burnt = _GrassMarkCount > 0.5 ? GrassMark(o.worldPos, markColour) : 0;
+			o.markColour = markColour;
 
 		}
 
@@ -178,8 +189,8 @@ Shader "Custom/GrassComputeSurface"
 			#endif			
 			float outside = saturate(abs(IN.texcoord.x - 0.5) + _Edge)* IN.texcoord.y;
 
-			// Gorilla Warfare: burnt blades go to soot, and lose their sheen with it.
-			final.rgb = lerp(final.rgb, float3(0.05, 0.035, 0.02), IN.burnt);
+			// Gorilla Warfare: marked blades go to the mark's colour - soot, dirt, blood - and lose their sheen.
+			final.rgb = lerp(final.rgb, IN.markColour, IN.burnt);
 			outside *= 1 - IN.burnt;
 
 			o.Albedo = final;

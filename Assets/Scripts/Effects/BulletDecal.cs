@@ -82,56 +82,201 @@ public class BulletDecal : MonoBehaviour
             return null;
         }
 
-        bool bloody = hit.collider.GetComponentInParent<IDamageable>() != null;
+        bool flesh = hit.collider.GetComponentInParent<IDamageable>() != null;
+
+        // Gore is the player's choice (GameSettings.Gore). Off, a shot on someone is dressed exactly
+        // like a shot on a wall - the same hole, the same puff - and nothing red appears anywhere.
+        bool gore = flesh && GameSettings.Gore;
 
         // Added 2026-08-22. Runs here rather than off the damage RPC because that RPC only ever
         // reaches the victim (see PlayerController.TakeDamage) - this, like the rest of
         // PlayFireEffects, is broadcast to every client, which is what a shooter's own hit
         // confirmation actually needs: to be seen by whoever's looking at the target, not just
         // felt by the target themselves.
-        if (bloody)
-        {
-            MonkeyRig rig = hit.collider.GetComponentInParent<MonkeyRig>();
-            if (rig != null)
-                rig.Flash();
-        }
+        MonkeyRig body = flesh ? hit.collider.GetComponentInParent<MonkeyRig>() : null;
+        if (body != null)
+            body.Flash();
 
-        Puff(hit.point, hit.normal, bloody);
+        if (gore)
+            BloodSpray(hit.point, hit.normal);
+        else
+            Puff(hit.point, hit.normal, false);
 
-        // On a gorilla: blood on the body itself, where the shot landed (BodyMarks), the way the
-        // chili's char goes on. A decal here sat on the hitbox - a sphere a little in or out of the
-        // mesh - and a fresh one on a chest showed as a red dot at best. Only for something that
-        // isn't a gorilla does blood fall back to a decal.
-        if (bloody)
+        // On a gorilla: on the body itself, where the shot landed, on the bone it hit (BodyMarks) -
+        // the way the chili's char goes on. It was a decal on the hitbox, a sphere a little in or out
+        // of the mesh, and at best a red dot; then a soft red patch, reported as "it just tints that
+        // part somewhat red and doesnt feel like that gorilla got hit by an actual gun". Now it's the
+        // walls' own bullet hole laid on the body - a wound, with gore on.
+        if (body != null)
         {
-            MonkeyRig body = hit.collider.GetComponentInParent<MonkeyRig>();
-            if (body != null)
+            BodyMarks marks = BodyMarks.On(body.gameObject);
+
+            if (gore)
             {
-                BodyMarks.On(body.gameObject).Add(hit.collider.transform, hit.point, Random.Range(0.13f, 0.19f),
-                                                  BodyMarks.Blood, BloodLifetime - BloodFade, BloodFade);
-                return null;
+                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.12f, 0.16f),
+                          BodyMarks.Blood, BodyMarks.Shape.Wound, WoundHold, WoundFade);
+                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.2f, 0.28f),
+                          BloodSmear, BodyMarks.Shape.Soft, WoundHold * 0.6f, WoundFade);
+                Splatter(hit.point, hit.normal);
             }
+            else
+            {
+                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.07f, 0.12f),
+                          Impact, BodyMarks.Shape.Hole, WorldLifetime - FadeSeconds, FadeSeconds);
+            }
+
+            return null;
         }
 
-        float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.14f, 0.24f);
-        GameObject host = PlaceOn(hit, size, bloody ? "~blood" : "~impact");
+        // Anything else - a wall, the floor, something that takes damage but isn't a gorilla.
+        float size = gore ? Random.Range(0.16f, 0.28f) : Random.Range(0.14f, 0.24f);
+        GameObject host = PlaceOn(hit, size, gore ? "~blood" : "~impact");
 
         BulletDecal decal = host.AddComponent<BulletDecal>();
-        decal.Build(hit.collider.transform, bloody ? Blood : Impact, bloody ? BloodLifetime : WorldLifetime, FadeSeconds);
+        decal.Build(hit.collider.transform, gore ? Blood : Impact, gore ? BloodLifetime : WorldLifetime, FadeSeconds);
 
         // Into grassy ground, the mark under the blades is mostly hidden by them - a scuff in the
         // grass itself too, lighter than a burn.
-        if (!bloody && hit.normal.y > 0.6f)
-            GrassMarks.Add(hit.point, Random.Range(0.35f, 0.5f), 0.6f, ScuffHold, ScuffFade);
+        if (!flesh && hit.normal.y > 0.6f)
+            GrassMarks.Add(hit.point, Random.Range(0.35f, 0.5f), GrassMarks.Dirt, 0.6f, ScuffHold, ScuffFade);
 
         return decal;
     }
 
     // A bullet hole's colour - the old one (0.32) was never actually applied, see SurfaceMark.shader.
     static readonly Color Impact = new Color(0.16f, 0.14f, 0.13f, 1f);
-    const float BloodFade = 2f;
     const float ScuffHold = 6f;
     const float ScuffFade = 2f;
+
+    // ---- gore ----
+
+    // Round a wound, lighter than the wound itself - a smear, not a second hole.
+    static readonly Color BloodSmear = Color.Lerp(Color.white, BodyMarks.Blood, 0.5f);
+    const float WoundHold = 8f;
+    const float WoundFade = 2f;
+    const float SplatterReach = 3.5f;
+    const float SplatterLifetime = 12f;
+
+    static Material sprayMaterial;
+    static Texture sprayTexture;
+
+    /// Blood, only with gore on: through the body onto whatever's behind it, and on the ground
+    /// underneath - where the shot went and where it ran.
+    static void Splatter(Vector3 point, Vector3 normal)
+    {
+        // Out the far side, along the line the shot was travelling. World only, so it passes the
+        // body's own hitboxes.
+        Vector3 through = (-normal + Random.insideUnitSphere * 0.25f).normalized;
+        if (Physics.Raycast(point, through, out RaycastHit behind, SplatterReach, Hitbox.WorldMask,
+                            QueryTriggerInteraction.Ignore))
+            BloodOn(behind, Random.Range(0.35f, 0.6f));
+
+        if (Physics.Raycast(point, Vector3.down, out RaycastHit below, 3f, Hitbox.WorldMask,
+                            QueryTriggerInteraction.Ignore))
+        {
+            BloodOn(below, Random.Range(0.28f, 0.45f));
+            GrassMarks.Add(below.point, Random.Range(0.4f, 0.6f), GrassMarks.BloodRed, 0.85f,
+                           SplatterLifetime - WoundFade, WoundFade);
+        }
+    }
+
+    static void BloodOn(RaycastHit hit, float size)
+    {
+        GameObject host = PlaceOn(hit, size, "~blood");
+        host.AddComponent<BulletDecal>().Build(hit.collider.transform, Blood, SplatterLifetime, WoundFade);
+    }
+
+    /// <summary>
+    /// The moment a shot goes into someone, with gore on: blood thrown back toward the shooter and
+    /// sprayed out through the far side, falling as it goes. Dark droplets, blended - not the
+    /// additive red sparks a hit used to throw, which glowed like embers rather than looking wet.
+    /// </summary>
+    static void BloodSpray(Vector3 point, Vector3 normal)
+    {
+        if (sprayMaterial == null)
+        {
+            Shader shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended")
+                            ?? Shader.Find("Particles/Alpha Blended")
+                            ?? Shader.Find("Sprites/Default");
+            sprayMaterial = new Material(shader) { name = "~bloodSpray", enableInstancing = true };
+
+            foreach (Sprite sprite in Resources.LoadAll<Sprite>("Particles/Boom"))
+            {
+                if (sprite.name.StartsWith("circle"))
+                {
+                    sprayTexture = sprite.texture;
+                    break;
+                }
+            }
+        }
+
+        SprayBurst(point, normal, 7, 1.5f, 3.5f, 45f);     // back toward the shooter
+        SprayBurst(point, -normal, 14, 3f, 7f, 30f);       // out through the far side
+    }
+
+    static void SprayBurst(Vector3 point, Vector3 direction, int count, float minSpeed, float maxSpeed, float cone)
+    {
+        GameObject host = new GameObject("~bloodSpray");
+        host.transform.SetPositionAndRotation(point, Quaternion.LookRotation(direction));
+
+        ParticleSystem ps = host.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = false;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(minSpeed, maxSpeed);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.08f);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.55f, 0.03f, 0.04f), new Color(0.3f, 0.01f, 0.02f));
+        main.gravityModifier = 1.4f;
+        main.maxParticles = 32;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)count) });
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = cone;
+        shape.radius = 0.03f;
+
+        ParticleSystem.ColorOverLifetimeModule fade = ps.colorOverLifetime;
+        fade.enabled = true;
+        Gradient alpha = new Gradient();
+        alpha.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+        fade.color = alpha;
+
+        ParticleSystemRenderer view = host.GetComponent<ParticleSystemRenderer>();
+        view.renderMode = ParticleSystemRenderMode.Billboard;
+        view.sharedMaterial = sprayMaterial;
+        view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        view.receiveShadows = false;
+
+        if (sprayTexture != null)
+        {
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            block.SetTexture("_MainTex", sprayTexture);
+            view.SetPropertyBlock(block);
+        }
+
+        ps.Play();
+    }
+
+    /// The bullet-hole shape every mark is made of - BodyMarks lays the same one on a body.
+    public static Texture2D Splat
+    {
+        get
+        {
+            if (splat == null)
+                splat = BuildSplat();
+            return splat;
+        }
+    }
 
     // ---- Red Hot Chili Pepper's char ----
 

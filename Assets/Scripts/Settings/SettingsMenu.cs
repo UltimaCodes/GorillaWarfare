@@ -459,6 +459,9 @@ public class SettingsMenu : MonoBehaviour
         // Its own toggle, same reasoning as motion blur above - see PsxFilter.cs.
         Toggle("psx filter", GameSettings.PsxFilter, GameSettings.SetPsxFilter);
 
+        // Off, a shot on someone looks exactly like a shot on a wall - see GameSettings.Gore.
+        Toggle("gore", GameSettings.Gore, GameSettings.SetGore);
+
         // "Add some joke settings too" - real, PlayerPrefs-backed, wired through the exact same
         // Toggle/Slider helpers as everything above them, which is the whole joke: nothing here
         // gives away that it does nothing until you go looking for what it's connected to.

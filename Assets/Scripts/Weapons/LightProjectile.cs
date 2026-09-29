@@ -270,7 +270,7 @@ public class LightProjectile : MonoBehaviour
 
         // Wider in the grass than on the ground under it - the fire rolls through the blades
         // round where it lands. At the same size only the blades right at the mark went dark.
-        GrassMarks.Add(point, size * 1.5f, 1f, 1f, 3f);
+        GrassMarks.Add(point, size * 1.5f, GrassMarks.Soot, 1f, 1f, 3f);
     }
 
     /// <summary>
@@ -320,8 +320,8 @@ public class LightProjectile : MonoBehaviour
                 toward = Vector3.up;
             Vector3 surface = nearest.ClosestPoint(centre + toward.normalized * 3f);
 
-            BodyMarks.On(rig.gameObject).Add(nearest.transform, surface, Mathf.Clamp(radius, 0.25f, 0.45f),
-                                            BodyMarks.Soot, 1f, 3f);
+            BodyMarks.On(rig.gameObject).Add(nearest.transform, surface, toward, Mathf.Clamp(radius, 0.25f, 0.45f),
+                                            BodyMarks.Soot, BodyMarks.Shape.Soft, 1f, 3f);
         }
     }
 
