@@ -376,6 +376,9 @@ public class Projectile : MonoBehaviour
                 hitOthers.Add(other);
         }
 
+        // What it did to them, on every client - soot on the side that faced it, and blood with gore.
+        BulletDecal.BlastBodies(at, radius, caught);
+
         foreach (PlayerController player in hitPlayers)
         {
             Vector3 toward = player.transform.position + Vector3.up - at;
@@ -572,10 +575,9 @@ public class Projectile : MonoBehaviour
         }
 
         // Scorch on whatever it went off against, so the explosion leaves the world changed
-        // rather than only the screen.
-        if (Physics.Raycast(at + Vector3.up * 0.4f, Vector3.down, out RaycastHit ground,
-                            radius, Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
-            BulletDecal.Spawn(ground.point, ground.normal, Hitbox.WorldMask);
+        // rather than only the screen. The size of the fireball - it was an ordinary bullet hole,
+        // "just one black dot like for the other guns".
+        BulletDecal.Blast(at, radius);
 
         // Shake scaled by how close it went off, so somebody else's pineapple across the map is
         // a thump and your own at your feet is an event.

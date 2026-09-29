@@ -66,9 +66,10 @@ public class BulletDecal : MonoBehaviour
     bool onMarkShader;
 
     /// <summary>
-    /// Places a mark at a reported hit. Returns null when there is nothing there to mark.
+    /// Places a mark at a reported hit - a bullet's, or one of Purple Haze's grapes (`scale` a little
+    /// under 1). Returns null when there is nothing there to mark, or when it went on a body.
     /// </summary>
-    public static BulletDecal Spawn(Vector3 point, Vector3 normal, int shooterLayerMask)
+    public static BulletDecal Spawn(Vector3 point, Vector3 normal, int shooterLayerMask, float scale = 1f)
     {
         // Look back along the normal for the surface that was actually hit. Doing this per
         // client rather than trusting the shooter's collider means a decal can never outlive
@@ -98,7 +99,7 @@ public class BulletDecal : MonoBehaviour
             body.Flash();
 
         if (gore)
-            BloodSpray(hit.point, hit.normal);
+            BloodSpray(hit.point, hit.normal, scale);
         else
             Puff(hit.point, hit.normal, false);
 
@@ -113,15 +114,25 @@ public class BulletDecal : MonoBehaviour
 
             if (gore)
             {
-                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.12f, 0.16f),
+                Transform part = hit.collider.transform;
+
+                // The wound, a heavy smear round it, and a run of blood down from it - "down" the
+                // way the body was standing when it was hit, laid along the surface.
+                marks.Add(part, hit.point, hit.normal, Random.Range(0.15f, 0.2f) * scale,
                           BodyMarks.Blood, BodyMarks.Shape.Wound, WoundHold, WoundFade);
-                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.2f, 0.28f),
-                          BloodSmear, BodyMarks.Shape.Soft, WoundHold * 0.6f, WoundFade);
-                Splatter(hit.point, hit.normal);
+                marks.Add(part, hit.point, hit.normal, Random.Range(0.3f, 0.38f) * scale,
+                          BloodSmear, BodyMarks.Shape.Soft, WoundHold * 0.7f, WoundFade);
+
+                Vector3 down = Vector3.ProjectOnPlane(Vector3.down, hit.normal);
+                if (down.sqrMagnitude > 0.01f)
+                    marks.Add(part, hit.point + down.normalized * Random.Range(0.1f, 0.16f) * scale, hit.normal,
+                              Random.Range(0.12f, 0.16f) * scale, BloodRun, BodyMarks.Shape.Soft, WoundHold * 0.7f, WoundFade);
+
+                Splatter(hit.point, hit.normal, scale);
             }
             else
             {
-                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.07f, 0.12f),
+                marks.Add(hit.collider.transform, hit.point, hit.normal, Random.Range(0.07f, 0.12f) * scale,
                           Impact, BodyMarks.Shape.Hole, WorldLifetime - FadeSeconds, FadeSeconds);
             }
 
@@ -129,7 +140,7 @@ public class BulletDecal : MonoBehaviour
         }
 
         // Anything else - a wall, the floor, something that takes damage but isn't a gorilla.
-        float size = gore ? Random.Range(0.16f, 0.28f) : Random.Range(0.14f, 0.24f);
+        float size = (gore ? Random.Range(0.16f, 0.28f) : Random.Range(0.14f, 0.24f)) * scale;
         GameObject host = PlaceOn(hit, size, gore ? "~blood" : "~impact");
 
         BulletDecal decal = host.AddComponent<BulletDecal>();
@@ -138,9 +149,110 @@ public class BulletDecal : MonoBehaviour
         // Into grassy ground, the mark under the blades is mostly hidden by them - a scuff in the
         // grass itself too, lighter than a burn.
         if (!flesh && hit.normal.y > 0.6f)
-            GrassMarks.Add(hit.point, Random.Range(0.35f, 0.5f), GrassMarks.Dirt, 0.6f, ScuffHold, ScuffFade);
+            GrassMarks.Add(hit.point, Random.Range(0.35f, 0.5f) * scale, GrassMarks.Dirt, 0.6f, ScuffHold, ScuffFade);
 
         return decal;
+    }
+
+    // ---- the Grenada ----
+
+    const float BlastHold = 16f;
+    const float BlastFade = 4f;
+
+    /// <summary>
+    /// A blast's mark - the Grenada's. It used to leave the same bullet hole every gun does, "just
+    /// one black dot". Now: a scorch the size of the fireball on the floor under it, the grass round
+    /// it burnt, and scorch on any wall close enough to have taken it. `radius` is the blast's own.
+    /// </summary>
+    public static void Blast(Vector3 at, float radius)
+    {
+        // The splat's solid core is about a third of it, so the mark is laid well past the fireball
+        // for the black itself to read as blast-sized.
+        float across = radius * 0.6f;
+
+        if (Physics.Raycast(at + Vector3.up * 0.4f, Vector3.down, out RaycastHit ground, radius,
+                            Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+        {
+            // Nearer the ground, the bigger and blacker the mark.
+            float height = Mathf.Clamp01(1f - (at.y - ground.point.y) / radius);
+            float size = across * Mathf.Lerp(0.6f, 1f, height) * Random.Range(0.9f, 1.1f);
+
+            ScorchOn(ground, size);
+            GrassMarks.Add(ground.point, size * 0.9f, GrassMarks.Soot, Mathf.Lerp(0.7f, 1f, height), BlastHold, BlastFade);
+        }
+
+        // The walls round it - eight ways out, a little down.
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 way = Quaternion.Euler(0f, i * 45f + Random.Range(-10f, 10f), 0f) * new Vector3(0f, -0.25f, 1f);
+            if (Physics.Raycast(at, way.normalized, out RaycastHit wall, across, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                && wall.normal.y < 0.6f)
+                ScorchOn(wall, across * 0.7f * (1f - wall.distance / across) + 0.4f);
+        }
+    }
+
+    /// <summary>
+    /// Everyone a blast caught: soot on the side of them that faced it, darker the closer they were,
+    /// and with gore, a wound and blood from anyone close enough to have been torn up by it. Once per
+    /// body, on its hitbox nearest the blast.
+    /// </summary>
+    public static void BlastBodies(Vector3 at, float radius, Collider[] caught)
+    {
+        System.Collections.Generic.HashSet<MonkeyRig> done = new System.Collections.Generic.HashSet<MonkeyRig>();
+
+        foreach (Collider collider in caught)
+        {
+            MonkeyRig rig = collider != null ? collider.GetComponentInParent<MonkeyRig>() : null;
+            if (rig == null || done.Contains(rig))
+                continue;
+
+            done.Add(rig);
+
+            Collider nearest = collider;
+            float best = (collider.bounds.center - at).sqrMagnitude;
+            foreach (Collider other in caught)
+            {
+                if (other == null || other.GetComponentInParent<MonkeyRig>() != rig)
+                    continue;
+
+                float d = (other.bounds.center - at).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    nearest = other;
+                }
+            }
+
+            Vector3 centre = nearest.bounds.center;
+            Vector3 toward = at - centre;
+            float strength = Mathf.Clamp01(1f - toward.magnitude / radius);
+            if (strength < 0.05f)
+                continue;
+
+            Vector3 facing = toward.sqrMagnitude > 0.0001f ? toward.normalized : Vector3.up;
+
+            // A point on the hitbox's surface on the side facing the blast.
+            Vector3 surface = nearest.ClosestPoint(centre + facing * 3f);
+
+            BodyMarks marks = BodyMarks.On(rig.gameObject);
+            marks.Add(nearest.transform, surface, facing, Mathf.Lerp(0.3f, 0.55f, strength),
+                      Color.Lerp(Color.white, BodyMarks.Soot, Mathf.Lerp(0.5f, 1f, strength)),
+                      BodyMarks.Shape.Soft, BlastHold * 0.4f, BlastFade);
+
+            if (GameSettings.Gore && strength > 0.35f)
+            {
+                marks.Add(nearest.transform, surface, facing, Random.Range(0.18f, 0.24f),
+                          BodyMarks.Blood, BodyMarks.Shape.Wound, WoundHold, WoundFade);
+                BloodSpray(surface, facing, 1.3f);
+                Splatter(surface, facing, 1.3f);
+            }
+        }
+    }
+
+    static void ScorchOn(RaycastHit hit, float size)
+    {
+        GameObject host = PlaceOn(hit, size, "~blast");
+        host.AddComponent<BulletDecal>().Build(hit.collider.transform, Charcoal, BlastHold + BlastFade, BlastFade);
     }
 
     // A bullet hole's colour - the old one (0.32) was never actually applied, see SurfaceMark.shader.
@@ -150,32 +262,37 @@ public class BulletDecal : MonoBehaviour
 
     // ---- gore ----
 
-    // Round a wound, lighter than the wound itself - a smear, not a second hole.
-    static readonly Color BloodSmear = Color.Lerp(Color.white, BodyMarks.Blood, 0.5f);
-    const float WoundHold = 8f;
+    // Round a wound, lighter than the wound itself - a smear, not a second hole - and the run of it
+    // down from the wound, between the two. Turned up 2026-09-29, "turn up the gore a bit".
+    static readonly Color BloodSmear = Color.Lerp(Color.white, BodyMarks.Blood, 0.62f);
+    static readonly Color BloodRun = Color.Lerp(Color.white, BodyMarks.Blood, 0.8f);
+    const float WoundHold = 12f;
     const float WoundFade = 2f;
     const float SplatterReach = 3.5f;
-    const float SplatterLifetime = 12f;
+    const float SplatterLifetime = 14f;
 
     static Material sprayMaterial;
     static Texture sprayTexture;
 
-    /// Blood, only with gore on: through the body onto whatever's behind it, and on the ground
-    /// underneath - where the shot went and where it ran.
-    static void Splatter(Vector3 point, Vector3 normal)
+    /// Blood, only with gore on: through the body onto whatever's behind it - two splashes, one
+    /// either side of the line - and on the ground underneath, where it ran.
+    static void Splatter(Vector3 point, Vector3 normal, float scale)
     {
         // Out the far side, along the line the shot was travelling. World only, so it passes the
         // body's own hitboxes.
-        Vector3 through = (-normal + Random.insideUnitSphere * 0.25f).normalized;
-        if (Physics.Raycast(point, through, out RaycastHit behind, SplatterReach, Hitbox.WorldMask,
-                            QueryTriggerInteraction.Ignore))
-            BloodOn(behind, Random.Range(0.35f, 0.6f));
+        for (int i = 0; i < 2; i++)
+        {
+            Vector3 through = (-normal + Random.insideUnitSphere * 0.35f).normalized;
+            if (Physics.Raycast(point, through, out RaycastHit behind, SplatterReach, Hitbox.WorldMask,
+                                QueryTriggerInteraction.Ignore))
+                BloodOn(behind, Random.Range(0.45f, 0.85f) * scale * (i == 0 ? 1f : 0.6f));
+        }
 
         if (Physics.Raycast(point, Vector3.down, out RaycastHit below, 3f, Hitbox.WorldMask,
                             QueryTriggerInteraction.Ignore))
         {
-            BloodOn(below, Random.Range(0.28f, 0.45f));
-            GrassMarks.Add(below.point, Random.Range(0.4f, 0.6f), GrassMarks.BloodRed, 0.85f,
+            BloodOn(below, Random.Range(0.45f, 0.7f) * scale);
+            GrassMarks.Add(below.point, Random.Range(0.55f, 0.8f) * scale, GrassMarks.BloodRed, 0.9f,
                            SplatterLifetime - WoundFade, WoundFade);
         }
     }
@@ -191,7 +308,7 @@ public class BulletDecal : MonoBehaviour
     /// sprayed out through the far side, falling as it goes. Dark droplets, blended - not the
     /// additive red sparks a hit used to throw, which glowed like embers rather than looking wet.
     /// </summary>
-    static void BloodSpray(Vector3 point, Vector3 normal)
+    static void BloodSpray(Vector3 point, Vector3 normal, float scale = 1f)
     {
         if (sprayMaterial == null)
         {
@@ -210,11 +327,17 @@ public class BulletDecal : MonoBehaviour
             }
         }
 
-        SprayBurst(point, normal, 7, 1.5f, 3.5f, 45f);     // back toward the shooter
-        SprayBurst(point, -normal, 14, 3f, 7f, 30f);       // out through the far side
+        int more = Mathf.RoundToInt(scale * 10f);
+        SprayBurst(point, normal, more, 1.5f, 4f, 45f, 0.04f, 0.1f, 0.35f, 0.7f);          // back toward the shooter
+        SprayBurst(point, -normal, more * 2 + 4, 3f, 8f, 30f, 0.04f, 0.1f, 0.35f, 0.7f);   // out through the far side
+
+        // A puff of red mist where it went in, hanging for a moment.
+        SprayBurst(point + normal * 0.05f, normal, 4, 0.2f, 0.8f, 70f, 0.18f, 0.38f, 0.2f, 0.4f, 0.6f, 0f);
     }
 
-    static void SprayBurst(Vector3 point, Vector3 direction, int count, float minSpeed, float maxSpeed, float cone)
+    static void SprayBurst(Vector3 point, Vector3 direction, int count, float minSpeed, float maxSpeed, float cone,
+                           float minSize, float maxSize, float minLife, float maxLife,
+                           float alpha = 1f, float gravity = 1.4f)
     {
         GameObject host = new GameObject("~bloodSpray");
         host.transform.SetPositionAndRotation(point, Quaternion.LookRotation(direction));
@@ -226,12 +349,13 @@ public class BulletDecal : MonoBehaviour
         main.loop = false;
         main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(minLife, maxLife);
         main.startSpeed = new ParticleSystem.MinMaxCurve(minSpeed, maxSpeed);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.08f);
-        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.55f, 0.03f, 0.04f), new Color(0.3f, 0.01f, 0.02f));
-        main.gravityModifier = 1.4f;
-        main.maxParticles = 32;
+        main.startSize = new ParticleSystem.MinMaxCurve(minSize, maxSize);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.55f, 0.03f, 0.04f, alpha),
+                                                            new Color(0.3f, 0.01f, 0.02f, alpha));
+        main.gravityModifier = gravity;
+        main.maxParticles = Mathf.Max(8, count + 4);
         main.stopAction = ParticleSystemStopAction.Destroy;
 
         ParticleSystem.EmissionModule emission = ps.emission;
@@ -245,11 +369,11 @@ public class BulletDecal : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule fade = ps.colorOverLifetime;
         fade.enabled = true;
-        Gradient alpha = new Gradient();
-        alpha.SetKeys(
+        Gradient over = new Gradient();
+        over.SetKeys(
             new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
-        fade.color = alpha;
+        fade.color = over;
 
         ParticleSystemRenderer view = host.GetComponent<ParticleSystemRenderer>();
         view.renderMode = ParticleSystemRenderMode.Billboard;
@@ -388,9 +512,36 @@ public class BulletDecal : MonoBehaviour
         return host;
     }
 
+    // Every live mark, oldest first. Purple Haze lands fourteen grapes a second, and with gore each
+    // one on a body throws up to three splashes onto the world - without a ceiling, a long spray at
+    // a crowd would leave hundreds. The oldest go first.
+    const int MaxMarks = 220;
+    static readonly System.Collections.Generic.Queue<BulletDecal> live = new System.Collections.Generic.Queue<BulletDecal>();
+
+    /// How many marks are on the world - for the probe.
+    public static int Live
+    {
+        get
+        {
+            while (live.Count > 0 && live.Peek() == null)
+                live.Dequeue();
+            return live.Count;
+        }
+    }
+
     void Build(Transform surface, Color colour, float seconds, float fade)
     {
         EnsureShared();
+
+        live.Enqueue(this);
+        while (live.Count > 0 && live.Peek() == null)
+            live.Dequeue();
+        while (live.Count > MaxMarks)
+        {
+            BulletDecal oldest = live.Dequeue();
+            if (oldest != null)
+                Destroy(oldest.gameObject);
+        }
 
         anchor = surface;
         tint = colour;

@@ -35,6 +35,7 @@ public class LightProjectile : MonoBehaviour
     static int hitboxMask = -1;
 
     const float PelletRadius = 0.06f;
+    const float GrapeMarkScale = 0.8f;
     const float PelletLife = 3f;
     // A grape about this wide, whatever size the bunch was modelled at.
     const float GrapeWidth = 0.09f;
@@ -173,6 +174,10 @@ public class LightProjectile : MonoBehaviour
             if (resolver != null)
                 resolver.ResolveHit(hit.collider, hit.point, travelled, info.DamageAtRange(travelled));
 
+            // And leaves what a bullet would - a hole in the wall, a wound and blood on a gorilla,
+            // gore permitting - a little smaller. Reported: "purple haze doesnt have bullet impact or
+            // gore". It only ever made its purple puff.
+            BulletDecal.Spawn(hit.point, hit.normal, SweepMask, GrapeMarkScale);
             Splat(hit.point);
             Return();
             return;

@@ -281,6 +281,7 @@ public class ProbeRunner : MonoBehaviour
         yield return CheckPurpleHazeRevsOnAim(player);
         yield return CheckRedHotChiliPepper(player);
         yield return CheckChiliChars(player);
+        yield return CheckGrenadaScorch(player);
 
         // ---- what an enemy looks like ----
         // Two weapons, because the pose is different: a pistol is one fist, everything longer
@@ -1120,6 +1121,11 @@ public class ProbeRunner : MonoBehaviour
         Check(spent > 5, "then it fires", $"{spent} grapes in {firing:F1}s");
         Check(mostInTheAir > 3, "grapes are real things in the air", $"{mostInTheAir} at once at most");
         Check(dealt > 0f, "grapes hurt what they reach", $"{dealt:F0} damage to a dummy 15m out");
+
+        // And mark it the way a bullet does - "purple haze doesnt have bullet impact or gore".
+        BodyMarks grapeMarks = dummy.GetComponent<BodyMarks>();
+        int grapeWounds = grapeMarks != null ? grapeMarks.CountOf(BodyMarks.Shape.Wound) + grapeMarks.CountOf(BodyMarks.Shape.Hole) : 0;
+        Check(grapeWounds > 0, "grapes leave wounds where they land", $"{grapeWounds} on the dummy");
         Check(Mathf.Abs(spunSpeed - gun.Info.spinMoveMultiplier) < 0.05f, "spun up, you walk slowly",
               $"x{spunSpeed:F2} move speed");
 
@@ -1426,6 +1432,87 @@ public class ProbeRunner : MonoBehaviour
         int licks = self.Fire != null ? self.Fire.particleCount : 0;
         Check(licks > 3, "you can tell you're on fire", $"{licks} flames in your view");
         CaptureComposite("burning-self");
+        yield return null;
+    }
+
+    /// <summary>
+    /// The Grenada fired at the floor six metres out, with a dummy standing near where it lands. It
+    /// has to leave a scorch the size of a blast - it used to leave the same bullet hole every gun
+    /// does, "just one black dot" - and mark the dummy it caught.
+    /// </summary>
+    IEnumerator CheckGrenadaScorch(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(4f);
+
+        PlayerController.PublishLoadout(new[] { "Pineapple" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+        PlayerMovement movement = player.GetComponent<PlayerMovement>();
+
+        if (cam == null || gun == null || gun.name != "Pineapple" || movement == null)
+        {
+            Check(false, "the Grenada is in hand", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        if (!ClearLine(cam, 9f, out Vector3 direction))
+        {
+            Check(false, "room to fire the Grenada", "every direction is blocked");
+            yield break;
+        }
+
+        Vector3 floor = cam.transform.position + direction * 6f;
+        if (Physics.Raycast(floor + Vector3.up * 2f, Vector3.down, out RaycastHit ground, 10f, Hitbox.WorldMask,
+                            QueryTriggerInteraction.Ignore))
+            floor = ground.point;
+
+        TrainingDummy caught = DummyAt(cam, floor + Vector3.Cross(direction, Vector3.up).normalized * 1.8f);
+        yield return null;
+
+        Face(player, cam, floor);
+        yield return null;
+        Face(player, cam, floor);
+        gun.Use();
+
+        float began = Time.time;
+        while (Time.time - began < 0.6f)
+            yield return null;
+
+        float biggest = 0f;
+        foreach (BulletDecal decal in Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None))
+        {
+            Renderer view = decal.GetComponent<Renderer>();
+            if (decal.name == "~blast" && view != null)
+                biggest = Mathf.Max(biggest, Mathf.Max(view.bounds.size.x, view.bounds.size.z));
+        }
+
+        Check(biggest > 2f, "the Grenada leaves a blast-sized scorch", $"{biggest:F1}m across");
+
+        BodyMarks marks = caught != null ? caught.GetComponent<BodyMarks>() : null;
+        Check(marks != null && marks.Showing > 0, "and marks whoever it caught",
+              marks == null ? "nothing on the dummy" : $"{marks.Showing} mark(s)");
+
+        // From above and to one side, to see the size of it - once the fireball and its smoke have
+        // gone, or they're all the picture shows.
+        began = Time.time;
+        while (Time.time - began < 1.8f)
+            yield return null;
+
+        Vector3 eye = floor - direction * 3f + Vector3.up * 5f;
+        Camera close = new GameObject("~closeBlast").AddComponent<Camera>();
+        close.enabled = false;
+        close.fieldOfView = 55f;
+        close.nearClipPlane = 0.05f;
+        close.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(floor - eye));
+        SavePixels(ReadPixels(960, 540, close), "grenada-scorch.png", 960, 540);
+        Object.DestroyImmediate(close.gameObject);
+
+        if (caught != null)
+            Object.Destroy(caught.gameObject);
+        movement.ResetVelocity();
         yield return null;
     }
 

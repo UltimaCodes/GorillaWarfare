@@ -3799,3 +3799,33 @@ blood on the world and in the grass) and three into a fresh one with gore off (p
 spray, no blood anywhere). Looked at: `mark-body-gore` (red, dark-cored wounds across the chest and
 belly with a smear round them), `mark-body-no-gore` (a dark bullet hole on the forearm, as on a wall).
 Not played, and not seen on a remote player.
+
+# Forty-fourth pass — more gore, grapes that mark, a Grenada that scorches, 2026-09-29
+
+"Turn up the gore a bit, purple haze doesnt have bullet impact or gore, grenada should leave a bigger
+bullet impact naturally instead of just one black dot like for the other guns."
+
+- **More gore.** Wounds 15-20cm (were 12-16), a heavier smear, a run of blood down from each wound,
+  twice the spray plus a puff of red mist where it went in, two splashes on whatever's behind instead
+  of one, and a bigger pool underneath. Wounds hold 12s.
+- **Purple Haze** only ever made its purple puff. A grape now leaves what a bullet does - the hole,
+  or the wound and the blood - at 0.8 the size.
+- **The Grenada** left the same bullet hole every gun does. `BulletDecal.Blast`: a scorch 60% of the
+  blast radius across (~4.5m, ~6m of mark with its soft edge - the splat's solid core is only about a
+  third of it, so at 45% the black read small) on the floor under it, the grass round it burnt, scorch
+  on any wall close enough, and on everyone it caught (`BlastBodies`) soot on the side that faced it
+  and, with gore, a wound and blood from anyone close.
+- **A ceiling on marks**: 220 live, oldest first - a gatling spraying a crowd with gore could otherwise
+  leave hundreds.
+
+## Verified
+
+All nine suites pass. New probe checks: grapes leave wounds on a dummy (4-7), and a Grenada fired at
+the floor leaves a scorch 6m across and marks the dummy standing near it. Looked at: `grenada-scorch`
+(a black crater with a ragged edge in a wide ring of burnt grass, blood beside it from the dummy -
+taken once the smoke had gone; the first render was all fireball), `mark-body-gore` (a bloodied arm
+with dark-cored wounds, blood running down from them, droplets in the air).
+
+`CheckVineSwings` failed once more in this pass - "-2.87m past it", having lifted 5.2m and hung there
+- and passed on the rerun. That's the third miss with three different numbers, before and after the
+swing rework, all on a spawn the check picks at random. Not this work; still worth a proper look.
