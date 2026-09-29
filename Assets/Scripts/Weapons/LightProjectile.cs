@@ -249,7 +249,7 @@ public class LightProjectile : MonoBehaviour
 
     /// <summary>
     /// Chars the world where the puff touches it: a scorch on the surface (BulletDecal.Char) and
-    /// the grass round it (GrassChar), since on grassy ground a mark under the blades is hidden.
+    /// the grass round it (GrassMarks), since on grassy ground a mark under the blades is hidden.
     /// Where it first touches, and again each time it's rolled a little further along - so a
     /// stream played over the floor leaves a trail rather than one blot per puff. On every client,
     /// since every client flies the puffs. A spot that's already black is renewed, not stacked.
@@ -270,11 +270,11 @@ public class LightProjectile : MonoBehaviour
 
         // Wider in the grass than on the ground under it - the fire rolls through the blades
         // round where it lands. At the same size only the blades right at the mark went dark.
-        GrassChar.Touch(point, size * 1.5f);
+        GrassMarks.Add(point, size * 1.5f, 1f, 1f, 3f);
     }
 
     /// <summary>
-    /// Chars the bodies the puff passes through, on the spot it reached them - BodyChar keeps
+    /// Chars the bodies the puff passes through, on the spot it reached them - BodyMarks keeps
     /// it on that hitbox, so it stays where the flame hit as the body moves. Once a body per puff,
     /// at the hitbox nearest the puff. Everyone's puffs, like the world's char: the burning damage
     /// is the shooter's to decide, what it looks like isn't.
@@ -320,7 +320,8 @@ public class LightProjectile : MonoBehaviour
                 toward = Vector3.up;
             Vector3 surface = nearest.ClosestPoint(centre + toward.normalized * 3f);
 
-            BodyChar.On(rig.gameObject).Touch(nearest.transform, surface, Mathf.Clamp(radius, 0.25f, 0.45f));
+            BodyMarks.On(rig.gameObject).Add(nearest.transform, surface, Mathf.Clamp(radius, 0.25f, 0.45f),
+                                            BodyMarks.Soot, 1f, 3f);
         }
     }
 

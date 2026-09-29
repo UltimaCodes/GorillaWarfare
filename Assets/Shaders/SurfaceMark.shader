@@ -1,17 +1,17 @@
-// Red Hot Chili Pepper's char on the world - a multiply decal that actually takes a colour and a
-// strength. BulletDecal's own impacts use Legacy Particles/Multiply, which has neither: the tint
-// and the fade BulletDecal sets on it are ignored, so a mark is only ever the faint grey of its
-// splat texture and pops out at the end instead of fading. Fine for a bullet hole; a char has to
-// go properly black and come back over a few seconds.
+// A mark on the world - a bullet hole, or Red Hot Chili Pepper's char - as a multiply decal that
+// actually takes a colour and a strength. BulletDecal used Legacy Particles/Multiply for this, which
+// has neither: the tint and the fade set on it were ignored, and on a surface it all but vanished -
+// reported as "bullet marks still dont work", and a close-up of a fresh one on a wall showed nothing
+// at all. The chili's char was already on this shader and worked, so impacts moved over too.
 //
 // Drawn after the opaque world (the grass included) with a small depth offset, so blades in front
 // of a mark on the ground still hide it.
-Shader "Custom/CharDecal"
+Shader "Custom/SurfaceMark"
 {
     Properties
     {
         _MainTex ("Shape", 2D) = "white" {}
-        _Color ("Soot", Color) = (0.1, 0.08, 0.07, 1)
+        _Color ("Colour", Color) = (0.1, 0.08, 0.07, 1)
         _Strength ("Strength", Range(0, 1)) = 1
     }
 

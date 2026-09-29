@@ -270,6 +270,9 @@ public class ProbeRunner : MonoBehaviour
         // ---- firing ----
         yield return CheckFiringLeavesAStreak(player);
 
+        // ---- and a mark where it lands ----
+        yield return CheckBulletMarks(player);
+
         // ---- aiming down the banana ----
         yield return CheckAimingDownSights(player);
 
@@ -687,6 +690,134 @@ public class ProbeRunner : MonoBehaviour
     }
 
     // A shot has to leave something behind, hit or miss.
+    /// <summary>
+    /// Reported 2026-09-29: "bullet marks still dont work". The Bunch fired at a wall, at the grassy
+    /// floor and at a dummy - each shot has to leave a mark you can see, on the thing it hit. Every
+    /// mark's surface, size and shader is logged, and each gets a close-up.
+    /// </summary>
+    IEnumerator CheckBulletMarks(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(3f);
+
+        PlayerController.PublishLoadout(new[] { "Rifle" });
+        yield return null;
+        yield return null;
+
+        Camera cam = PlayerController.LocalCamera;
+        SingleShotGun gun = player.ActiveGun;
+        if (cam == null || gun == null || gun.name != "Rifle")
+        {
+            Check(false, "the Bunch is in hand for the marks", gun != null ? gun.name : "nothing");
+            yield break;
+        }
+
+        // A wall: the nearest world surface straight out, in one of twelve directions.
+        Vector3 wallAim = Vector3.zero;
+        bool haveWall = false;
+        for (int i = 0; i < 12 && !haveWall; i++)
+        {
+            Vector3 d = Quaternion.Euler(0f, i * 30f, 0f) * Vector3.forward;
+            if (Physics.Raycast(cam.transform.position, d, out RaycastHit wall, 25f, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                && Mathf.Abs(wall.normal.y) < 0.5f && wall.distance > 3f)
+            {
+                wallAim = wall.point;
+                haveWall = true;
+            }
+        }
+
+        ClearLine(cam, 6f, out Vector3 open);
+        Vector3 floorAim = cam.transform.position + open * 4f;
+        if (Physics.Raycast(floorAim + Vector3.up * 2f, Vector3.down, out RaycastHit floorHit, 10f, Hitbox.WorldMask,
+                            QueryTriggerInteraction.Ignore))
+            floorAim = floorHit.point;
+
+        TrainingDummy dummy = DummyAt(cam, cam.transform.position + open * 5f);
+
+        foreach ((string what, Vector3 aim) in new[]
+                 {
+                     ("wall", wallAim), ("floor", floorAim),
+                     ("body", dummy != null ? ChestOf(dummy) : Vector3.zero),
+                 })
+        {
+            if (aim == Vector3.zero)
+            {
+                log.AppendLine($"  ..    mark on the {what}: nothing to aim at");
+                continue;
+            }
+
+            Face(player, cam, aim);
+
+            // Past the gun's own time between shots, or the trigger does nothing.
+            float settle = Time.time;
+            while (Time.time - settle < gun.Info.SecondsBetweenShots + 0.1f)
+            {
+                Face(player, cam, aim);
+                yield return null;
+            }
+
+            BulletDecal[] before = Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None);
+            int grassBefore = GrassMarks.Live;
+            gun.Use();
+            yield return null;
+
+            Vector3 at;
+            Vector3 facing;
+
+            if (what == "body")
+            {
+                // A shot on a gorilla is blood on the body where it landed, not a decal.
+                BodyMarks blood = dummy.GetComponent<BodyMarks>();
+                Check(blood != null && blood.Showing > 0, "a shot leaves blood on the body where it lands",
+                      blood == null ? "no mark on the dummy" : $"{blood.Showing} mark(s)");
+                at = ChestOf(dummy);
+                facing = (cam.transform.position - at).normalized;
+            }
+            else
+            {
+                BulletDecal made = null;
+                foreach (BulletDecal decal in Object.FindObjectsByType<BulletDecal>(FindObjectsSortMode.None))
+                {
+                    if (System.Array.IndexOf(before, decal) < 0)
+                        made = decal;
+                }
+
+                if (made == null)
+                {
+                    Check(false, $"a shot leaves a mark on the {what}", "no mark made");
+                    continue;
+                }
+
+                Renderer view = made.GetComponent<Renderer>();
+                Transform surface = made.transform.parent;
+                string shader = view != null && view.sharedMaterial != null ? view.sharedMaterial.shader.name : "none";
+                log.AppendLine($"  ..    mark on the {what}: '{made.name}' on '{(surface != null ? surface.name : "nothing")}'"
+                               + $" size {(view != null ? view.bounds.size.magnitude : 0f):F2}m shader {shader}");
+
+                // The shader is the point: Particles/Multiply took no colour and all but vanished.
+                Check(shader == "Custom/SurfaceMark", $"a shot leaves a mark on the {what}", $"{made.name}, {shader}");
+
+                if (what == "floor")
+                    Check(GrassMarks.Live > grassBefore, "and scuffs the grass there", $"{GrassMarks.Live} grass marks, {grassBefore} before");
+
+                at = made.transform.position;
+                facing = -made.transform.forward;
+            }
+
+            Vector3 eye = at + facing * 1.1f + Vector3.up * 0.3f;
+            Camera close = new GameObject("~closeMark").AddComponent<Camera>();
+            close.enabled = false;
+            close.fieldOfView = 45f;
+            close.nearClipPlane = 0.05f;
+            close.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(at - eye));
+            SavePixels(ReadPixels(960, 540, close), $"mark-{what}.png", 960, 540);
+            Object.DestroyImmediate(close.gameObject);
+        }
+
+        if (dummy != null)
+            Object.Destroy(dummy.gameObject);
+        yield return null;
+    }
+
     IEnumerator CheckFiringLeavesAStreak(PlayerController player)
     {
         PlayerController.PublishLoadout(new[] { "Rifle" });
@@ -1014,10 +1145,10 @@ public class ProbeRunner : MonoBehaviour
 
         // Charred where the flame touched it, and only there: some marks, on the near dummy,
         // none on the far one.
-        BodyChar sootNear = near.GetComponent<BodyChar>();
-        BodyChar sootFar = far.GetComponent<BodyChar>();
+        BodyMarks sootNear = near.GetComponent<BodyMarks>();
+        BodyMarks sootFar = far.GetComponent<BodyMarks>();
         Check(sootNear != null && sootNear.Showing > 0, "the flame chars the body where it hits",
-              sootNear == null ? "no char on the dummy" : $"{sootNear.Showing} of {BodyChar.Points} marks");
+              sootNear == null ? "no char on the dummy" : $"{sootNear.Showing} of {BodyMarks.Points} marks");
         Check(sootFar == null || sootFar.Showing == 0, "and not a body it never reached",
               sootFar == null ? "clean" : $"{sootFar.Showing} marks");
 
@@ -1093,7 +1224,7 @@ public class ProbeRunner : MonoBehaviour
             floor = ground.point;
 
         int charsBefore = BulletDecal.CharCount;
-        int grassBefore = GrassChar.Live;
+        int grassBefore = GrassMarks.Live;
 
         float began = Time.time;
         while (Time.time - began < 0.7f)
@@ -1109,8 +1240,8 @@ public class ProbeRunner : MonoBehaviour
 
         Check(BulletDecal.CharCount > charsBefore, "the flame chars the ground it touches",
               $"{BulletDecal.CharCount} char marks, {charsBefore} before");
-        Check(GrassChar.Live > grassBefore, "and burns the grass there",
-              $"{GrassChar.Live} burnt patches, {grassBefore} before");
+        Check(GrassMarks.Live > grassBefore, "and burns the grass there",
+              $"{GrassMarks.Live} burnt patches, {grassBefore} before");
 
         // Once the flames have gone and the char is still at full strength - the moment the
         // stream stops, the fire and its light are on top of whatever's under them.
@@ -1118,20 +1249,20 @@ public class ProbeRunner : MonoBehaviour
         while (Time.time - began < 0.6f)
             yield return null;
 
-        Vector4[] sent = Shader.GetGlobalVectorArray("_GrassCharPoints");
+        Vector4[] sent = Shader.GetGlobalVectorArray("_GrassMarkPoints");
         float nearestSent = float.MaxValue;
         if (sent != null)
         {
-            for (int i = 0; i < (int)Shader.GetGlobalFloat("_GrassCharCount"); i++)
+            for (int i = 0; i < (int)Shader.GetGlobalFloat("_GrassMarkCount"); i++)
                 nearestSent = Mathf.Min(nearestSent, Vector3.Distance(sent[i], floor));
         }
 
-        log.AppendLine($"  ..    grass char sent: {Shader.GetGlobalFloat("_GrassCharCount"):F0} points, nearest "
+        log.AppendLine($"  ..    grass char sent: {Shader.GetGlobalFloat("_GrassMarkCount"):F0} points, nearest "
                        + $"{nearestSent:F2}m from where the flame was aimed, radius {(sent != null && sent.Length > 0 ? sent[0].w : 0f):F2}");
         CaptureComposite("flamer-char-ground-after");
 
         // And close up on the burnt patch itself, from a little above and to one side.
-        if (sent != null && Shader.GetGlobalFloat("_GrassCharCount") > 0.5f)
+        if (sent != null && Shader.GetGlobalFloat("_GrassMarkCount") > 0.5f)
         {
             Vector3 patch = sent[0];
             Vector3 side = Vector3.Cross(direction, Vector3.up).normalized;

@@ -36,10 +36,10 @@ public static class AlwaysIncludeShaders
         "Legacy Shaders/Particles/Alpha Blended",
         "Legacy Shaders/Particles/Multiply",
 
-        // The chili's char on a body (BodyChar adds it as an extra pass while anything's burnt),
-        // and on the world (BulletDecal.Char).
-        "Custom/CharOverlay",
-        "Custom/CharDecal",
+        // Marks on a body - char and blood (BodyMarks adds it as an extra pass while any show),
+        // and on the world - every impact, stray blood and char decal (BulletDecal).
+        "Custom/BodyMarks",
+        "Custom/SurfaceMark",
     };
 
     [MenuItem("Tools/Gorilla Warfare/Always-include the custom shaders")]

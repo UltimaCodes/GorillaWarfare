@@ -16,7 +16,7 @@ using UnityEngine;
 /// orange light flickering on everything round it. The person burning doesn't see their own
 /// body in first person, so for them the flames lick up from the bottom of the view.
 ///
-/// The char is not here - it goes only where the flame actually touched (BodyChar), not over
+/// The char is not here - it goes only where the flame actually touched (BodyMarks), not over
 /// the whole body.
 /// </summary>
 public class Afterburn : MonoBehaviour

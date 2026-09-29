@@ -44,14 +44,14 @@ never reached zero, so every mark carried a faint square. For an edge: `InverseL
 
 **`Legacy Shaders/Particles/Multiply` has no tint.** Setting `_TintColor` or `_Color` on it does
 nothing - the colour comes from vertex colour times texture. That's why bullet impacts never faded
-(they pop out). Anything that needs a coloured or fading multiply uses `Custom/CharDecal`.
+(they pop out), and on a surface they all but vanished. Every mark on the world uses `Custom/SurfaceMark` now.
 
 **A sound bank with no clips of its own isn't silent - it's everyone's.** `GameAudio.Pick` falls back
 to the parent folder, and `Shoot` holds every weapon's clips, so a new weapon with no `Shoot/<key>`
 played all of them at random. A fallback bank passed after it never runs. Give a new weapon its own
 clips or a `GunInfo.standInSound`.
 
-**A global shader array's size is fixed by the first set.** `GrassChar` and `BodyChar` always send
+**A global shader array's size is fixed by the first set.** `GrassMarks` and `BodyMarks` always send
 the full array (64, 16) and a count, never a shorter one.
 
 **In the probe, aim the player, not the camera.** Setting `LocalCamera.transform.rotation` turns

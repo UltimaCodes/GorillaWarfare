@@ -48,13 +48,11 @@ public class BulletDecal : MonoBehaviour
     const float BloodLifetime = 7f;
     const float FadeSeconds = 1.2f;
 
-    static readonly Color Scorch = new Color(0.32f, 0.30f, 0.28f, 1f);
     static readonly Color Blood = new Color(0.62f, 0.05f, 0.06f, 1f);
 
     static Texture2D splat;
-    static Material worldMaterial;
-    static Material bloodMaterial;
-    static Material charMaterial;
+    static Material markMaterial;
+    static Material fallbackMaterial;
     static Mesh quad;
     static Sprite[] boomShapes;
 
@@ -65,7 +63,7 @@ public class BulletDecal : MonoBehaviour
     float diesAt;
     float lifetime;
     float fadeSeconds = FadeSeconds;
-    bool charred;
+    bool onMarkShader;
 
     /// <summary>
     /// Places a mark at a reported hit. Returns null when there is nothing there to mark.
@@ -100,14 +98,40 @@ public class BulletDecal : MonoBehaviour
 
         Puff(hit.point, hit.normal, bloody);
 
-        float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.09f, 0.16f);
+        // On a gorilla: blood on the body itself, where the shot landed (BodyMarks), the way the
+        // chili's char goes on. A decal here sat on the hitbox - a sphere a little in or out of the
+        // mesh - and a fresh one on a chest showed as a red dot at best. Only for something that
+        // isn't a gorilla does blood fall back to a decal.
+        if (bloody)
+        {
+            MonkeyRig body = hit.collider.GetComponentInParent<MonkeyRig>();
+            if (body != null)
+            {
+                BodyMarks.On(body.gameObject).Add(hit.collider.transform, hit.point, Random.Range(0.13f, 0.19f),
+                                                  BodyMarks.Blood, BloodLifetime - BloodFade, BloodFade);
+                return null;
+            }
+        }
+
+        float size = bloody ? Random.Range(0.16f, 0.28f) : Random.Range(0.14f, 0.24f);
         GameObject host = PlaceOn(hit, size, bloody ? "~blood" : "~impact");
 
         BulletDecal decal = host.AddComponent<BulletDecal>();
-        decal.Build(hit.collider.transform, bloody ? Blood : Scorch, bloody ? BloodLifetime : WorldLifetime, FadeSeconds);
+        decal.Build(hit.collider.transform, bloody ? Blood : Impact, bloody ? BloodLifetime : WorldLifetime, FadeSeconds);
+
+        // Into grassy ground, the mark under the blades is mostly hidden by them - a scuff in the
+        // grass itself too, lighter than a burn.
+        if (!bloody && hit.normal.y > 0.6f)
+            GrassMarks.Add(hit.point, Random.Range(0.35f, 0.5f), 0.6f, ScuffHold, ScuffFade);
 
         return decal;
     }
+
+    // A bullet hole's colour - the old one (0.32) was never actually applied, see SurfaceMark.shader.
+    static readonly Color Impact = new Color(0.16f, 0.14f, 0.13f, 1f);
+    const float BloodFade = 2f;
+    const float ScuffHold = 6f;
+    const float ScuffFade = 2f;
 
     // ---- Red Hot Chili Pepper's char ----
 
@@ -124,7 +148,7 @@ public class BulletDecal : MonoBehaviour
     ///
     /// Flame on a spot that's already charred renews that mark instead of stacking another, so
     /// holding the stream on a wall keeps one patch black rather than piling up sixty decals; the
-    /// cap is for everywhere else at once. Bodies char through MonkeyRig, not here - a decal on a
+    /// cap is for everywhere else at once. Bodies char through BodyMarks, not here - a decal on a
     /// moving gorilla would slide off it.
     /// </summary>
     public static void Char(Vector3 point, Vector3 normal, float size)
@@ -233,8 +257,8 @@ public class BulletDecal : MonoBehaviour
         filter.sharedMesh = quad;
 
         view = gameObject.AddComponent<MeshRenderer>();
-        charred = colour == Charcoal && charMaterial != null;
-        view.sharedMaterial = charred ? charMaterial : colour == Blood ? bloodMaterial : worldMaterial;
+        onMarkShader = markMaterial != null;
+        view.sharedMaterial = onMarkShader ? markMaterial : fallbackMaterial;
         view.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         view.receiveShadows = false;
         view.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -273,8 +297,9 @@ public class BulletDecal : MonoBehaviour
 
         view.GetPropertyBlock(block);
 
-        // A char's shader takes its colour and strength separately (CharDecal.shader).
-        if (charred)
+        // SurfaceMark.shader takes its colour and strength separately. The fallback (only if that
+        // shader's missing) is the old Particles/Multiply, which honours neither.
+        if (onMarkShader)
         {
             block.SetColor("_Color", tint);
             block.SetFloat("_Strength", strength);
@@ -439,18 +464,19 @@ public class BulletDecal : MonoBehaviour
         if (splat == null)
             splat = BuildSplat();
 
-        if (worldMaterial == null)
-            worldMaterial = BuildMaterial();
-
-        if (bloodMaterial == null)
-            bloodMaterial = BuildMaterial();
-
-        // The chili's char - its own shader, since Particles/Multiply ignores a tint and a fade.
-        if (charMaterial == null)
+        // Every mark - impact, blood off a gorilla, char - on the one shader that honours a colour
+        // and a fade (SurfaceMark.shader).
+        if (markMaterial == null)
         {
-            Shader shader = Shader.Find("Custom/CharDecal");
+            Shader shader = Shader.Find("Custom/SurfaceMark");
             if (shader != null)
-                charMaterial = new Material(shader) { name = "~char", mainTexture = splat };
+                markMaterial = new Material(shader) { name = "~mark", mainTexture = splat };
+        }
+
+        if (markMaterial == null && fallbackMaterial == null)
+        {
+            Debug.LogWarning("[marks] no Custom/SurfaceMark shader - marks fall back to Particles/Multiply and barely show");
+            fallbackMaterial = BuildMaterial();
         }
     }
 

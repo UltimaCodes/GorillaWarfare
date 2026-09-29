@@ -3719,3 +3719,40 @@ blades round the scorch), `flamer-char-ground-after`, `flamer-stream`, `burning-
 Not verified: two people, again - the rev and burn flags on the stream, the shove, and what the char
 looks like on a remote player (the same code as a dummy, but a player's hitboxes have never been
 charred in front of anyone). Nothing here has been played.
+
+# Forty-second pass — bullet marks that show, 2026-09-29
+
+"Bullet marks still dont work but the scorching and burning does, maybe use the same logic for bullet
+impact as you did for scorching and burning?"
+
+## What was actually wrong
+
+A new probe check (`CheckBulletMarks`) shoots the Bunch at a wall, the grassy floor and a dummy, and
+takes a close-up of each mark. Every shot *made* a mark - on the wall, on the floor plane, on the
+dummy's chest hitbox - and none of them could be seen: the wall showed nothing but the impact's
+flash, the floor a pale speck, the body a red dot. (The check's first run also "failed" the floor and
+body for a reason of its own: it fired three shots two frames apart, inside the Bunch's time between
+shots, so two never went off.)
+
+- **The shader.** Impacts were drawn with `Legacy Particles/Multiply`, which ignores the colour and
+  the fade BulletDecal set on it and, on a surface, all but vanished. The chili's char had its own
+  shader that honours both and showed fine - so, as suggested, every mark uses it now
+  (`CharDecal.shader` renamed `SurfaceMark.shader`, "Custom/SurfaceMark"). Impacts are a proper dark
+  (0.16) instead of the grey that was never applied, a little bigger (14-24cm), and fade at the end
+  instead of popping out.
+- **Grass.** Into grassy ground the mark under the blades is mostly hidden - the same reason the
+  chili's floor char needed the grass burn. A shot into the ground scuffs the blades too, lighter than
+  a burn (0.6 of it, 6s held, 2s fading).
+- **Bodies.** Blood was a decal on the hitbox - a sphere a little in or out of the mesh. It's a mark on
+  the body itself now, on the bone that was hit, the way the char goes on. `BodyChar` became
+  `BodyMarks` (and `CharOverlay.shader` `BodyMarks.shader`), with a colour, a hold and a fade per mark,
+  so soot and blood share the sixteen slots. Only something that isn't a gorilla still gets a blood
+  decal.
+
+`GrassChar` became `GrassMarks` the same way, with a darkness, hold and fade per mark.
+
+## Verified
+
+All nine suites pass. Looked at: `mark-wall` (a dark bullet hole on a palm trunk), `mark-floor` (the
+same on the ground), `mark-body` (a blood patch where the shot landed - it caught the face), and the
+chili's char renders unchanged.
