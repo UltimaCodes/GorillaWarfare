@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83cc44a98115ee945a1172ca9d976a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponFinish
+  key: thunderstruck
+  displayName: Thunderstruck
+  flavour: Crackles when it's quiet.
+  rarity: 3
+  paint: {r: 0.043137256, g: 0.105882354, b: 0.23921569, a: 1}
+  repaint: 1
+  metallic: 0.5
+  smoothness: 0.8
+  pattern: {fileID: 2800000, guid: f0b58fc8c7b7af847a96574c98140eca, type: 3}
+  patternColour: {r: 0.49019608, g: 0.9529412, b: 1, a: 1}
+  patternRepeats: 5
+  patternScroll: {x: 0, y: 2.2}
+  patternGlow: 3
+  glow: {r: 0.22352941, g: 0.8352941, b: 1, a: 1}
+  glowStrength: 0.5
+  pulseSpeed: 6
+  pulseDepth: 0.75
+  hueCycle: 0
+  hueSpread: 0
+  rim: {r: 0.60784316, g: 0.9372549, b: 1, a: 1}
+  rimStrength: 2
+  rimPower: 2.5
+  glint: {r: 1, g: 1, b: 1, a: 0}
+  glintEvery: 0
+  glintWidth: 0.15
+  wobble: 0
+  wobbleSpeed: 6
+  auraSprite: {fileID: 2800000, guid: 42112d1255933cd4cb724f53e190afb2, type: 3}
+  auraColour: {r: 0.56078434, g: 0.91764706, b: 1, a: 1}
+  auraRate: 22
+  auraSize: 0.16
+  auraLife: 0.35
+  auraMotion: 4
+  auraGlows: 1
+  auraRainbow: 0
+  models: []

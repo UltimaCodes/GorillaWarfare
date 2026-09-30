@@ -1,363 +1,273 @@
-using System.IO;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Builds the crate shop as a prefab, once - same reasoning SettingsMenuBuilder already
-/// established: this has to be reachable from wherever a "open crates" button ends up living,
-/// and building it as scene content would tie it to one specific scene for no reason. Drag the
-/// result into whatever scene needs it, wire a button to SetActive(true) on it.
+/// Builds the crate screen (CrateOpeningScreen) as a prefab, Resources/CrateShop.prefab, which
+/// RoomManager instantiates. Rebuilt 2026-09-30 in the main menu's own style (MenuStyle) - "revamp
+/// the entire crates system to match the rest of the UI" - with the three chests (Kenney, CC0,
+/// Assets/Art/Crates) on a stage behind the cards, each in its own look (FinishLibraryBuilder's
+/// crate looks), and a reel of real finish cards.
 ///
-/// Re-runnable and idempotent in the same shape every other builder in this project uses -
-/// deletes and rebuilds the prefab from scratch. Nothing here has been hand-edited yet the way
-/// the in-match HUD has, so a destructive rebuild is still safe - if that changes, this needs the
-/// same Run()/Repair() split HudBuilder.cs uses.
+/// Re-runnable and destructive - it replaces the prefab whole. Nothing in it has been edited by
+/// hand; if that changes, this wants the Run/Repair split HudBuilder has.
 /// </summary>
 public static class CrateShopBuilder
 {
-    const string Folder = "Assets/Resources";
-    const string Path = Folder + "/CrateShop.prefab";
-    const string BananaTexturePath = "Assets/Textures/UI/BananaHealth.png";
+    const string Path = "Assets/Resources/CrateShop.prefab";
+    const string Sprites = "Assets/Resources/Particles/Finish";
+    const float Margin = 100f;
 
-    static readonly Color Ink = new Color(0.95f, 0.95f, 0.92f);
-    static readonly Color Dim = new Color(0.95f, 0.95f, 0.92f, 0.6f);
-    // Fully opaque, not 0.95 - a real screenshot showed the game world clearly through what was
-    // meant to read as a solid takeover, well past what 5% see-through should produce. Rather
-    // than chase why (no debugger on a batch-mode render), a modal shop screen doesn't actually
-    // need to show the game behind it at all, so opaque sidesteps the question entirely.
-    static readonly Color Backdrop = new Color(0.03f, 0.03f, 0.04f, 1f);
-    static readonly Color PanelFace = new Color(0.1f, 0.1f, 0.12f, 1f);
-    static readonly Color CardFace = new Color(0.16f, 0.16f, 0.19f, 1f);
-
-    static readonly Vector2 Center = new Vector2(0.5f, 0.5f);
-    static readonly Vector2 TopCenter = new Vector2(0.5f, 1f);
+    static readonly string[] Chests = { "DungeonChest", "PirateChest", "PlatformerChest" };
+    static readonly string[] Looks = { "crate-rotten", "crate-ripe", "crate-holy" };
 
     [MenuItem("Tools/Gorilla Warfare/Build the crate shop")]
     public static void Run()
     {
-        TMP_FontAsset font = FindFont();
+        MenuStyle.Load();
 
-        if (!Directory.Exists(Folder))
-            Directory.CreateDirectory(Folder);
-
-        GameObject root = new GameObject("CrateShop",
-            typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-
-        Canvas canvas = root.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 550; // above the settings menu (500), below nothing
-
-        CanvasScaler scaler = root.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.matchWidthOrHeight = 0.5f;
-
+        GameObject root = MenuStyle.CanvasRoot("CrateShop", 550);
         CrateOpeningScreen screen = root.AddComponent<CrateOpeningScreen>();
-        SerializedObject so = new SerializedObject(screen);
 
-        // Everything actually visible lives under this, not directly under root - root has to
-        // stay active permanently so Awake (and Instance) actually fires; Unity never calls
-        // Awake on a GameObject instantiated already-inactive, which an earlier version of this
-        // learned the hard way (every button click logged "RoomManager never instantiated the
-        // screen" despite it having done exactly that - Instance was simply never set). Starts
-        // hidden; Open()/Close() toggle this, matching SettingsMenu's own `panel` shape exactly.
-        GameObject panel = new GameObject("Panel", typeof(RectTransform));
-        panel.transform.SetParent(root.transform, false);
-        Stretch((RectTransform)panel.transform);
-        panel.SetActive(false);
-        Wire(so, "panel", panel);
+        RectTransform panel = MenuStyle.Stretch(root.transform, "Panel");
+        CanvasGroup fade = panel.gameObject.AddComponent<CanvasGroup>();
+        MenuStyle.Panel(panel, "Backdrop", Vector2.zero, Vector2.one, MenuStyle.Middle, Vector2.zero, Vector2.zero, MenuStyle.Backing, raycast: true);
 
-        Panel(panel.transform, "Backdrop", Vector2.zero, Vector2.one, Center, Vector2.zero, Vector2.zero, Backdrop);
+        RectTransform stageRect = MenuStyle.Stretch(panel, "Stage");
+        RawImage stageView = stageRect.gameObject.AddComponent<RawImage>();
+        stageView.raycastTarget = false;
 
-        // ---------------------------------------------------------------- select page
-        GameObject selectPage = new GameObject("SelectPage", typeof(RectTransform));
-        selectPage.transform.SetParent(panel.transform, false);
-        Stretch((RectTransform)selectPage.transform);
+        TMP_Text tokenLabel = MenuStyle.Label(panel, "Tokens", "0 TOKENS", false, 44f, MenuStyle.Banana, TextAlignmentOptions.TopRight,
+                                              MenuStyle.TopRight, new Vector2(-Margin, -60f), new Vector2(600f, 56f));
+        TokenCounter counter = tokenLabel.gameObject.AddComponent<TokenCounter>();
+        MenuStyle.Wire(counter, "text", tokenLabel);
 
-        TMP_Text title = Text(selectPage.transform, "Title", font, 72f, TextAlignmentOptions.Center,
-                              TopCenter, new Vector2(0f, -90f), new Vector2(1200f, 100f), Ink);
-        title.text = "OPEN A CRATE";
+        // ---------------------------------------------------------------- pick a crate
+        RectTransform select = MenuStyle.Stretch(panel, "SelectPage");
+        MenuStyle.Label(select, "Title", "CRATES", true, 96f, Color.white, TextAlignmentOptions.TopLeft,
+                        MenuStyle.TopLeft, new Vector2(Margin, -50f), new Vector2(900f, 120f));
+        MenuStyle.Label(select, "Subtitle", "EVERY FINISH WORKS ON EVERY WEAPON", false, 30f, MenuStyle.Muted, TextAlignmentOptions.Bottom,
+                        MenuStyle.BottomMiddle, new Vector2(0f, 76f), new Vector2(900f, 40f)).characterSpacing = 4f;
+        Button inventory = MenuStyle.GhostButton(select, "Inventory", "INVENTORY", MenuStyle.TopRight, new Vector2(-Margin - 440f, -62f), new Vector2(260f, 58f));
+        Button close = MenuStyle.TextButton(select, "Back", "BACK", 52f, MenuStyle.BottomLeft, new Vector2(Margin + 20f, 60f), new Vector2(300f, 70f));
 
-        TMP_Text balance = Text(selectPage.transform, "Balance", font, 40f, TextAlignmentOptions.Center,
-                                TopCenter, new Vector2(0f, -170f), new Vector2(800f, 60f),
-                                new Color(1f, 0.86f, 0.2f));
-        balance.text = "0 TOKENS";
-        Wire(so, "tokenBalanceText", balance);
+        CrateCard[] cards = new CrateCard[3];
+        RectTransform[] spots = new RectTransform[3];
+        for (int i = 0; i < 3; i++)
+            cards[i] = BuildCrateCard(select, i, new Vector2((i - 1) * 540f, -130f), out spots[i]);
 
-        GameObject rotten = BuildCrateButton(selectPage.transform, "RottenCrateButton", -520f, font,
-                                             new Color(0.55f, 0.42f, 0.22f));
-        GameObject ripe = BuildCrateButton(selectPage.transform, "RipeCrateButton", 0f, font,
-                                           new Color(0.96f, 0.82f, 0.16f));
-        GameObject holy = BuildCrateButton(selectPage.transform, "HolyCrateButton", 520f, font,
-                                           new Color(0.7f, 0.9f, 1f));
+        // ---------------------------------------------------------------- opening
+        RectTransform opening = MenuStyle.Stretch(panel, "OpeningPage");
+        Image dim = MenuStyle.Panel(opening, "Dim", Vector2.zero, Vector2.one, MenuStyle.Middle, Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0f));
+        TMP_Text openingTitle = MenuStyle.Label(opening, "CrateName", "RIPE CRATE", true, 72f, MenuStyle.Banana, TextAlignmentOptions.Top,
+                                                MenuStyle.TopMiddle, new Vector2(0f, -60f), new Vector2(1200f, 90f));
 
-        Wire(so, "rottenButton", rotten.GetComponent<CrateButton>());
-        Wire(so, "ripeButton", ripe.GetComponent<CrateButton>());
-        Wire(so, "holyButton", holy.GetComponent<CrateButton>());
+        // The reel.
+        RectTransform reel = MenuStyle.Rect(opening, "Reel", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, new Vector2(0f, -20f), new Vector2(1640f, 300f));
+        MenuStyle.Panel(reel, "Backing", Vector2.zero, Vector2.one, MenuStyle.Middle, Vector2.zero, Vector2.zero, new Color(0.02f, 0.025f, 0.03f, 0.92f));
+        MenuStyle.Panel(reel, "EdgeTop", new Vector2(0f, 1f), new Vector2(1f, 1f), MenuStyle.TopMiddle, Vector2.zero, new Vector2(0f, 3f), MenuStyle.Rule);
+        MenuStyle.Panel(reel, "EdgeBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), MenuStyle.BottomMiddle, Vector2.zero, new Vector2(0f, 3f), MenuStyle.Rule);
+        RectTransform viewport = MenuStyle.Rect(reel, "Viewport", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, Vector2.zero, new Vector2(1600f, 270f));
+        viewport.gameObject.AddComponent<RectMask2D>();
+        RectTransform strip = MenuStyle.Rect(viewport, "Strip", MenuStyle.MiddleLeft, MenuStyle.MiddleLeft, MenuStyle.MiddleLeft, Vector2.zero, new Vector2(1f, 240f));
+        FinishCard reelCard = InventoryBuilder.BuildCard(strip, "ReelCard", new Vector2(200f, 240f));
+        RectTransform reelCardRect = (RectTransform)reelCard.transform;
+        reelCardRect.anchorMin = reelCardRect.anchorMax = MenuStyle.MiddleLeft;
+        reelCardRect.pivot = MenuStyle.Middle;
+        Object.DestroyImmediate(reelCard.GetComponent<HoverLift>());
+        Object.DestroyImmediate(reelCard.GetComponent<PopIn>());
+        reelCard.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f);   // no selection frame on the reel
+        Image pointer = MenuStyle.Panel(reel, "Pointer", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, Vector2.zero, new Vector2(6f, 320f), MenuStyle.Banana);
+        MenuStyle.Panel(pointer.rectTransform, "Top", MenuStyle.TopMiddle, MenuStyle.TopMiddle, MenuStyle.BottomMiddle, Vector2.zero, new Vector2(34f, 14f), MenuStyle.Banana);
+        MenuStyle.Panel(pointer.rectTransform, "Bottom", MenuStyle.BottomMiddle, MenuStyle.BottomMiddle, MenuStyle.TopMiddle, Vector2.zero, new Vector2(34f, 14f), MenuStyle.Banana);
 
-        GameObject closeGo = BuildTextButton(selectPage.transform, "CloseButton", "CLOSE", font,
-                                             new Vector2(0.5f, 0f), new Vector2(0f, 90f),
-                                             new Vector2(300f, 70f));
-        Wire(so, "closeButton", closeGo.GetComponent<Button>());
+        TMP_Text skip = MenuStyle.Label(opening, "SkipHint", "CLICK TO SKIP", false, 28f, MenuStyle.Muted, TextAlignmentOptions.Bottom,
+                                        MenuStyle.BottomMiddle, new Vector2(0f, 110f), new Vector2(600f, 40f));
+        skip.characterSpacing = 6f;
 
-        Wire(so, "selectPage", selectPage);
+        // The reveal.
+        RectTransform reveal = MenuStyle.Stretch(opening, "Reveal");
+        Image raysA = RayImage(reveal, "RaysA", 1500f);
+        Image raysB = RayImage(reveal, "RaysB", 1100f);
+        Image frame = MenuStyle.Panel(reveal, "WeaponFrame", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, new Vector2(0f, 172f), new Vector2(748f, 584f), Color.white);
+        RectTransform revealRect = MenuStyle.Rect(reveal, "Weapon", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, new Vector2(0f, 172f), new Vector2(740f, 576f));
+        RawImage revealView = revealRect.gameObject.AddComponent<RawImage>();
+        revealView.raycastTarget = false;
 
-        // ---------------------------------------------------------------- opening page
-        GameObject openingPage = new GameObject("OpeningPage", typeof(RectTransform));
-        openingPage.transform.SetParent(panel.transform, false);
-        Stretch((RectTransform)openingPage.transform);
-        openingPage.SetActive(false);
+        TMP_Text badge = MenuStyle.Label(reveal, "New", "NEW!", true, 64f, MenuStyle.Banana, TextAlignmentOptions.Center,
+                                         MenuStyle.Middle, new Vector2(330f, 420f), new Vector2(260f, 90f));
+        TMP_Text rarity = MenuStyle.Label(reveal, "Rarity", "APEX", false, 40f, Color.white, TextAlignmentOptions.Center,
+                                          MenuStyle.Middle, new Vector2(0f, -145f), new Vector2(800f, 50f));
+        rarity.characterSpacing = 10f;
+        Image rarityBar = MenuStyle.Panel(reveal, "RarityBar", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, new Vector2(0f, -176f), new Vector2(260f, 6f), Color.white);
+        TMP_Text name = MenuStyle.Label(reveal, "Name", "PRISMATIC", true, 104f, Color.white, TextAlignmentOptions.Center,
+                                        MenuStyle.Middle, new Vector2(0f, -240f), new Vector2(1600f, 120f));
+        TMP_Text flavour = MenuStyle.Label(reveal, "Flavour", "", false, 32f, new Color(1f, 1f, 1f, 0.75f), TextAlignmentOptions.Center,
+                                           MenuStyle.Middle, new Vector2(0f, -306f), new Vector2(1400f, 44f));
+        TMP_Text count = MenuStyle.Label(reveal, "Count", "", false, 28f, MenuStyle.Banana, TextAlignmentOptions.Center,
+                                         MenuStyle.Middle, new Vector2(0f, -346f), new Vector2(1000f, 40f));
+        count.characterSpacing = 4f;
+        TMP_Text collection = MenuStyle.Label(reveal, "Collection", "", false, 28f, MenuStyle.Muted, TextAlignmentOptions.TopLeft,
+                                              MenuStyle.TopLeft, new Vector2(Margin, -60f), new Vector2(600f, 40f));
+        collection.characterSpacing = 4f;
 
-        // The carousel: a masked viewport with a wide strip inside it that slides left. Cards
-        // are cloned from cardTemplate at runtime (CrateOpeningScreen.BuildCarousel) - nothing
-        // here is hand-placed per card.
-        GameObject viewportGo = Panel(openingPage.transform, "CarouselViewport", Center, Center, Center,
-                                      Vector2.zero, new Vector2(1400f, 260f), new Color(0f, 0f, 0f, 0.4f));
-        viewportGo.AddComponent<RectMask2D>();
-        RectTransform viewport = (RectTransform)viewportGo.transform;
-        Wire(so, "carouselViewport", viewport);
+        RectTransform actionsRect = MenuStyle.Rect(reveal, "Actions", MenuStyle.BottomMiddle, MenuStyle.BottomMiddle, MenuStyle.BottomMiddle,
+                                                   new Vector2(0f, 60f), new Vector2(1240f, 76f));
+        CanvasGroup actions = actionsRect.gameObject.AddComponent<CanvasGroup>();
+        Button equipAll = MenuStyle.PrimaryButton(actionsRect, "EquipAll", "EQUIP ON ALL", MenuStyle.MiddleLeft, new Vector2(0f, 0f), new Vector2(300f, 72f));
+        Button toInventory = MenuStyle.GhostButton(actionsRect, "ToInventory", "INVENTORY", MenuStyle.MiddleLeft, new Vector2(316f, 0f), new Vector2(250f, 72f));
+        Button scrap = MenuStyle.GhostButton(actionsRect, "Scrap", "SCRAP", MenuStyle.MiddleLeft, new Vector2(582f, 0f), new Vector2(250f, 72f), new Color(1f, 0.1f, 0.25f, 0.6f));
+        Button another = MenuStyle.GhostButton(actionsRect, "OpenAnother", "OPEN ANOTHER", MenuStyle.MiddleLeft, new Vector2(848f, 0f), new Vector2(392f, 72f), new Color(1f, 0.82f, 0.12f, 0.6f));
+        Button back = MenuStyle.TextButton(reveal, "Back", "BACK", 52f, MenuStyle.BottomLeft, new Vector2(Margin + 20f, 60f), new Vector2(300f, 70f));
 
-        GameObject stripGo = new GameObject("CarouselStrip", typeof(RectTransform));
-        stripGo.transform.SetParent(viewportGo.transform, false);
-        RectTransform strip = (RectTransform)stripGo.transform;
-        strip.anchorMin = strip.anchorMax = new Vector2(0f, 0.5f);
-        strip.pivot = new Vector2(0f, 0.5f);
-        strip.anchoredPosition = Vector2.zero;
-        strip.sizeDelta = new Vector2(1f, 260f); // width is meaningless - children position themselves
-        Wire(so, "carouselStrip", strip);
+        Image flash = MenuStyle.Panel(panel, "Flash", Vector2.zero, Vector2.one, MenuStyle.Middle, Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0f));
 
-        RectTransform card = BuildCard(stripGo.transform, "CardTemplate", font);
-        card.gameObject.SetActive(false);
-        Wire(so, "cardTemplate", card);
+        // ---------------------------------------------------------------- wiring
+        MenuStyle.Wire(screen, "panel", panel.gameObject);
+        MenuStyle.Wire(screen, "fade", fade);
+        MenuStyle.Wire(screen, "stageView", stageView);
+        MenuStyle.Wire(screen, "tokens", counter);
+        MenuStyle.Wire(screen, "selectPage", select.gameObject);
+        MenuStyle.Wire(screen, "cards", cards);
+        MenuStyle.Wire(screen, "chestSpots", spots);
+        MenuStyle.Wire(screen, "closeButton", close);
+        MenuStyle.Wire(screen, "inventoryButton", inventory);
 
-        // A fixed line at the viewport's own centre, on top of the strip - where the result
-        // actually lands, same convention every real case-opening reel uses.
-        GameObject pointer = Panel(viewportGo.transform, "LandingPointer", Center, Center, Center,
-                                   Vector2.zero, new Vector2(6f, 280f), new Color(1f, 1f, 1f, 0.9f));
-        Wire(so, "landingPointer", (RectTransform)pointer.transform);
+        GameObject[] chests = new GameObject[3];
+        WeaponFinish[] looks = new WeaponFinish[3];
+        for (int i = 0; i < 3; i++)
+        {
+            chests[i] = Load<GameObject>($"Assets/Art/Crates/{Chests[i]}/chest.fbx");
+            looks[i] = Load<WeaponFinish>($"{FinishLibraryBuilder.LooksFolder}/{Looks[i]}.asset");
+        }
+        MenuStyle.Wire(screen, "chestModels", chests);
+        MenuStyle.Wire(screen, "chestLooks", looks);
+        MenuStyle.Wire(screen, "coinModel", Load<GameObject>("Assets/Art/Crates/PlatformerChest/coin-gold.fbx"));
+        MenuStyle.Wire(screen, "glowSprite", Load<Texture2D>($"{Sprites}/light_01.png"));
+        MenuStyle.Wire(screen, "starSprite", Load<Texture2D>($"{Sprites}/star_06.png"));
+        MenuStyle.Wire(screen, "sparkSprite", Load<Texture2D>($"{Sprites}/star_04.png"));
+        MenuStyle.Wire(screen, "smokeSprite", Load<Texture2D>($"{Sprites}/smoke_05.png"));
+        MenuStyle.Wire(screen, "confettiSprite", Load<Texture2D>($"{Sprites}/star_07.png"));
+        MenuStyle.Wire(screen, "raySprite", Load<Texture2D>($"{Sprites}/star_08.png"));
 
-        // ---------------------------------------------------------------- result panel
-        GameObject resultPanel = new GameObject("ResultPanel", typeof(RectTransform));
-        resultPanel.transform.SetParent(openingPage.transform, false);
-        Stretch((RectTransform)resultPanel.transform);
-        resultPanel.SetActive(false);
+        MenuStyle.Wire(screen, "openingPage", opening.gameObject);
+        MenuStyle.Wire(screen, "openingTitle", openingTitle);
+        MenuStyle.Wire(screen, "flash", flash);
+        MenuStyle.Wire(screen, "dim", dim);
+        MenuStyle.Wire(screen, "skipHint", skip);
 
-        Image glow = Image(resultPanel.transform, "Glow", Vector2.zero, Vector2.one, Center,
-                           Vector2.zero, Vector2.zero, new Color(1f, 1f, 1f, 0.3f));
-        Wire(so, "resultGlow", glow);
+        MenuStyle.Wire(screen, "reel", reel);
+        MenuStyle.Wire(screen, "reelViewport", viewport);
+        MenuStyle.Wire(screen, "reelStrip", strip);
+        MenuStyle.Wire(screen, "reelCardTemplate", reelCard);
+        MenuStyle.Wire(screen, "pointer", pointer);
 
-        Image resultCard = Image(resultPanel.transform, "ResultCard", Center, Center, Center,
-                                 new Vector2(0f, 60f), new Vector2(260f, 340f), Color.white);
-        resultCard.sprite = BananaSprite();
-        Wire(so, "resultCardImage", resultCard);
+        MenuStyle.Wire(screen, "revealGroup", reveal.gameObject);
+        MenuStyle.Wire(screen, "revealView", revealView);
+        MenuStyle.Wire(screen, "revealFrame", frame);
+        MenuStyle.Wire(screen, "raysA", raysA);
+        MenuStyle.Wire(screen, "raysB", raysB);
+        MenuStyle.Wire(screen, "revealName", name);
+        MenuStyle.Wire(screen, "revealRarity", rarity);
+        MenuStyle.Wire(screen, "revealRarityBar", rarityBar);
+        MenuStyle.Wire(screen, "revealFlavour", flavour);
+        MenuStyle.Wire(screen, "newBadge", badge);
+        MenuStyle.Wire(screen, "countText", count);
+        MenuStyle.Wire(screen, "collectionText", collection);
+        MenuStyle.Wire(screen, "actions", actions);
+        MenuStyle.Wire(screen, "equipAllButton", equipAll);
+        MenuStyle.Wire(screen, "equipAllLabel", equipAll.GetComponentInChildren<TMP_Text>());
+        MenuStyle.Wire(screen, "inventoryFromResultButton", toInventory);
+        MenuStyle.Wire(screen, "scrapButton", scrap);
+        MenuStyle.Wire(screen, "scrapLabel", scrap.GetComponentInChildren<TMP_Text>());
+        MenuStyle.Wire(screen, "openAnotherButton", another);
+        MenuStyle.Wire(screen, "openAnotherLabel", another.GetComponentInChildren<TMP_Text>());
+        MenuStyle.Wire(screen, "backButton", back);
 
-        TMP_Text resultText = Text(resultPanel.transform, "ResultRarity", font, 84f, TextAlignmentOptions.Center,
-                                   Center, new Vector2(0f, -140f), new Vector2(900f, 100f), Ink);
-        resultText.text = "APEX";
-        Wire(so, "resultRarityText", resultText);
+        opening.gameObject.SetActive(false);
+        reveal.gameObject.SetActive(false);
+        panel.gameObject.SetActive(false);
 
-        GameObject openAnother = BuildTextButton(resultPanel.transform, "OpenAnotherButton", "OPEN ANOTHER",
-                                                 font, new Vector2(0.5f, 0f), new Vector2(-180f, 90f),
-                                                 new Vector2(340f, 70f));
-        Wire(so, "openAnotherButton", openAnother.GetComponent<Button>());
-
-        GameObject closeFromResult = BuildTextButton(resultPanel.transform, "CloseFromResultButton", "CLOSE",
-                                                     font, new Vector2(0.5f, 0f), new Vector2(180f, 90f),
-                                                     new Vector2(340f, 70f));
-        // Its own field. This used to be onClick.AddListener(screen.Close) right here - a runtime
-        // listener, which the saved prefab never keeps, so the button shipped dead.
-        Wire(so, "closeFromResultButton", closeFromResult.GetComponent<Button>());
-
-        Wire(so, "resultPanel", resultPanel);
-
-        Wire(so, "openingPage", openingPage);
-
-        so.ApplyModifiedPropertiesWithoutUndo();
-
-        if (File.Exists(Path))
+        if (System.IO.File.Exists(Path))
             AssetDatabase.DeleteAsset(Path);
+        InventoryBuilder.Save(root, Path);
 
-        PrefabUtility.SaveAsPrefabAsset(root, Path);
-        Object.DestroyImmediate(root);
-
-        AssetDatabase.SaveAssets();
-
-        Debug.Log($"[crates] built at {Path} - RoomManager instantiates it automatically, "
-                  + "a button anywhere just calls CrateOpeningScreen.Instance.Open()");
-
+        Debug.Log($"[crates] built {Path} - RoomManager instantiates it; a button anywhere calls CrateOpeningScreen.Instance.Open()");
         if (Application.isBatchMode)
             EditorApplication.Exit(0);
     }
 
-    static GameObject BuildCrateButton(Transform parent, string name, float x, TMP_FontAsset font, Color accent)
+    /// <summary>
+    /// A crate's card: its colour along the top, name, price, line, a bar per rarity with its real
+    /// odds, and OPEN. `spot` comes back as the point over the card where its chest stands.
+    /// </summary>
+    static CrateCard BuildCrateCard(Transform page, int index, Vector2 centre, out RectTransform spot)
     {
-        GameObject go = Panel(parent, name, Center, Center, Center,
-                              new Vector2(x, -20f), new Vector2(440f, 560f), CardFace);
+        CrateInfo crate = CrateInfo.All[index];
+        Vector2 size = new Vector2(470f, 520f);
 
-        CanvasGroup group = go.AddComponent<CanvasGroup>();
-        Button button = go.AddComponent<Button>();
-        button.targetGraphic = go.GetComponent<Image>();
+        RectTransform rect = MenuStyle.Rect(page, $"{crate.Key}Card", MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, centre, size);
+        Image face = rect.gameObject.AddComponent<Image>();
+        face.color = MenuStyle.Card;
+        CanvasGroup group = rect.gameObject.AddComponent<CanvasGroup>();
+        rect.gameObject.AddComponent<PopIn>().delay = 0.08f * index;
 
-        Image accentStripe = Image(go.transform, "Accent", new Vector2(0f, 1f), new Vector2(1f, 1f),
-                                   new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 14f), accent);
+        Image accent = MenuStyle.Panel(rect, "Accent", new Vector2(0f, 1f), new Vector2(1f, 1f), MenuStyle.TopMiddle, Vector2.zero, new Vector2(0f, 8f), crate.Colour);
 
-        Image icon = Image(go.transform, "Icon", Center, Center, Center,
-                           new Vector2(0f, 60f), new Vector2(220f, 260f), Color.white);
-        icon.color = accent;
-        icon.sprite = BananaSprite();
+        TMP_Text name = MenuStyle.Label(rect, "Name", crate.Name.ToUpperInvariant(), true, 52f, Color.white, TextAlignmentOptions.Top,
+                                        MenuStyle.TopMiddle, new Vector2(0f, -26f), new Vector2(460f, 64f));
+        TMP_Text price = MenuStyle.Label(rect, "Price", $"{crate.Cost} TOKENS", false, 40f, MenuStyle.Banana, TextAlignmentOptions.Top,
+                                         MenuStyle.TopMiddle, new Vector2(0f, -92f), new Vector2(460f, 48f));
+        TMP_Text tagline = MenuStyle.Label(rect, "Tagline", crate.Tagline, false, 28f, MenuStyle.Muted, TextAlignmentOptions.Top,
+                                           MenuStyle.TopMiddle, new Vector2(0f, -140f), new Vector2(460f, 36f));
 
-        TMP_Text name1 = Text(go.transform, "Name", font, 40f, TextAlignmentOptions.Center,
-                              Center, new Vector2(0f, -140f), new Vector2(400f, 60f), Ink);
-
-        TMP_Text cost = Text(go.transform, "Cost", font, 32f, TextAlignmentOptions.Center,
-                             Center, new Vector2(0f, -195f), new Vector2(400f, 50f),
-                             new Color(1f, 0.86f, 0.2f));
-
-        CrateButton crateButton = go.AddComponent<CrateButton>();
-        SerializedObject cbSo = new SerializedObject(crateButton);
-        Wire(cbSo, "button", button);
-        Wire(cbSo, "nameText", name1);
-        Wire(cbSo, "costText", cost);
-        Wire(cbSo, "group", group);
-        cbSo.ApplyModifiedPropertiesWithoutUndo();
-
-        return go;
-    }
-
-    static RectTransform BuildCard(Transform parent, string name, TMP_FontAsset font)
-    {
-        GameObject go = Panel(parent, name, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                              new Vector2(0f, 0.5f), Vector2.zero, new Vector2(190f, 220f), CardFace);
-
-        Image icon = Image(go.transform, "Icon", Center, Center, Center,
-                           new Vector2(0f, 20f), new Vector2(120f, 140f), Color.white);
-        icon.sprite = BananaSprite();
-
-        Text(go.transform, "Label", font, 24f, TextAlignmentOptions.Center,
-            Center, new Vector2(0f, -80f), new Vector2(180f, 40f), Ink);
-
-        return (RectTransform)go.transform;
-    }
-
-    static GameObject BuildTextButton(Transform parent, string name, string label, TMP_FontAsset font,
-                                      Vector2 anchor, Vector2 position, Vector2 size)
-    {
-        GameObject go = Panel(parent, name, anchor, anchor, anchor, position, size, PanelFace);
-        Button button = go.AddComponent<Button>();
-        button.targetGraphic = go.GetComponent<Image>();
-
-        // The bug that shipped first: `label` sat right there in the parameter list and never
-        // actually reached the Text() call below it, which only ever received the GameObject's
-        // own internal name ("Label") - so every button this built rendered as an empty dark
-        // rectangle. Confirmed on a real screenshot (both crate-shop-check.png and
-        // crate-reveal-check.png showed it) before being caught here.
-        TMP_Text labelText = Text(go.transform, "Label", font, 32f, TextAlignmentOptions.Center,
-                                  Center, Vector2.zero, size, Ink);
-        labelText.text = label;
-
-        return go;
-    }
-
-    static void Stretch(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
-    static GameObject Panel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
-                            Vector2 pivot, Vector2 position, Vector2 size, Color colour)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = anchorMin;
-        rect.anchorMax = anchorMax;
-        rect.pivot = pivot;
-        rect.anchoredPosition = position;
-        rect.sizeDelta = size;
-
-        Image image = go.AddComponent<Image>();
-        image.color = colour;
-
-        return go;
-    }
-
-    static Image Image(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
-                       Vector2 pivot, Vector2 position, Vector2 size, Color colour)
-    {
-        GameObject go = Panel(parent, name, anchorMin, anchorMax, pivot, position, size, colour);
-        return go.GetComponent<Image>();
-    }
-
-    static TMP_Text Text(Transform parent, string name, TMP_FontAsset font, float size,
-                         TextAlignmentOptions alignment, Vector2 anchor, Vector2 position,
-                         Vector2 dimensions, Color colour)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-
-        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
-        text.fontSize = size;
-        text.alignment = alignment;
-        text.color = colour;
-        text.raycastTarget = false;
-        text.enableWordWrapping = false;
-        text.overflowMode = TextOverflowModes.Overflow;
-
-        if (font != null)
-            text.font = font;
-
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
-        rect.anchoredPosition = position;
-        rect.sizeDelta = dimensions;
-
-        return text;
-    }
-
-    static void Wire(SerializedObject so, string field, Object value)
-    {
-        SerializedProperty property = so.FindProperty(field);
-
-        if (property == null)
+        Image[] fills = new Image[5];
+        TMP_Text[] labels = new TMP_Text[5];
+        for (int i = 0; i < 5; i++)
         {
-            Debug.LogError($"[crates] {so.targetObject.GetType().Name} has no field called '{field}'");
-            return;
+            float y = -196f - i * 40f;
+            labels[i] = MenuStyle.Label(rect, $"Odds{i}", "RARITY 0%", false, 24f, Color.white, TextAlignmentOptions.MidlineLeft,
+                                        MenuStyle.TopLeft, new Vector2(32f, y), new Vector2(210f, 30f));
+            MenuStyle.Panel(rect, $"OddsTrack{i}", MenuStyle.TopLeft, MenuStyle.TopLeft, MenuStyle.TopLeft, new Vector2(240f, y - 9f), new Vector2(208f, 12f), MenuStyle.Rule);
+            Image fill = MenuStyle.Panel(rect, $"OddsFill{i}", MenuStyle.TopLeft, MenuStyle.TopLeft, MenuStyle.TopLeft, new Vector2(240f, y - 9f), new Vector2(208f, 12f), Color.white);
+            fills[i] = fill;
         }
 
-        property.objectReferenceValue = value;
+        TMP_Text need = MenuStyle.Label(rect, "Need", "NEED 0 MORE", false, 28f, MenuStyle.Danger, TextAlignmentOptions.Bottom,
+                                        MenuStyle.BottomMiddle, new Vector2(0f, 112f), new Vector2(460f, 36f));
+
+        Button open = MenuStyle.PrimaryButton(rect, "Open", "OPEN", MenuStyle.BottomMiddle, new Vector2(0f, 26f), new Vector2(400f, 76f));
+
+        spot = MenuStyle.Rect(rect, "ChestSpot", MenuStyle.TopMiddle, MenuStyle.TopMiddle, MenuStyle.Middle, new Vector2(0f, 20f), new Vector2(10f, 10f));
+
+        CrateCard card = rect.gameObject.AddComponent<CrateCard>();
+        MenuStyle.Wire(card, "openButton", open);
+        MenuStyle.Wire(card, "nameText", name);
+        MenuStyle.Wire(card, "priceText", price);
+        MenuStyle.Wire(card, "taglineText", tagline);
+        MenuStyle.Wire(card, "needText", need);
+        MenuStyle.Wire(card, "accent", accent);
+        MenuStyle.Wire(card, "oddsFills", fills);
+        MenuStyle.Wire(card, "oddsLabels", labels);
+        MenuStyle.Wire(card, "group", group);
+        return card;
     }
 
-    static Sprite bananaSprite;
-
-    static Sprite BananaSprite()
+    /// Rays behind the reveal - the particle pack's star, huge and faint, turned by the screen.
+    static Image RayImage(Transform parent, string name, float size)
     {
-        if (bananaSprite != null)
-            return bananaSprite;
-
-        bananaSprite = AssetDatabase.LoadAssetAtPath<Sprite>(BananaTexturePath);
-
-        if (bananaSprite == null)
-            Debug.LogError($"[crates] no banana sprite at {BananaTexturePath}");
-
-        return bananaSprite;
+        Image rays = MenuStyle.Panel(parent, name, MenuStyle.Middle, MenuStyle.Middle, MenuStyle.Middle, new Vector2(0f, 150f), new Vector2(size, size), Color.white);
+        rays.sprite = MenuStyle.Sprite($"{Sprites}/star_08.png");
+        rays.preserveAspect = true;
+        return rays;
     }
 
-    static TMP_FontAsset FindFont()
+    static T Load<T>(string path) where T : Object
     {
-        string[] guids = AssetDatabase.FindAssets("t:TMP_FontAsset Jersey10");
-
-        if (guids.Length == 0)
-            guids = AssetDatabase.FindAssets("t:TMP_FontAsset");
-
-        if (guids.Length == 0)
-            return null;
-
-        return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(AssetDatabase.GUIDToAssetPath(guids[0]));
+        T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+        if (asset == null)
+            Debug.LogError($"[crates] nothing at {path}");
+        return asset;
     }
 }

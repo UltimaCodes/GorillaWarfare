@@ -111,6 +111,7 @@ public class ProbeRunner : MonoBehaviour
         GameSettings.UsePrefsNamespace(ProbePrefsPrefix);
         KeyBinds.UsePrefsNamespace(ProbeBindsPrefix);
         PlayerWallet.UsePrefsNamespace(ProbeWalletPrefix);
+        SkinInventory.UsePrefsNamespace(ProbeWalletPrefix + "skins_");
 
         // -nographics suppresses rendering but not audio - without this, a probe run (gunfire,
         // deaths, hitmarkers, a full match's worth of sound) plays out loud on whatever speakers
@@ -282,6 +283,9 @@ public class ProbeRunner : MonoBehaviour
         yield return CheckRedHotChiliPepper(player);
         yield return CheckChiliChars(player);
         yield return CheckGrenadaScorch(player);
+
+        // ---- weapon skins, and crates that give them ----
+        yield return CheckWeaponSkins(player);
 
         // ---- what an enemy looks like ----
         // Two weapons, because the pose is different: a pistol is one fist, everything longer
@@ -1161,6 +1165,77 @@ public class ProbeRunner : MonoBehaviour
 
     /// Holding aim alone winds the barrel without spending a grape - TF2's rev, waiting at a corner
     /// already spun - and letting go of everything winds it back down and gives you your legs back.
+    /// <summary>
+    /// Weapon skins (2026-09-30). A finish you've equipped is what your weapon draws with - the
+    /// finish shader, its particles on the viewmodel layer with the rest of the gun - and it's
+    /// published so everyone else draws it too; taking it off puts the stock look back. A crate
+    /// costs its price and hands over a finish there and then; scrapping one pays for it.
+    /// </summary>
+    IEnumerator CheckWeaponSkins(PlayerController player)
+    {
+        yield return LiveWithTimeLeft(3f);
+
+        Check(FinishCatalog.All.Count >= 25, "there are weapon finishes to win", $"{FinishCatalog.All.Count}");
+        WeaponFinish finish = FinishCatalog.Find("molten-core") ?? (FinishCatalog.All.Count > 0 ? FinishCatalog.All[0] : null);
+        if (finish == null)
+            yield break;
+
+        string ShaderOf(SingleShotGun g) =>
+            g != null && g.VisualRenderers != null && g.VisualRenderers.Length > 0 && g.VisualRenderers[0] != null
+                ? g.VisualRenderers[0].sharedMaterial.shader.name : "none";
+
+        SkinInventory.Grant(finish);
+        SkinInventory.Equip("Rifle", finish);
+        PlayerController.PublishLoadout(new[] { "Rifle" });
+        yield return null;
+        yield return null;
+
+        SingleShotGun gun = player.ActiveGun;
+        FinishView view = gun != null && gun.VisualRoot != null ? gun.VisualRoot.GetComponent<FinishView>() : null;
+        Check(view != null && view.Showing == finish && ShaderOf(gun) == "Custom/WeaponFinish",
+              "your weapon wears the finish you equipped",
+              $"{(gun != null ? gun.name : "no gun")}: {ShaderOf(gun)}, showing {(view != null && view.Showing != null ? view.Showing.key : "stock")}");
+
+        Transform aura = gun != null && gun.VisualRoot != null ? gun.VisualRoot.Find("~aura") : null;
+        Check(finish.auraRate <= 0f || (aura != null && aura.gameObject.layer == LayerMask.NameToLayer(ViewModelCamera.LayerName)),
+              "and its particles are drawn with it, on the viewmodel layer",
+              aura != null ? LayerMask.LayerToName(aura.gameObject.layer) : "no aura");
+
+        string published = PhotonNetwork.LocalPlayer.CustomProperties.TryGetValue(SkinInventory.PropertyKey, out object value) ? value as string : null;
+        Check(published != null && published.Contains($"Rifle={finish.key}"), "and everyone else is told what it's wearing", published ?? "nothing published");
+
+        SkinInventory.Equip("Rifle", null);
+        PlayerController.PublishLoadout(new[] { "Rifle" });
+        yield return null;
+        yield return null;
+        Check(ShaderOf(player.ActiveGun) != "Custom/WeaponFinish", "and it's back to stock when you take it off", ShaderOf(player.ActiveGun));
+
+        CrateOpeningScreen crates = CrateOpeningScreen.Instance;
+        if (crates != null)
+        {
+            PlayerWallet.Add(CrateInfo.Rotten.Cost);
+            int tokens = PlayerWallet.Tokens;
+            int copies = SkinInventory.TotalCopies;
+            crates.Open();
+            typeof(CrateOpeningScreen).GetMethod("TryOpen", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?.Invoke(crates, new object[] { CrateInfo.Rotten });
+            yield return null;
+            Check(PlayerWallet.Tokens == tokens - CrateInfo.Rotten.Cost && SkinInventory.TotalCopies == copies + 1,
+                  "a crate costs its price and gives you a finish before it's even opened",
+                  $"{tokens - PlayerWallet.Tokens} tokens spent, {SkinInventory.TotalCopies - copies} finish(es) gained");
+            crates.Close();
+        }
+        else
+        {
+            Check(false, "a crate gives you a finish", "no crate screen");
+        }
+
+        int before = PlayerWallet.Tokens;
+        bool scrapped = SkinInventory.Scrap(finish);
+        Check(scrapped && PlayerWallet.Tokens == before + finish.ScrapValue, "scrapping a finish pays for it",
+              $"+{PlayerWallet.Tokens - before} for a {CrateRarityInfo.NameFor(finish.rarity)}");
+    }
+
     IEnumerator CheckPurpleHazeRevsOnAim(PlayerController player)
     {
         yield return LiveWithTimeLeft(3.5f);

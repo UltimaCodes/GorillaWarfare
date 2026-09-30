@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83cc44a98115ee945a1172ca9d976a34, type: 3}
+  m_Name: crate-rotten
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponFinish
+  key: crate-rotten
+  displayName: Rotten
+  flavour: 
+  rarity: 0
+  paint: {r: 0.35686275, g: 0.41960785, b: 0.16470589, a: 1}
+  repaint: 0.6
+  metallic: 0
+  smoothness: 0.2
+  pattern: {fileID: 2800000, guid: ac5867e039466774a927ef4547c5fd91, type: 3}
+  patternColour: {r: 0.18039216, g: 0.20784314, b: 0.078431375, a: 0.8}
+  patternRepeats: 3
+  patternScroll: {x: 0, y: 0}
+  patternGlow: 0
+  glow: {r: 0, g: 0, b: 0, a: 1}
+  glowStrength: 0
+  pulseSpeed: 0
+  pulseDepth: 0
+  hueCycle: 0
+  hueSpread: 0
+  rim: {r: 0.60784316, g: 0.7607843, b: 0.2901961, a: 1}
+  rimStrength: 0.5
+  rimPower: 3
+  glint: {r: 1, g: 1, b: 1, a: 0}
+  glintEvery: 0
+  glintWidth: 0.15
+  wobble: 0
+  wobbleSpeed: 6
+  auraSprite: {fileID: 2800000, guid: cae2c890e31b20d4fb23fbd7dc38948f, type: 3}
+  auraColour: {r: 0.10980392, g: 0.10980392, b: 0.10980392, a: 1}
+  auraRate: 12
+  auraSize: 0.05
+  auraLife: 1.6
+  auraMotion: 3
+  auraGlows: 0
+  auraRainbow: 0
+  models: []

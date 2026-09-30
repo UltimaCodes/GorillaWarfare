@@ -97,9 +97,16 @@ The first round of feedback from people playing it. Worked through in this order
       222 controls on every menu screen: one was dead - the crate result's CLOSE, which never had a
       listener saved into the prefab. Fixed. At 4:3 a few controls fell off the right edge; the
       menu's Canvas Scaler is on Screen Match Mode "Expand" now and 4:3 audits clean.
-- [ ] **The crates themselves want reworking** - opening one wins nothing yet. Picked (ideas.md
-      section 0): titles, kill effects and wearables - not weapon skins - with a Locker and
-      CS2-style collections, earned tokens only. Kept for later.
+- [x] **Weapon skins, an inventory, and crates that give them** (2026-09-30, bug-log.md forty-sixth
+      pass). 30 universal finishes (`WeaponFinish`, Resources/Finishes) - paint, Kenney patterns, chrome,
+      glow, pulses, travelling rainbows, glints, jelly, particle auras - six a rarity, and a slot on each
+      for Ryaan's own skin models. An INVENTORY on the title screen (CS-style: weapons, a live preview,
+      your finishes, equip on one or all, scrap for tokens). Copies stack. The crate screen rebuilt in
+      the menu's style: three living chests, a rattle, a burst of coins, a reel of real finishes, a
+      reveal scaled by rarity. Finishes replicate - everyone sees yours.
+- [ ] **Your own skin models** - drop a model into a finish's `models` list (per weapon) and it's
+      drawn instead of the stock one whenever that finish is on it.
+- [ ] **More a crate can drop** - titles, kill effects, wearables (ideas.md section 0).
 - [x] **Purple Haze and Red Hot Chili Pepper** (2026-09-28) - the grape gatling and the chili
       flamethrower, named after JoJo Stands. Purple Haze fires real grapes after a spin-up (1.2s since 2026-09-29)
       (aim alone revs it) and walks you at 60% while spun; Red Hot Chili Pepper is a 7m stream
@@ -676,8 +683,7 @@ twenty-sixth pass.
       prefab (`CrateShopBuilder.cs`) the same way the settings menu is, so it's reachable from
       wherever a button ends up living.
 - [x] **A title menu button**, next to Settings - answers "how do I access the crates."
-- [ ] Real rewards. Every rarity currently resolves to "you got an APEX" and nothing else -
-      that's the next real piece of work here, whenever there's actual loot to hand out.
+- [x] Real rewards - weapon finishes, 2026-09-30 (see the forty-sixth pass).
 - [ ] Tuning - the odds, the token amount, the spin duration, the reward curve's own 2500-score
       scale, none of it played against yet. See Unverified.
 

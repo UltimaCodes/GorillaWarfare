@@ -1,0 +1,18 @@
+Where this art came from.
+
+Kenney Mini Dungeon        https://kenney.nl/assets/mini-dungeon        CC0   DungeonChest/   the Rotten Crate's chest
+Kenney Pirate Kit          https://kenney.nl/assets/pirate-kit          CC0   PirateChest/    the Ripe Crate's chest
+Kenney Platformer Kit      https://kenney.nl/assets/platformer-kit      CC0   PlatformerChest/ the Holy Crate's chest,
+                                                                              and the coins, jewel and key
+
+CC0 - public domain, no attribution required. Credited anyway (CREDITS.md). Downloaded 2026-09-30
+(kenney_mini-dungeon.zip 1.7 MB, kenney_pirate-kit.zip 3.0 MB, kenney_platformer-kit.zip 4.4 MB) for
+the crate screen - only the chests and the platformer kit's coins, jewel and key were kept.
+
+Each chest has its lid as a separate part and open / close / open-close clips of its own - they
+import as legacy clips (SkinAssetSetup), and ChestRig reads the open one for where the lid ends up.
+Each folder keeps its kit's own palette texture, Textures/colormap.png, which its model points at.
+
+The three chests are close to the same shape, so each tier also wears a finish of its own
+(Looks/, made by FinishLibraryBuilder): Rotten mouldy with flies round it, Ripe banana-gold with a
+glint, Holy white chrome that glows.

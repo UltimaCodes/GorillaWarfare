@@ -122,6 +122,11 @@ Jungle props — Kenney's Nature Kit, and particle sprites — Kenney's Particle
 (licence files in `Assets/Art/Jungle` and `Assets/Resources/Particles`). The health banana sprite
 is credited in `Assets/Textures/UI/BananaHealth-CREDIT.txt`.
 
+Weapon skins and crates - Kenney's **Pattern Pack** (the finishes' patterns, `Assets/Art/Patterns`), the rest of
+his **Particle Pack** (the finishes' auras and the crate screen's bursts, `Assets/Resources/Particles/Finish`), and the
+chests from his **Mini Dungeon**, **Pirate Kit** and **Platformer Kit** (with the platformer kit's coins), all
+**CC0** (licences and a `SOURCES.txt` beside each).
+
 The glacier - its snowy pines, rocks, snow walls, log cabins, lanterns, sleds and train wagons - is
 Kenney's Holiday Kit, **CC0** (licence file and `SOURCES.txt` in `Assets/Art/Glacier`; only the ice and
 cabin pieces were imported, none of the Christmas ones). The terrain on every map is coloured in the

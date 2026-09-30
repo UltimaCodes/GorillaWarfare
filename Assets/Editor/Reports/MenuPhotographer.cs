@@ -29,6 +29,8 @@ public static class MenuPhotographer
     {
         GameSettings.ResetAll();
         PlayerPrefs.DeleteKey(PrefsPrefix + "wallet_Tokens");
+        PlayerPrefs.DeleteKey(PrefsPrefix + "skins_Owned");
+        PlayerPrefs.DeleteKey(PrefsPrefix + "skins_Equipped");
         PlayerPrefs.Save();
     }
     const int Width = 1920;
@@ -136,6 +138,7 @@ public static class MenuPhotographer
         GameSettings.UsePrefsNamespace(PrefsPrefix);
         KeyBinds.UsePrefsNamespace(PrefsPrefix + "bind_");
         PlayerWallet.UsePrefsNamespace(PrefsPrefix + "wallet_");
+        SkinInventory.UsePrefsNamespace(PrefsPrefix + "skins_");
 
         new GameObject("~MenuPhotographer").AddComponent<Runner>();
     }
@@ -250,23 +253,51 @@ public static class MenuPhotographer
                 SettingsMenu.Instance.Close();
             }
 
-            // The crate shop, and a crate opened for real (the spin runs 5.6s).
+            // The crates, and one opened for real, shot at each stage: the chests waiting, one
+            // taking the stage, the moment it bursts, the reel running, the result.
             if (CrateOpeningScreen.Instance != null)
             {
                 PlayerPrefs.SetInt(PrefsPrefix + "wallet_Tokens", 1000);
                 PlayerWallet.UsePrefsNamespace(PrefsPrefix + "wallet_");
 
                 CrateOpeningScreen.Instance.Open();
+                yield return new WaitForSecondsRealtime(1f);
                 yield return Shot(null, "crates");
 
                 typeof(CrateOpeningScreen).GetMethod("TryOpen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                    ?.Invoke(CrateOpeningScreen.Instance, new object[] { CrateInfo.Ripe });
-                yield return new WaitForSecondsRealtime(2f);
+                    ?.Invoke(CrateOpeningScreen.Instance, new object[] { CrateInfo.Holy });
+                yield return new WaitForSecondsRealtime(1.2f);
+                yield return Shot(null, "crates-rattle");
+                yield return new WaitForSecondsRealtime(0.62f);
+                yield return Shot(null, "crates-burst");
+                yield return new WaitForSecondsRealtime(3f);
                 yield return Shot(null, "crates-spinning");
-                yield return new WaitForSecondsRealtime(4.5f);
+
+                float resultDeadline = Time.realtimeSinceStartup + 15f;
+                while (!CrateOpeningScreen.Instance.ShowingResult && Time.realtimeSinceStartup < resultDeadline)
+                    yield return null;
+                yield return new WaitForSecondsRealtime(1.5f);
                 yield return Shot(null, "crates-result");
 
                 CrateOpeningScreen.Instance.Close();
+            }
+
+            // The inventory, with that crate's finish in it and a few more so the grid has
+            // something to show.
+            if (InventoryScreen.Instance != null)
+            {
+                foreach (string key in new[] { "prismatic", "molten-core", "zebra", "neon-hive", "chrome", "bruised", "toxic", "jelly" })
+                {
+                    WeaponFinish finish = FinishCatalog.Find(key);
+                    if (finish != null)
+                        SkinInventory.Grant(finish);
+                }
+                SkinInventory.Grant(FinishCatalog.Find("zebra"));
+
+                InventoryScreen.Instance.Open("Rifle", FinishCatalog.Find("molten-core"));
+                yield return new WaitForSecondsRealtime(1.5f);
+                yield return Shot(null, "inventory");
+                InventoryScreen.Instance.Close();
             }
 
             Debug.Log($"[menushot] {taken.Count} shots in {Time.realtimeSinceStartup - started:F1}s:\n  " + string.Join("\n  ", taken));

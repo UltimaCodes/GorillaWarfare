@@ -127,6 +127,24 @@ public class RoomManager : MonoBehaviourPunCallbacks
             }
         }
 
+        // The inventory - the finishes you own and what each weapon wears. Same arrangement as the
+        // crate shop, which it's opened from as often as from the menu.
+        if (InventoryScreen.Instance == null)
+        {
+            GameObject inventoryPrefab = Resources.Load<GameObject>("Inventory");
+
+            if (inventoryPrefab != null)
+            {
+                GameObject inventory = Instantiate(inventoryPrefab);
+                inventory.name = "Inventory";
+                inventory.transform.SetParent(transform, false);
+            }
+            else
+            {
+                Debug.LogWarning("[room] no Inventory prefab in Resources - run Tools/Gorilla Warfare/Build the inventory");
+            }
+        }
+
         // On this object because it has to survive the trip from the menu into the game - the
         // camera it attaches to is destroyed and rebuilt on every respawn, and something has to
         // outlive that to put the layer back.

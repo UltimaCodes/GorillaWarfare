@@ -29,6 +29,7 @@ public class MenuGorilla : MonoBehaviour
     const float CapsuleHalfHeight = 1f;
 
     MonkeyRig rig;
+    SingleShotGun heldGun;
 
     void Start()
     {
@@ -116,6 +117,19 @@ public class MenuGorilla : MonoBehaviour
 
         // A display piece: it never fires, so it shouldn't take input or play sounds.
         gun.enabled = false;
+
+        // In the finish you've put on it - and whatever you put on it next, straight away.
+        heldGun = gun;
+        WeaponSkins.Apply(gun, SkinInventory.Equipped(weapon));
+    }
+
+    void OnEnable() => SkinInventory.Changed += Redress;
+    void OnDisable() => SkinInventory.Changed -= Redress;
+
+    void Redress()
+    {
+        if (heldGun != null)
+            WeaponSkins.Apply(heldGun, SkinInventory.Equipped(weapon));
     }
 
     void OnDrawGizmos()

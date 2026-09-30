@@ -189,6 +189,15 @@ gets it behind the lobby too (`MenuBackdrop.View.sky`). Look before trusting a l
 `SceneCheck` checks all of it for every map in the list, and the host picks from the list in the
 lobby.
 
+**Adding a weapon finish:** a `WeaponFinish` asset in `Resources/Finishes` (right-click > Create > FPS > Weapon
+Finish, or a row in `FinishLibraryBuilder`) with a key nothing else uses - saves and the network carry the key.
+Patterns come from `Assets/Art/Patterns`, aura sprites from `Resources/Particles/Finish`; a model of your own goes in
+its `models` list against a weapon's key. `Tools/Gorilla Warfare/Photograph the weapon finishes` shows every one on
+its turntable; `SceneCheck` checks the set. What you own and wear is `SkinInventory` (PlayerPrefs, like the
+wallet) - every batch tool gives it its own namespace next to the wallet's, so a test run never touches yours.
+The inventory, crate screen and card pictures draw through `PreviewStage` - a camera and lights on the Preview
+layer, a kilometre under the map, that no other light or camera sees.
+
 Moving an asset: move it **with its `.meta`** (`git mv` both, or drag it inside Unity), so its GUID
 and every reference to it survive. Then search the code for its old path - a few tools load by path
 (the map builders' kit folders, `MenuBuilder`'s row prefabs, the builders' `BananaHealth.png`) - and run the suite.

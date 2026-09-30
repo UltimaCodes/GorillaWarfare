@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83cc44a98115ee945a1172ca9d976a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponFinish
+  key: gunmetal
+  displayName: Gunmetal
+  flavour: Heavy for a fruit.
+  rarity: 1
+  paint: {r: 0.22745098, g: 0.24705882, b: 0.2784314, a: 1}
+  repaint: 1
+  metallic: 0.9
+  smoothness: 0.75
+  pattern: {fileID: 0}
+  patternColour: {r: 0, g: 0, b: 0, a: 1}
+  patternRepeats: 6
+  patternScroll: {x: 0, y: 0}
+  patternGlow: 0
+  glow: {r: 0, g: 0, b: 0, a: 1}
+  glowStrength: 0
+  pulseSpeed: 0
+  pulseDepth: 0
+  hueCycle: 0
+  hueSpread: 0
+  rim: {r: 0, g: 0, b: 0, a: 1}
+  rimStrength: 0
+  rimPower: 3
+  glint: {r: 1, g: 1, b: 1, a: 0.35}
+  glintEvery: 4
+  glintWidth: 0.15
+  wobble: 0
+  wobbleSpeed: 6
+  auraSprite: {fileID: 0}
+  auraColour: {r: 1, g: 1, b: 1, a: 1}
+  auraRate: 0
+  auraSize: 0.05
+  auraLife: 0.8
+  auraMotion: 0
+  auraGlows: 1
+  auraRainbow: 0
+  models: []

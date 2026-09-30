@@ -1383,6 +1383,13 @@ public class SingleShotGun : Item
     Transform visualRoot;
     Vector3 reloadRestPosition;
 
+    /// The built model and what draws it - where a weapon skin goes (WeaponSkins).
+    public Transform VisualRoot => visualRoot;
+    public Renderer[] VisualRenderers => visualRenderers;
+
+    /// Your own weapon, rather than the copy of it everyone else sees.
+    public bool IsOwned => owned;
+
     /// The rotation a melee weapon rests at. Fixed at build time so a swing always returns to
     /// exactly where it started rather than to wherever it happened to be interrupted.
     Quaternion meleeHeld = Quaternion.identity;

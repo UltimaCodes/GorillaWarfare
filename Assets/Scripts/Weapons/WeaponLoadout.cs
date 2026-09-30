@@ -146,6 +146,11 @@ public class WeaponLoadout : MonoBehaviour
         SingleShotGun gun = go.AddComponent<SingleShotGun>();
         gun.Configure(info, cam, owned);
 
+        // In whatever finish its owner put on it (SkinInventory) - before the layer below, so the
+        // finish's particles go onto the viewmodel layer with the rest of it.
+        Photon.Pun.PhotonView view = GetComponentInParent<Photon.Pun.PhotonView>();
+        WeaponSkins.Dress(gun, view != null ? view.Owner : null);
+
         // Only your own weapon goes on the viewmodel layer. Somebody else's is a real object in
         // the world that should be occluded by walls exactly like the rest of them - putting
         // theirs on this layer would draw their banana through the building they are behind.

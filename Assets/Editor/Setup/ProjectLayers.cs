@@ -9,10 +9,13 @@ using UnityEngine;
 /// </summary>
 public static class ProjectLayers
 {
-    public static readonly string[] Required = { ShaderStack.ViewModelVolumeLayerName };
+    public static readonly string[] Required = { ShaderStack.ViewModelVolumeLayerName, PreviewStage.LayerName };
 
     [MenuItem("Tools/Gorilla Warfare/Add the project's named layers")]
-    public static void Run()
+    public static void Run() => Finish(EnsureLayers() ? 0 : 1);
+
+    /// Adds whichever of Required is missing. False if there was no free slot for one.
+    public static bool EnsureLayers()
     {
         SerializedObject tags = new SerializedObject(
             AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
@@ -39,8 +42,7 @@ public static class ProjectLayers
             if (slot < 0)
             {
                 Debug.LogError($"[layers] no free user layer for '{name}'");
-                Finish(1);
-                return;
+                return false;
             }
 
             layers.GetArrayElementAtIndex(slot).stringValue = name;
@@ -52,7 +54,7 @@ public static class ProjectLayers
         AssetDatabase.SaveAssets();
 
         Debug.Log($"[layers] added {added}, {Required.Length - added} already present");
-        Finish(0);
+        return true;
     }
 
     static void Finish(int exitCode)

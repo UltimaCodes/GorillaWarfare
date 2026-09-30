@@ -1,0 +1,10 @@
+Where this art came from.
+
+Kenney Pattern Pack        https://kenney.nl/assets/pattern-pack        CC0
+
+CC0 - public domain, no attribution required. Credited anyway (CREDITS.md). Downloaded 2026-09-30
+as kenney_pattern-pack.zip, 1.2 MB. All 84 seamless tiles from its PNG/Default folder, black and
+white: stripes, chevrons, waves, checks, hexes, hearts, zebra and giraffe markings, shards.
+
+The weapon finishes use them as masks (Custom/WeaponFinish): white is where a finish's second
+colour goes. Imported linear and repeating (SkinAssetSetup), so they tile round a weapon.

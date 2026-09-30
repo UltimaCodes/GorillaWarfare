@@ -109,12 +109,15 @@ public class SandboxFlowRunner : MonoBehaviour
         GameSettings.UsePrefsNamespace("gw_sandboxcheck_");
         KeyBinds.UsePrefsNamespace("gw_sandboxcheck_bind_");
         PlayerWallet.UsePrefsNamespace("gw_sandboxcheck_wallet_");
+        SkinInventory.UsePrefsNamespace("gw_sandboxcheck_skins_");
         AudioListener.volume = 0f;
 
         yield return RunCheck();
 
         GameSettings.ResetAll();
         PlayerPrefs.DeleteKey("gw_sandboxcheck_wallet_Tokens");
+        PlayerPrefs.DeleteKey("gw_sandboxcheck_skins_Owned");
+        PlayerPrefs.DeleteKey("gw_sandboxcheck_skins_Equipped");
         PlayerPrefs.Save();
 
         if (PhotonNetwork.IsConnected)

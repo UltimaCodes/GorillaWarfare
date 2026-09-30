@@ -40,6 +40,10 @@ public static class AlwaysIncludeShaders
         // and on the world - every impact, stray blood and char decal (BulletDecal).
         "Custom/BodyMarks",
         "Custom/SurfaceMark",
+
+        // Weapon skins - WeaponSkins makes a material from it for every finish it draws. Added
+        // 2026-09-30 with the skins.
+        "Custom/WeaponFinish",
     };
 
     [MenuItem("Tools/Gorilla Warfare/Always-include the custom shaders")]

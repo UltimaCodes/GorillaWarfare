@@ -51,6 +51,8 @@ public static class SceneCheck
         // prefab asset, so these are checked directly rather than from either scene.
         CheckWiring(PrefabComponent<SettingsMenu>("SettingsMenu"), "SettingsMenu prefab");
         CheckWiring(PrefabComponent<CrateOpeningScreen>("CrateShop"), "CrateShop prefab");
+        CheckWiring(PrefabComponent<InventoryScreen>("Inventory"), "Inventory prefab");
+        CheckFinishes();
 
         foreach (string note in Notes)
             Debug.Log($"[scene] {note}");
@@ -213,6 +215,47 @@ public static class SceneCheck
 
             Notes.Add($"{map.sceneName}: map '{map.key}' ({map.displayName}), build index {scene.buildIndex}");
         }
+    }
+
+    /// <summary>
+    /// The weapon finishes: there are some, every one has a key nothing else shares (saves and
+    /// the network carry the key), a name and a rarity with something in it, and whatever
+    /// pattern or particle sprite it names really is there.
+    /// </summary>
+    static void CheckFinishes()
+    {
+        WeaponFinish[] finishes = Resources.LoadAll<WeaponFinish>("Finishes");
+        if (finishes.Length == 0)
+        {
+            Failures.Add("no weapon finishes in Resources/Finishes - crates would give nothing. Run Tools/Gorilla Warfare/Build the weapon finishes");
+            return;
+        }
+
+        System.Collections.Generic.HashSet<string> keys = new System.Collections.Generic.HashSet<string>();
+        int[] perRarity = new int[CrateRarityInfo.All.Length];
+        foreach (WeaponFinish finish in finishes)
+        {
+            if (string.IsNullOrEmpty(finish.key) || !keys.Add(finish.key))
+                Failures.Add($"finish '{finish.name}' has an empty or repeated key '{finish.key}'");
+            if (string.IsNullOrEmpty(finish.displayName))
+                Failures.Add($"finish '{finish.name}' has no name");
+            if (finish.auraRate > 0f && finish.auraSprite == null)
+                Failures.Add($"finish '{finish.name}' has an aura but no sprite for it");
+            if (finish.patternColour.a > 0f && finish.pattern == null && finish.patternGlow > 0f)
+                Failures.Add($"finish '{finish.name}' glows a pattern it hasn't got");
+            perRarity[System.Array.IndexOf(CrateRarityInfo.All, finish.rarity)]++;
+        }
+
+        for (int i = 0; i < perRarity.Length; i++)
+        {
+            if (perRarity[i] == 0)
+                Failures.Add($"no finishes of rarity {CrateRarityInfo.NameFor(CrateRarityInfo.All[i])} - a crate landing on it gives the nearest instead");
+        }
+
+        if (Shader.Find("Custom/WeaponFinish") == null)
+            Failures.Add("no Custom/WeaponFinish shader - no finish can be drawn");
+
+        Notes.Add($"finishes: {finishes.Length} ({string.Join(", ", perRarity)} by rarity)");
     }
 
     static void CheckSpawns(string map)
@@ -478,6 +521,7 @@ public static class SceneCheck
 
             bool wiredAtRuntime = button.GetComponent<OpenSettingsButton>() != null
                                   || button.GetComponent<OpenCrateShopButton>() != null
+                                  || button.GetComponent<OpenInventoryButton>() != null
                                   || button.GetComponentInParent<ModeSelector>(true) != null
                                   || button.GetComponentInParent<MapSelector>(true) != null;
 

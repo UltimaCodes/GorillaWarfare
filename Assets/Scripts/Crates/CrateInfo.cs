@@ -16,23 +16,35 @@ public readonly struct CrateInfo
 {
     public readonly string Name;
     public readonly int Cost;
+
+    /// Never shown - what the crate screen keys its chest and its look by.
+    public readonly string Key;
+
+    /// The crate's own colour - its card, its chest's glow, the flash when it bursts.
+    public readonly Color Colour;
+
+    public readonly string Tagline;
+
     readonly float[] odds; // parallel to CrateRarityInfo.All, must sum to 1
 
-    CrateInfo(string name, int cost, float[] odds)
+    CrateInfo(string key, string name, int cost, Color colour, string tagline, float[] odds)
     {
+        Key = key;
         Name = name;
         Cost = cost;
+        Colour = colour;
+        Tagline = tagline;
         this.odds = odds;
     }
 
-    public static readonly CrateInfo Rotten = new CrateInfo("Rotten Crate", 10,
-        new[] { 0.60f, 0.27f, 0.10f, 0.025f, 0.005f });
+    public static readonly CrateInfo Rotten = new CrateInfo("rotten", "Rotten Crate", 10, new Color(0.56f, 0.68f, 0.28f),
+        "Smells like a bargain.", new[] { 0.60f, 0.27f, 0.10f, 0.025f, 0.005f });
 
-    public static readonly CrateInfo Ripe = new CrateInfo("Ripe Crate", 50,
-        new[] { 0.40f, 0.33f, 0.18f, 0.07f, 0.02f });
+    public static readonly CrateInfo Ripe = new CrateInfo("ripe", "Ripe Crate", 50, new Color(1f, 0.82f, 0.12f),
+        "Just right.", new[] { 0.40f, 0.33f, 0.18f, 0.07f, 0.02f });
 
-    public static readonly CrateInfo Holy = new CrateInfo("Holy Crate", 100,
-        new[] { 0.20f, 0.30f, 0.28f, 0.16f, 0.06f });
+    public static readonly CrateInfo Holy = new CrateInfo("holy", "Holy Crate", 100, new Color(0.72f, 0.9f, 1f),
+        "Blessed by the banana gods.", new[] { 0.20f, 0.30f, 0.28f, 0.16f, 0.06f });
 
     public static readonly CrateInfo[] All = { Rotten, Ripe, Holy };
 
@@ -56,4 +68,10 @@ public readonly struct CrateInfo
     }
 
     public float OddsFor(CrateRarity rarity) => odds[System.Array.IndexOf(CrateRarityInfo.All, rarity)];
+
+    /// <summary>
+    /// What a crate actually gives: a rarity from the odds above, then a finish of that rarity at
+    /// random. Every finish of a rarity is equally likely - the odds are about how rare, not which.
+    /// </summary>
+    public WeaponFinish RollFinish() => FinishCatalog.Pick(Roll());
 }

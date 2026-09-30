@@ -50,6 +50,7 @@ public static class MenuButtonAudit
         GameSettings.UsePrefsNamespace(PrefsPrefix);
         KeyBinds.UsePrefsNamespace(PrefsPrefix + "bind_");
         PlayerWallet.UsePrefsNamespace(PrefsPrefix + "wallet_");
+        SkinInventory.UsePrefsNamespace(PrefsPrefix + "skins_");
 
         new GameObject("~MenuButtonAudit").AddComponent<MenuButtonAuditRunner>();
     }
@@ -177,7 +178,14 @@ public class MenuButtonAuditRunner : MonoBehaviour
             // Open the cheapest one for real and wait out the spin.
             MethodInfo tryOpen = typeof(CrateOpeningScreen).GetMethod("TryOpen", BindingFlags.NonPublic | BindingFlags.Instance);
             tryOpen?.Invoke(crates, new object[] { CrateInfo.Rotten });
-            yield return new WaitForSecondsRealtime(6.5f);
+
+            // The chest, the reel and the reveal take about nine seconds - waited out, not guessed.
+            float resultDeadline = Time.realtimeSinceStartup + 20f;
+            while (!crates.ShowingResult && Time.realtimeSinceStartup < resultDeadline)
+                yield return null;
+            yield return new WaitForSecondsRealtime(1.2f);
+            if (!crates.ShowingResult)
+                Report("crates - the result", "the result never came up");
             Audit("crates - the result", crates.transform);
 
             crates.Close();
@@ -186,6 +194,30 @@ public class MenuButtonAuditRunner : MonoBehaviour
         else
         {
             Report("crates", "there is no crate shop");
+        }
+
+        // ---- the inventory, with something in it from the crate above ----
+        menus.OpenMenu("title");
+        InventoryScreen inventory = InventoryScreen.Instance;
+        if (inventory != null)
+        {
+            Button way = FindButtonWith<OpenInventoryButton>();
+            if (way != null)
+                way.onClick.Invoke();
+            else
+            {
+                Report("inventory", "no INVENTORY on the title screen");
+                inventory.Open();
+            }
+
+            yield return new WaitForSecondsRealtime(1f);
+            Audit("inventory", inventory.transform);
+            inventory.Close();
+            yield return Settle();
+        }
+        else
+        {
+            Report("inventory", "there is no inventory screen");
         }
 
         // ---- settings, every tab ----
@@ -458,6 +490,8 @@ public class MenuButtonAuditRunner : MonoBehaviour
 
         GameSettings.ResetAll();
         PlayerPrefs.DeleteKey(MenuButtonAudit.PrefsPrefix + "wallet_Tokens");
+        PlayerPrefs.DeleteKey(MenuButtonAudit.PrefsPrefix + "skins_Owned");
+        PlayerPrefs.DeleteKey(MenuButtonAudit.PrefsPrefix + "skins_Equipped");
         PlayerPrefs.Save();
 
         Debug.Log($"[buttons] audit - {audited} controls, {warnings} warnings at 4:3\n" + log);

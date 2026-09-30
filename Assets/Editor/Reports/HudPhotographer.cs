@@ -76,6 +76,7 @@ public static class HudPhotographer
             GameSettings.UsePrefsNamespace("gw_probe_");
             KeyBinds.UsePrefsNamespace("gw_probe_bind_");
             PlayerWallet.UsePrefsNamespace("gw_probe_wallet_");
+            SkinInventory.UsePrefsNamespace("gw_probe_skins_");
 
             // -nographics suppresses rendering but not audio - without this, every gunshot,
             // death cry and hit sound this session's real play mode triggers comes out of
@@ -329,25 +330,18 @@ public static class HudPhotographer
 
                 Debug.Log($"[hudshot] -> {CrateShopOutputPath}");
 
-                // Second shot: force the reveal state directly rather than spending real tokens
-                // and sitting through a real 5.6s spin - CrateOpeningScreen.Reveal is public
-                // enough in spirit but private in practice, so this goes through the same
-                // reflection route as everything else on this page.
+                // Second shot: straight to a result rather than spending tokens and sitting
+                // through the whole opening - ShowResult is the reveal's own fill-in, public for
+                // exactly this.
                 CrateOpeningScreen openScreen = CrateOpeningScreen.Instance;
-                GameObject openingPageField = GetPrivateField<GameObject>(openScreen, "openingPage");
-                GameObject selectPageField = GetPrivateField<GameObject>(openScreen, "selectPage");
-                GameObject resultPanelField = GetPrivateField<GameObject>(openScreen, "resultPanel");
+                WeaponFinish apex = FinishCatalog.Pick(CrateRarity.Apex);
 
-                if (openingPageField != null && resultPanelField != null)
+                if (apex != null)
                 {
-                    selectPageField?.SetActive(false);
-                    openingPageField.SetActive(true);
+                    openScreen.ShowResult(apex, 1);
 
-                    var flags2 = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-                    typeof(CrateOpeningScreen).GetMethod("Reveal", flags2)
-                        ?.Invoke(openScreen, new object[] { CrateRarity.Apex });
-
-                    yield return null;
+                    for (int i = 0; i < 20; i++)
+                        yield return null;
                     yield return new WaitForEndOfFrame();
 
                     ScreenCapture.CaptureScreenshot(CrateRevealOutputPath);

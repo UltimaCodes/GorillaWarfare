@@ -264,6 +264,13 @@ only - section 4's reasoning stands: anything that touches a fight makes "I open
   If the game ever sells anything, sell the item directly, never a chance at it.
 - The shop gets the new menu's look.
 
+**Changed 2026-09-30: weapon skins first after all** - Ryaan: "a weapon skins system (for now make them different
+colors and make them glow or whatever, ill make actual weapon skin models... then make an inventory system where
+players can select their weapon skins (like in counter strike)". Built - 30 universal finishes, an Inventory, and
+the crates rebuilt to drop them (bug-log.md, forty-sixth pass). Every rule above still holds: cosmetic only,
+earned tokens only, nothing tradeable, a duplicate worth tokens (scrapping, here). Titles, kill effects and
+wearables below are still the next things a crate could drop.
+
 **Picked 2026-09-28: titles, kill effects and wearables** - kept for later, not started. Vine styles
 weren't picked. Titles are the cheapest (text, no models); wearables are the Crab Game feel but need
 a sourced accessory pack, and should wait for the replacement gorilla so they're fitted once.

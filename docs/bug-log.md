@@ -3950,3 +3950,94 @@ menu hidden (`lobby-colour-backdrop.png`).
 
 Not played. Unmeasured: frame rate with about 1,300 props on a map (they're static-batched, and the
 undergrowth casts no shadows), and `Menu.unity` is 8.5MB now with all three maps copied behind it.
+
+# Forty-sixth pass - weapon skins, an inventory, and crates worth opening, 2026-09-30
+
+"Next thing on the agenda is a weapon skins system (for now make them different colors and make them
+glow or whatever, ill make actual weapon skin models but do what you can with them as they are right
+now), then make an inventory system where players can select their weapon skins (like in counter
+strike) in the main menu. Revamp the entire crates system to match the rest of the UI and all but try
+to add alot of animations, add like a proper crate opening and all animation, make it as addictive and
+dopamine inducing as possible." Asked: universal finishes ("make sure theyre REALLY unique and
+interesting and not boring"), copies stack and any can be scrapped for tokens, a different chest per
+crate. Downloaded with Ryaan's OK, all Kenney, CC0: Mini Dungeon, Pirate Kit and Platformer Kit (the
+chests, and coins), the whole Particle Pack (we had 12 of its 80 sprites), the Pattern Pack.
+
+## Finishes
+
+- **30 of them, six a rarity** (`WeaponFinish`, one asset each in Resources/Finishes, retunable in the
+  inspector - `FinishLibraryBuilder` only ever adds missing ones). Each is a different idea, not the
+  same one recoloured: a spotted Bruised, Leaf Litter camo, zebra, tiger and giraffe markings, candy
+  stripes, gunmetal and chrome, Gold Leaf with a glint running along it, Neon Hive, Frostbite shedding
+  snow, Toxic Waste with crawling glowing waves and bubbles, Lovebug trailing hearts, Molten Core's
+  glowing cracks and embers, Deep Space's stars and orbiting constellations, Thunderstruck's current
+  and lightning, Jelly that wobbles, Hazard Pay's marching stripes, Haunted's wisps, a travelling
+  Prismatic rainbow, Solar Flare, Void Walker's orbiting swirls, Disco Inferno, Crown Jewel, Glitch.
+- **One shader** (`Custom/WeaponFinish`) does all of it on the weapon's own model and texture - paint
+  that keeps the texture's light and dark, a Kenney pattern laid on three ways so it wraps a curved
+  banana with no seam, chrome, glow and pulse, hue cycling over time and along the weapon, an edge
+  light, a glint sweep, a jelly wobble - framed per weapon so every weapon wears it the same way. The
+  particle aura streams off a box the length of the weapon, sized to it. No texture was made for any
+  of it: the patterns and sprites are Kenney's.
+- **Your own models**: each finish has a `models` list - a model against a weapon's key is drawn
+  instead of the stock one whenever that finish is on it.
+
+## Inventory
+
+`SkinInventory` - what you own (with counts) and what each weapon wears, saved like the wallet, and
+published as a player property so everyone else draws your weapons in your finishes (`WeaponLoadout`
+dresses every weapon it builds with its owner's). The lobby gorilla's rifle wears yours and changes
+the moment you change it. The screen (`InventoryScreen`, INVENTORY under CRATES on the title screen):
+weapons down the left with what each wears, the picked one turning in the middle (drag to turn), your
+finishes on the right with how many copies; EQUIP, EQUIP ON ALL, SCRAP (twice - the first click asks,
+a misclick shouldn't cost an Apex), SCRAP SPARES for every copy past the first.
+
+## Crates
+
+Rebuilt in the menu's own look (`CrateShopBuilder`, `MenuStyle`). Three chests stand over their cards,
+each in a finish of its own - Rotten mouldy with flies circling, Ripe banana-gold, Holy glowing white
+chrome - bobbing, turning, peeking their lids open when you hover. Each card shows its crate's real
+odds as bars. Opening one: the others drop away, the camera pushes in, three jolts each harder (wood
+thuds, dust, sparks leaking out), the lid bursts open (the kit's own open pose, driven past its stop
+and settling back) in a flash with stars and a shower of real coins, then the reel - six seconds of
+finish cards slowing past the pointer, ticking, the card under the pointer lifting; click to skip.
+The reveal is scaled by rarity: the finish on a random weapon turning in a showcase of rays in its
+rarity's colour, the name punched in, NEW! or how many you've got, particles, shake and sound layered
+up the rarer it is (confetti on an Apex). Then EQUIP ON ALL, INVENTORY, SCRAP, OPEN ANOTHER.
+
+Honest the whole way through, as the first version was: the result is rolled first and is in your
+inventory before the chest has finished shaking (closing mid-spin loses nothing), every other card on
+the reel is drawn from the same odds, and it stops wherever it stops on the winning card - nothing is
+placed to look like a near miss. Earned tokens only, nothing tradeable (see ideas.md section 0).
+
+## Bugs found building it
+
+- **The three kits' chests are nearly the same chest.** Kenney reuses the model across kits - the
+  first render of all three looked identical. Each tier wears its own finish now, so they don't.
+- **The auras were invisible at first** - sized in metres, where a 1.3m sniper and a 0.4m pistol need
+  different ones. Sized to the weapon's length now, and the faint ones made bigger.
+- **A shader wanted eleven interpolators on shader model 3.0**, which has ten - the object-space normal
+  is worked out from the world one instead of being carried.
+- **The chests filled the screen** and the rattle zoom was far too close - measured against the frame
+  and shrunk. **The reveal's weapon was clipped** - framed looser, and its box made into a showcase
+  with rays and a rarity-coloured frame instead of a plain dark rectangle.
+- **Legacy particle shaders tint through `_TintColor`**, not `_Color`, so the glows first came out
+  untinted.
+- **SceneCheck flagged INVENTORY as a button that does nothing** - its click is wired at runtime,
+  like CRATES'; taught.
+- **The button audit waited a fixed 6.5 seconds** for a crate result - it waits for the result now.
+
+## Verified
+
+All nine suites pass. New probe checks: your equipped finish is what your weapon draws with, its
+particles on the viewmodel layer, published for everyone else, and gone when you take it off; a crate
+costs its price and gives a finish at once; scrapping pays. SceneCheck: both prefabs fully wired, 30
+finishes, six a rarity, every pattern and sprite they name present. MenuButtonAudit clicked every
+control on the crate screen through a real opening, and on the inventory.
+
+Looked at (`Photograph the weapon finishes`, `Photograph the main menu`): all 30 finishes on their
+turntable with their auras streaming, one finish on all eight weapons, the three chests shut and open,
+the crate page, the rattle, the burst, the reel, a result, the inventory.
+
+Not played, and not seen on a remote player (the property is checked, not another client drawing it).
+Every number is a first pass: scrap values, aura rates, how long the rattle and reel run.
