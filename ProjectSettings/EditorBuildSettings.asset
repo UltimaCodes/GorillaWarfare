@@ -14,5 +14,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Zoo.unity
     guid: 3344d07b154cf5a48bb86450e326ec82
+  - enabled: 1
+    path: Assets/Scenes/Glacier.unity
+    guid: 3d6871b07a20a5a4086ac088ad5b6be9
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

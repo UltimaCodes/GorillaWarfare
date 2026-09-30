@@ -3829,3 +3829,124 @@ with dark-cored wounds, blood running down from them, droplets in the air).
 `CheckVineSwings` failed once more in this pass - "-2.87m past it", having lifted 5.2m and hung there
 - and passed on the rerun. That's the third miss with three different numbers, before and after the
 swing rework, all on a spawn the check picks at random. Not this work; still worth a proper look.
+
+# Forty-fifth pass - the maps on terrain, a bigger zoo, a glacier, your colour behind the lobby, 2026-09-30
+
+"In the zoo map, make sure the grass is only on the grassy areas because its on the concrete too and
+expand the map, make it 1.5 times bigger (and i dont mean enlarge it, i mean expand it), make the border
+walls taller aswell. Add a new glacier map thats all ice themed. When you change your gorillas color
+make that change be reflected in the background screen of the lobby." Then, mid-way: "try using the
+terrain builder instead of shapes and boxes for everything so you can add some verticality to the map.
+Right now, the blocky cliffs and rocks arent it and theyre more so decoration instead of being like a
+part of the map", and "make it feel like a proper jungle yk" - for both the jungle and the zoo.
+
+## The ground is terrain now
+
+- **`TerrainKit`** (Editor/Builders) shapes a Unity Terrain from plain features - hills, ridges,
+  mesas (a flat top and cliff sides), flat pads for buildings, ramps up to high ground, trenches, a
+  rim banking up at the edges, noise - and scatters kit props over it, seeded, with spacing, a slope
+  limit and a clearing round every spawnpoint. The terrain is called `Floor`, the name MapSetup and
+  MenuBuilder already look for.
+- **`Custom/MapTerrain`** colours it by how steep it is, in colours taken from the kits: level ground,
+  a slope you can still walk up (dirt), and past the player's 45 degree slope limit a cliff (stone) -
+  so what you can climb is readable at a glance. Grass grows only where the ground reads as grass
+  (`GrassField.maxSlope` set to match).
+
+## The jungle (`JungleBuilder`)
+
+Replaces `Game.unity`'s Map and spawnpoints and keeps everything else, including the rock walls and the
+idol. A dry creek winds north to south through the middle; the idol stands on a temple mesa in the east
+with cliffs round it and two slopes up; a ridge runs down the west with two rocky tops; fallen ruins on a
+knoll in the north-east, a hollow in the south-west, a clearing in the middle; the ground banks up into
+cliffs against the walls. About 1,130 plants and trees - bamboo thickets, 150 trees, bushes to hide in
+(no collider - they hide you, they don't stop you), ferns, flowers, logs and rocks for cover. Twelve new
+spawnpoints. `MapExpansion` and its stacked cliff-block towers are gone.
+
+## The zoo (`ZooBuilder.Rebuild`)
+
+135m across (was 90), the middle kept and a ring of new ground round it: an elephant house the east
+avenue runs through, a giraffe paddock with two feeding towers, a cafe, a monkey climbing frame, a
+keeper's hut, a water tower, bamboo in a hollow, a rocky knoll and a wooded hill. Walls 14m over the
+ground (were 8). The rock enclosure is a two-tier hill of the terrain itself - a shelf you jump onto
+from the plaza side, cliffs, a long slope up the far side - not a stack of cliff blocks. The drained
+pool is cut into the ground, its tiled walls standing over the cut's edge. And it's overgrown: about
+820 plants and trees across the lawns, some growing in the pool. Fourteen spawnpoints.
+
+**Grass on the concrete** had two causes. `GrassField.Blocked` looked for anything standing on a spot
+from 18cm up, so a 10cm paving slab or path passed under it and the grass grew through - the box starts
+2cm up now. And the reptile house had no floor at all. Every building has one now.
+
+## The glacier (`GlacierBuilder`)
+
+A third map, in `Scenes/Glacier.unity`, registered and in the lobby's picker. Kenney's Holiday Kit
+(CC0, only the ice and cabin pieces - `Assets/Art/Glacier/SOURCES.txt`): snowy pines, snow-capped rocks,
+snow walls, drifts, lanterns, sleds, train wagons, and log cabins assembled from the kit's 1m modules at
+three times scale. A frozen lake in the south-middle, a crevasse across the middle and one across the
+south-east (both shallowing out at the ends to climb in and out), an ice shelf in the north-west, five
+ice pillars to swing between, a three-cabin outpost in the north-east, an abandoned train in the
+south-east, ice cliffs all round with invisible walls at their tops (the vine can pull you up a cliff,
+and past it there's no world). A colder sky - the arena's own sky shader in the kit's ice blues - and a
+snow-coloured haze. Every colour is read off the kit's palette. No grass (`SceneCheck.Grassless`).
+
+## The lobby
+
+- **Your colour on the gorilla.** `MenuGorilla` checks every frame what it should wear - your colour
+  in a room, your team's once a team mode has put you on one - and re-tints when it changes. It was
+  always the untinted rig before, dark against the jungle.
+- **Each map's backdrop can bring its own sky and fog** (`MenuBackdrop.View.sky`), copied from its
+  scene by MapSetup. The glacier does; the jungle and zoo share the menu's.
+- The jungle's lobby camera moved - its old spot is in the creek bed now. It looks across the clearing
+  at the idol on its temple. The glacier's looks over the frozen lake at the pillars and the cabins.
+
+## Bugs found building it
+
+- **Jungle cliffs came out teal.** The cliff colour was read off the kit's cliff model, whose first
+  material is the grass on its top. They use the kit's dark stone now, the same as the zoo.
+- **The kit's bushes are knee-high at the scale the zoo had them** - measured, a large bush is 0.4 x
+  0.24m at scale 1. Scaled 4-7.5 now, so a bush can hide a gorilla.
+- **A zoo spawnpoint inside a hay bale** in the new elephant house (SceneCheck: "no room to stand").
+  Moved between the hay and the trough.
+- **The probe's floor shot hit a palm.** "A shot leaves a mark on the floor... and scuffs the grass" -
+  the mark landed on a tree beside the spawn, so no scuff. Trees keep 6m clear of every spawnpoint now,
+  bushes 3.75m, ferns 3m.
+- **Snow drifts hanging off the ice pillars' tops** into the air. Kept off the pillars, and to flat
+  ground only.
+- **A tree in front of the lobby camera.** Widening the spawn clearings changed what the seeded scatter
+  drew, and a trunk landed in the jungle backdrop's foreground (`lobby-colour-backdrop.png` was all bark).
+  Each map keeps its lobby camera's line of sight clear now (`LobbyView`), past where the gorilla stands.
+- **The vine check's "spawn-dependent" miss, found.** It failed in most runs on the new jungle (a swing
+  that lifted and then hung, 1-5m short, at 2-3 m/s) - the same shape as the three misses earlier
+  passes put down to the spawn. Two wrong guesses first: a tree top in the swing's path (it now checks
+  clearance at swing height too, which is worth keeping) and ground rising under the arc (it
+  wasn't - the log showed level ground failing and a 1.5m rise passing). The cause: the probe aimed
+  at its branch by turning the camera, and the player's own look put the camera back the next frame.
+  The swing drives along where you look, so it swung along the spawn's facing, not at the branch -
+  fine whenever the clearest direction was straight ahead, which on the open old map it nearly always
+  was. It aims through the look angles now (`Face`); three runs in a row passed with the branch 135-180
+  degrees off the spawn's facing, at 11-12 m/s. Not a bug in the vine.
+- **Dummies in trees and over humps.** The probe's `ClearLine` found a direction clear at eye height
+  and dropped a dummy onto whatever was under the far end - in the dense jungle, sometimes a canopy,
+  or ground over a rise that the grapes' arc ran into ("grapes hurt what they reach: 0 damage", and the
+  dummy wasn't in the picture the probe took while aiming at it). It now wants level ground along the
+  whole line, and drops the dummy from just above the point instead of 4m up.
+- **A spawn in a bowl.** The jungle's south-west spawn sat between the hollow, the ridge and the rising
+  edge, with no level ground 6m out in any direction. Moved, and every spawnpoint on every map stands
+  on a small patch of level ground now. Checked across all 38 with the probe's own test: every jungle
+  spawn has a level, clear line 15m out; the two zoo spawns without one are indoors (the reptile and
+  elephant houses).
+
+## Verified
+
+All nine suites pass. SceneCheck on all three maps (spawnpoints with ground under them and room to
+stand, grass wired where there's grass, none on the glacier on purpose); the probe end to end,
+including the zoo pass; MenuButtonAudit over the lobby's map picker with three maps in it. The vine
+check passed eight runs in a row after the fix, from six different spawns.
+
+Looked at, from above and at eye height (`Tools/Gorilla Warfare/Photograph a map`): the jungle's creek,
+temple ramp, ridge and ruins; the zoo's rock hill from the plaza, its ramp and its top, the pool, the
+bamboo hollow; the glacier's outpost and a cabin doorway, a crevasse, the pillars, the lake. The lobby
+(`MenuPhotographer`): the jungle, the zoo and the glacier behind it, and the gorilla in mint with the
+menu hidden (`lobby-colour-backdrop.png`).
+
+Not played. Unmeasured: frame rate with about 1,300 props on a map (they're static-batched, and the
+undergrowth casts no shadows), and `Menu.unity` is 8.5MB now with all three maps copied behind it.

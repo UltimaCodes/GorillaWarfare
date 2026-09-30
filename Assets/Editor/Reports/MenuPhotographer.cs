@@ -210,8 +210,37 @@ public static class MenuPhotographer
             PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, "zoo" } });
             yield return new WaitForSecondsRealtime(1.5f);
             yield return Shot(null, "lobby-zoo");
+
+            // And the glacier, which brings its own sky and fog with it.
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, "glacier" } });
+            yield return new WaitForSecondsRealtime(1.5f);
+            yield return Shot(null, "lobby-glacier");
             PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { MapRegistry.RoomKey, MapRegistry.Default.key } });
             yield return new WaitForSecondsRealtime(0.5f);
+
+            // A colour picked - the backdrop's gorilla wears it (MenuGorilla), the way the backdrop
+            // shows the map. Mint, far from the banana default, so it can't be mistaken.
+            PlayerColours.Choose(5);
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Shot(null, "lobby-colour");
+
+            // The lobby's panels cover the gorilla - the same moment again with the menu hidden,
+            // to see the colour it's actually wearing.
+            List<Canvas> shown = new List<Canvas>();
+            foreach (Canvas canvas in Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+            {
+                if (canvas.isRootCanvas && canvas.enabled)
+                {
+                    canvas.enabled = false;
+                    shown.Add(canvas);
+                }
+            }
+            yield return Shot(null, "lobby-colour-backdrop");
+            foreach (Canvas canvas in shown)
+                canvas.enabled = true;
+
+            PlayerColours.Choose(0);
+            yield return new WaitForSecondsRealtime(0.3f);
 
             if (SettingsMenu.Instance != null)
             {

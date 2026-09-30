@@ -6,24 +6,43 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Builds the second map - a greybox zoo - into `Scenes/Zoo.unity`, once.
+/// Builds the second map - a zoo, overgrown - into `Scenes/Zoo.unity`, once.
 ///
 /// "Make a proprietary second map right now temporarily, ill fix it up (make it a zoo)." So this
-/// is a layout, not a finished map: plain blocks in the jungle kit's own materials (stone, wood,
-/// dirt - embedded in its models, nothing made up), the kit's trees and rocks as dressing, and
-/// the arena's sun, sky and grass copied across so it looks like the same game. Real zoo art gets
-/// sourced once the layout is right.
+/// is a layout, not a finished map: the buildings are plain blocks in the jungle kit's own
+/// materials (stone, wood, dirt - embedded in its models, nothing made up), the kit's trees,
+/// plants and rocks are the dressing, and the arena's sun, sky and grass are copied across so it
+/// looks like the same game. Real zoo art gets sourced once the layout is right.
 ///
 /// Refuses to run if the scene exists - from the first build on it's Ryaan's to edit by hand,
-/// the same rule as MenuBuilder.Run. Delete the scene to build it again.
+/// the same rule as MenuBuilder.Run. Rebuild runs over it, for as long as nobody has (git history
+/// is the check - on 2026-09-30 only the build commit had ever touched it).
 ///
-/// The layout, 90 x 90 m inside the walls, centred on the origin:
+/// Rebuilt 2026-09-30, three reports the same day:
+/// - "expand the map, make it 1.5 times bigger (and i dont mean enlarge it, i mean expand it),
+///   make the border walls taller" - 135 x 135 m, was 90; the middle kept as it was and a ring of
+///   new ground round it; walls 14m over the ground, were 8.
+/// - "try using the terrain builder instead of shapes and boxes... the blocky cliffs and rocks
+///   arent it" - the ground is a Terrain (TerrainKit) now. The rock enclosure is a two-tier hill,
+///   not a stack of cliff blocks; the lawns roll; there are knolls, a hollow and a ridge.
+/// - "make it feel like a proper jungle" - the zoo's gone wild: trees, bushes, ferns and flowers
+///   all over the lawns, bamboo in the hollow, plants growing in the drained pool.
+///
+/// The layout, centred on the origin:
 /// - a paved plaza in the middle with a bandstand to fight round and on;
 /// - four avenues running out from it to the walls, lined with trees - the long sightlines;
-/// - an enclosure in each corner, each a different shape of fight: a drained pool (NE) you drop
-///   into, a rock enclosure (SE) to climb, a reptile house (SW) with a roof over it, and a tall
+/// - an enclosure in each inner corner, each a different shape of fight: a drained pool (NE) you
+///   drop into, a rock hill (SE) to climb, a reptile house (SW) with a roof over it, and a tall
 ///   aviary cage (NW) to swing through on the vine;
-/// - two spawnpoints per enclosure, none in the plaza, all facing in.
+/// - round them, the new ground: an elephant house the east avenue runs through, a giraffe
+///   paddock with two feeding towers either side of the west avenue, a cafe on the north side, a
+///   monkey climbing frame and a keeper's hut on the south, and in the outer corners a water tower,
+///   a bamboo hollow, a rocky knoll and a wooded hill;
+/// - fourteen spawnpoints, none in the plaza, all facing in.
+///
+/// Grass grows only on the lawns: paving, paths and every building's floor keep it off (see
+/// GrassField.Blocked), and so does ground too steep to read as grass - it grew through the plaza's
+/// concrete, reported the same day.
 /// </summary>
 public static class ZooBuilder
 {
@@ -32,30 +51,49 @@ public static class ZooBuilder
     const string Models = "Assets/Art/Jungle/Models";
     const string FloorMaterialPath = "Assets/Art/Jungle/Materials/grass.mat";
     const string SpawnpointPrefab = "Assets/Prefabs/World/Spawnpoint.prefab";
+    const string TerrainPath = "Assets/Scenes/Terrain/Zoo.asset";
+    const string GroundMaterialPath = "Assets/Scenes/Terrain/ZooGround.mat";
 
-    const float Half = 45f;
-    const float WallHeight = 8f;
+    const float Half = 67.5f;
+    const float WallTop = 16f;     // 14m over the ground where it banks up against the walls
+    const float WallBottom = -2f;
     const float WallThickness = 1.5f;
-    const float FloorDepth = 3f;
 
-    // The drained pool's hole in the floor, NE.
+    // Where the old 90m map ended - the enclosures there still sit inside it, and the new areas go
+    // outside it.
+    const float InnerHalf = 45f;
+
+    // The drained pool's hole in the ground, NE.
     static readonly Rect Pool = new Rect(19f, 21f, 18f, 14f);
     const float PoolDepth = 3f;
 
-    static Dictionary<string, Material> kit;
-    static Material floorMaterial;
+    // The rock hill, SE: a lower shelf and the top.
+    static readonly Vector2 RockHill = new Vector2(28f, -28f);
+    const float ShelfHeight = 3.2f;
+    const float TopHeight = 7f;
 
-    [MenuItem("Tools/Gorilla Warfare/Build the zoo (greybox, once)")]
-    public static void Run()
+    static Dictionary<string, Material> kit;
+    static HeightMap ground;
+    static readonly List<Vector3> taken = new List<Vector3>();
+
+    [MenuItem("Tools/Gorilla Warfare/Build the zoo (once)")]
+    public static void Run() => Build(false);
+
+    /// Builds it again over the existing scene, keeping its GUID - and throwing away anything done
+    /// to it by hand. Only while nothing has been.
+    [MenuItem("Tools/Gorilla Warfare/Rebuild the zoo (throws away hand edits)")]
+    public static void Rebuild() => Build(true);
+
+    static void Build(bool overwrite)
     {
-        if (File.Exists(ScenePath))
+        if (File.Exists(ScenePath) && !overwrite)
         {
-            Fail($"{ScenePath} already exists - it's hand-edited from here. Delete it to build it again.");
+            Fail($"{ScenePath} already exists - it's hand-edited from here. Rebuild runs over it.");
             return;
         }
 
         kit = KitMaterials();
-        floorMaterial = AssetDatabase.LoadAssetAtPath<Material>(FloorMaterialPath);
+        Material grass = AssetDatabase.LoadAssetAtPath<Material>(FloorMaterialPath);
 
         foreach (string needed in new[] { "stone", "stoneDark", "dirt", "woodBark", "woodDark" })
         {
@@ -66,125 +104,52 @@ public static class ZooBuilder
             }
         }
 
-        if (floorMaterial == null)
+        if (grass == null)
         {
             Fail($"no floor material at {FloorMaterialPath}");
             return;
         }
 
         Scene zoo = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        GrassField grass = CopyFromGame(zoo);
+        GrassField grassField = CopyFromGame(zoo);
 
         Transform map = new GameObject("Map").transform;
+        taken.Clear();
 
-        List<Collider> ground = BuildFloor(map);
+        // The kit's own colours: the arena floor's grass on the level, its dirt on a slope you can
+        // still climb, its dark stone on a cliff you can't.
+        ground = ShapeGround();
+        Material groundMaterial = TerrainKit.GroundMaterial(GroundMaterialPath, grass.color, kit["dirt"].color, kit["stoneDark"].color);
+        Terrain terrain = TerrainKit.Build(ground, map, TerrainPath, groundMaterial);
+
         BuildWalls(map);
         BuildPlaza(map);
         BuildAvenues(map);
         BuildPool(map);
-        BuildRocks(map);
+        BuildRockHill(map);
         BuildReptileHouse(map);
         BuildAviary(map);
+        BuildElephantHouse(map);
+        BuildGiraffePaddock(map);
+        BuildCafe(map);
+        BuildMonkeyFrame(map);
+        BuildKeepersHut(map);
+        BuildCorners(map);
+        int wild = Overgrow(map);
         BuildSpawns();
 
-        if (grass != null)
-            PointGrassAt(grass, ground);
+        if (grassField != null)
+        {
+            PointGrassAt(grassField, new List<Collider> { terrain.GetComponent<TerrainCollider>() });
+            TerrainKit.GrassOnFlatOnly(grassField);
+        }
 
+        AssetDatabase.SaveAssets();
         EditorSceneManager.SaveScene(zoo, ScenePath);
         AddToBuildSettings(ScenePath);
 
-        Debug.Log($"[zoo] built {ScenePath} - {map.GetComponentsInChildren<Renderer>().Length} pieces, "
-                  + "8 spawnpoints. It's yours to edit from here; this won't run over it.");
-
-        if (Application.isBatchMode)
-            EditorApplication.Exit(0);
-    }
-
-    /// <summary>
-    /// The zoo from above, and from eye height in a few places - to look at the layout rather
-    /// than trust the numbers. Edit mode, so no grass (it grows at runtime). Output:
-    /// Logs/zoo-shots/*.png.
-    /// </summary>
-    [MenuItem("Tools/Gorilla Warfare/Photograph the zoo")]
-    public static void Photograph()
-    {
-        if (!File.Exists(ScenePath))
-        {
-            Fail($"no {ScenePath} to photograph");
-            return;
-        }
-
-        EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-        string folder = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Logs", "zoo-shots");
-        Directory.CreateDirectory(folder);
-
-        GameObject host = new GameObject("~ZooCamera");
-        Camera camera = host.AddComponent<Camera>();
-        camera.farClipPlane = 400f;
-
-        void Shot(string name, Vector3 at, Vector3 lookAt, bool fromAbove, float fov = 70f)
-        {
-            camera.orthographic = fromAbove;
-            camera.orthographicSize = Half + 6f;
-            camera.clearFlags = fromAbove ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
-            camera.backgroundColor = Color.black;
-            camera.fieldOfView = fov;
-            host.transform.position = at;
-            host.transform.rotation = Quaternion.LookRotation(lookAt - at, fromAbove ? Vector3.forward : Vector3.up);
-
-            int width = fromAbove ? 1400 : 1920, height = fromAbove ? 1400 : 1080;
-            RenderTexture target = new RenderTexture(width, height, 24);
-            camera.targetTexture = target;
-            camera.Render();
-
-            RenderTexture.active = target;
-            Texture2D image = new Texture2D(width, height, TextureFormat.RGB24, false);
-            image.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            image.Apply();
-            RenderTexture.active = null;
-            camera.targetTexture = null;
-
-            File.WriteAllBytes(Path.Combine(folder, name + ".png"), image.EncodeToPNG());
-            Object.DestroyImmediate(image);
-            target.Release();
-        }
-
-        // GW_ZOO_VIEWS="x,y,z,yaw;..." - menu-camera framings (55 degrees, 16:9) to choose the lobby
-        // backdrop's spot by looking, the way the arena's was chosen.
-        string views = System.Environment.GetEnvironmentVariable("GW_ZOO_VIEWS");
-        if (!string.IsNullOrEmpty(views))
-        {
-            string[] spots = views.Split(';');
-            for (int i = 0; i < spots.Length; i++)
-            {
-                string[] v = spots[i].Split(',');
-                if (v.Length < 4)
-                    continue;
-
-                float Parse(string s) => float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
-                Vector3 at = new Vector3(Parse(v[0]), Parse(v[1]), Parse(v[2]));
-                Vector3 look = at + Quaternion.Euler(-2f, Parse(v[3]), 0f) * Vector3.forward * 10f;
-
-                Shot($"view-{i}", at, look, false, 55f);
-            }
-
-            Object.DestroyImmediate(host);
-            Debug.Log($"[zoo] photographed {spots.Length} candidate views into {folder}");
-            if (Application.isBatchMode)
-                EditorApplication.Exit(0);
-            return;
-        }
-
-        Shot("top", new Vector3(0f, 120f, 0f), Vector3.zero, true);
-        Shot("plaza-north", new Vector3(0f, 1.7f, -12f), new Vector3(0f, 2f, 20f), false);
-        Shot("from-pool-spawn", new Vector3(16f, 1.7f, 40f), new Vector3(0f, 1f, 0f), false);
-        Shot("into-pool", new Vector3(24f, 2.5f, 17f), new Vector3(30f, -2f, 30f), false);
-        Shot("aviary-inside", new Vector3(-30f, 1.7f, 23f), new Vector3(-26f, 9f, 34f), false);
-        Shot("reptile-house", new Vector3(-28f, 1.7f, -12f), new Vector3(-28f, 2f, -30f), false);
-        Shot("rock-enclosure", new Vector3(16f, 1.7f, -16f), new Vector3(28f, 3f, -28f), false);
-
-        Object.DestroyImmediate(host);
-        Debug.Log($"[zoo] photographed into {folder}");
+        Debug.Log($"[zoo] built {ScenePath} - {map.GetComponentsInChildren<Renderer>().Length} pieces, {wild} of them growing wild, "
+                  + $"{SpawnSpots.Length} spawnpoints. It's yours to edit from here; Run won't go over it.");
 
         if (Application.isBatchMode)
             EditorApplication.Exit(0);
@@ -245,14 +210,14 @@ public static class ZooBuilder
         return grass;
     }
 
-    static void PointGrassAt(GrassField grass, List<Collider> ground)
+    static void PointGrassAt(GrassField grass, List<Collider> colliders)
     {
         SerializedObject so = new SerializedObject(grass);
 
         SerializedProperty list = so.FindProperty("ground");
-        list.arraySize = ground.Count;
-        for (int i = 0; i < ground.Count; i++)
-            list.GetArrayElementAtIndex(i).objectReferenceValue = ground[i];
+        list.arraySize = colliders.Count;
+        for (int i = 0; i < colliders.Count; i++)
+            list.GetArrayElementAtIndex(i).objectReferenceValue = colliders[i];
 
         so.FindProperty("area").rectValue = new Rect(-Half, -Half, Half * 2f, Half * 2f);
         so.ApplyModifiedPropertiesWithoutUndo();
@@ -260,27 +225,89 @@ public static class ZooBuilder
 
     // ---------------------------------------------------------------- the ground
 
-    /// A thick slab with the pool cut out of it - four pieces round the hole. Thick so the pool's
-    /// sides are solid, not a floor over nothing.
-    static List<Collider> BuildFloor(Transform map)
+    // Everything built stands level at 0 on these - the paths, the plaza, every building's
+    // footprint - and nothing grows wild on them.
+    static readonly Rect[] Pads =
     {
-        Transform floor = Group(map, "Floor");
-        List<Collider> ground = new List<Collider>();
+        Rect.MinMaxRect(-14f, -14f, 14f, 14f),                 // plaza
+        Rect.MinMaxRect(-3.5f, 14f, 3.5f, Half),               // avenues
+        Rect.MinMaxRect(-3.5f, -Half, 3.5f, -14f),
+        Rect.MinMaxRect(14f, -3.5f, Half, 3.5f),
+        Rect.MinMaxRect(-Half, -3.5f, -14f, 3.5f),
+        Rect.MinMaxRect(16.5f, 18.5f, 39.5f, 37.5f),           // round the pool
+        Rect.MinMaxRect(-38.5f, 17.5f, -17.5f, 38.5f),         // aviary
+        Rect.MinMaxRect(-39f, -36f, -17f, -20f),               // reptile house
+        Rect.MinMaxRect(48f, -12f, 65f, 12f),                  // elephant house
+        Rect.MinMaxRect(-61f, 9.5f, -41.5f, 16.5f),            // giraffe towers and their ramps
+        Rect.MinMaxRect(-61f, -16.5f, -41.5f, -9.5f),
+        Rect.MinMaxRect(-66f, 3f, -48f, 5f),                   // paddock fences
+        Rect.MinMaxRect(-66f, -5f, -48f, -3f),
+        Rect.MinMaxRect(13f, 45f, 35f, 65f),                   // cafe and terrace
+        Rect.MinMaxRect(7f, -63f, 37f, -49f),                  // monkey frame and its ramp
+        Rect.MinMaxRect(-39f, -63f, -25f, -51f),               // keeper's hut
+        Rect.MinMaxRect(40f, 52f, 60f, 60f),                   // water tower and its ramp
+        Rect.MinMaxRect(13.5f, -43f, 15.5f, -14f),             // rock hill fences
+        Rect.MinMaxRect(14f, -15.5f, 43f, -13.5f),
+    };
 
-        void Slab(string name, float xMin, float xMax, float zMin, float zMax)
-        {
-            GameObject piece = Block(floor, name,
-                new Vector3((xMin + xMax) * 0.5f, -FloorDepth * 0.5f, (zMin + zMax) * 0.5f),
-                new Vector3(xMax - xMin, FloorDepth, zMax - zMin), floorMaterial);
-            ground.Add(piece.GetComponent<Collider>());
-        }
+    // The slopes up onto high ground: the rock hill's, and the knoll's. Kept clear of anything growing.
+    static readonly Vector2[][] Ways =
+    {
+        new[] { new Vector2(44f, -41f), RockHill + new Vector2(5f, -5f) },
+        new[] { new Vector2(-43f, -61f), new Vector2(-51.5f, -58.5f) },
+    };
 
-        Slab("South", -Half, Half, -Half, Pool.yMin);
-        Slab("North", -Half, Half, Pool.yMax, Half);
-        Slab("West", -Half, Pool.xMin, Pool.yMin, Pool.yMax);
-        Slab("East", Pool.xMax, Half, Pool.yMin, Pool.yMax);
+    /// <summary>
+    /// Rolling lawns; the rock hill; the knolls and hollows in the outer ring; the ground banking
+    /// up against the walls; then everything built flattened level, and the pool cut in last.
+    /// </summary>
+    static HeightMap ShapeGround()
+    {
+        HeightMap g = new HeightMap(Half * 2f, 513, -8f, 32f);
 
-        return ground;
+        g.Noise(1.1f, 16f, 7);
+
+        // SE, the rock hill: a skirt, a shelf to jump up onto from the plaza side, and the top -
+        // cliffs all round but the long dirt slope up from the far side.
+        g.Hill(RockHill, 14f, 1.5f);
+        g.Mesa(RockHill + new Vector2(-1f, 1f), 10.5f, ShelfHeight, 1.8f, 0.18f, 2);
+        g.Mesa(RockHill + new Vector2(1.5f, -1.5f), 6.5f, TopHeight, 2.2f, 0.2f, 5);
+        g.Ramp(Ways[0][0], 0f, Ways[0][1], TopHeight, 4f, 2.5f);
+
+        // Between the enclosures and the avenues: a ridge either side of the north avenue, a low
+        // mound west of the plaza.
+        g.Ridge(new Vector2(-9f, 19f), new Vector2(-9f, 40f), 5.5f, 2.2f);
+        g.Ridge(new Vector2(10f, 18f), new Vector2(10f, 40f), 4.5f, 1.6f);
+        g.Hill(new Vector2(-28f, -8f), 8f, 1.8f);
+
+        // The outer ring.
+        g.Hill(new Vector2(-24f, 56f), 14f, 5f);                       // N, a big grassy hill
+        g.Mesa(new Vector2(-24f, 56f), 4f, 5.4f, 3f, 0.2f, 9);         // with a flat lookout
+        g.Hill(new Vector2(-12f, -56f), 9f, 3f);                       // S
+        g.Ridge(new Vector2(58f, 18f), new Vector2(58f, 42f), 7f, 4f); // E, north of the elephant house
+        g.Hill(new Vector2(52f, -30f), 10f, 3f);                       // E, south of it
+        g.Hill(new Vector2(-56f, 30f), 8f, 2.5f);                      // W, under the palms
+        g.Hill(new Vector2(-56f, -30f), 8f, 2.5f);
+        g.Hill(new Vector2(56f, -56f), 12f, 3.5f);                     // SE corner, the wooded hill
+        g.Mesa(new Vector2(-57f, -57f), 7f, 6f, 2.2f, 0.25f, 4);       // SW corner, the rocky knoll
+        g.Ramp(Ways[1][0], 0f, Ways[1][1], 6f, 3.5f, 2f);
+        g.Disc(new Vector2(-56f, 56f), 6f, -1.8f, 7f);                 // NW corner, the bamboo hollow
+
+        g.Rim(Half - 6f, 1.5f, 1f);
+
+        foreach (Rect pad in Pads)
+            g.Pad(pad, 0f, 3f);
+
+        // Every spawnpoint on a little level ground - nobody comes back on a slope, and there's a
+        // flat few metres round you to fight from.
+        foreach (Vector2 spot in SpawnSpots)
+            g.Disc(spot, 3f, g.Height(spot.x, spot.y), 5f);
+
+        // The pool floor sits 20cm under the basin's slab, so the two never fight over the same
+        // plane; the tiled walls stand over the step at the edge.
+        g.Cut(Pool, -PoolDepth - 0.2f);
+
+        return g;
     }
 
     static void BuildWalls(Transform map)
@@ -289,12 +316,13 @@ public static class ZooBuilder
         Material stone = kit["stoneDark"];
         float span = Half * 2f + WallThickness * 2f;
         float at = Half + WallThickness * 0.5f;
-        float y = WallHeight * 0.5f;
+        float height = WallTop - WallBottom;
+        float y = (WallTop + WallBottom) * 0.5f;
 
-        Block(walls, "North", new Vector3(0f, y, at), new Vector3(span, WallHeight, WallThickness), stone);
-        Block(walls, "South", new Vector3(0f, y, -at), new Vector3(span, WallHeight, WallThickness), stone);
-        Block(walls, "East", new Vector3(at, y, 0f), new Vector3(WallThickness, WallHeight, span), stone);
-        Block(walls, "West", new Vector3(-at, y, 0f), new Vector3(WallThickness, WallHeight, span), stone);
+        Block(walls, "North", new Vector3(0f, y, at), new Vector3(span, height, WallThickness), stone);
+        Block(walls, "South", new Vector3(0f, y, -at), new Vector3(span, height, WallThickness), stone);
+        Block(walls, "East", new Vector3(at, y, 0f), new Vector3(WallThickness, height, span), stone);
+        Block(walls, "West", new Vector3(-at, y, 0f), new Vector3(WallThickness, height, span), stone);
     }
 
     // ---------------------------------------------------------------- the middle
@@ -323,12 +351,14 @@ public static class ZooBuilder
 
         Disc(stand, "Roof", new Vector3(0f, 5.4f, 0f), 10f, 0.4f, kit["woodDark"]);
 
-        // Low planters at the plaza's corners - cover without closing the sightlines off.
+        // Low planters at the plaza's corners - cover without closing the sightlines off - gone to
+        // seed like everything else.
         foreach (Vector2 corner in new[] { new Vector2(10f, 10f), new Vector2(-10f, 10f),
                                            new Vector2(10f, -10f), new Vector2(-10f, -10f) })
         {
             Block(plaza, "Planter", new Vector3(corner.x, 0.5f, corner.y), new Vector3(3f, 1f, 3f), kit["stone"]);
-            Prop(plaza, "plant_bushLarge", new Vector3(corner.x, 1f, corner.y), 0f, 3f);
+            Prop(plaza, "plant_bushLarge", new Vector3(corner.x, 1f, corner.y), 0f, 6f, false);
+            Prop(plaza, "plant_flatTall", new Vector3(corner.x + 0.8f, 1f, corner.y - 0.6f), 40f, 2.2f, false);
         }
     }
 
@@ -356,20 +386,25 @@ public static class ZooBuilder
                                        Mathf.Abs(across.z) * 6f + Mathf.Abs(along.z) * (Half - 14f));
             Block(avenue, "Path", middle + Vector3.up * 0.01f, size, kit["dirt"]);
 
-            for (float d = 18f; d < Half - 3f; d += 8f)
+            // The east avenue ends inside the elephant house, so its trees stop short of the doors.
+            float treesTo = name == "East" ? 46f : Half - 3f;
+
+            for (float d = 18f; d < treesTo; d += 8f)
             {
                 foreach (float side in new[] { -1f, 1f })
                 {
                     Vector3 at = along * d + across * side * 11f;
-                    Prop(avenue, trees[Random.Range(0, trees.Length)], at, Random.Range(0f, 360f), Random.Range(5f, 8f));
+                    Grown(avenue, trees[Random.Range(0, trees.Length)], at, Random.Range(0f, 360f), Random.Range(5f, 8f));
                 }
             }
 
-            // Two rocks in each avenue, off the path - something to duck behind on a long lane.
-            for (int i = 0; i < 2; i++)
+            // Rocks off the path - something to duck behind on a long lane. Two on the old stretch,
+            // one more on the new.
+            for (int i = 0; i < 3; i++)
             {
-                Vector3 at = along * Random.Range(20f, Half - 6f) + across * (i == 0 ? -6f : 6f);
-                Prop(avenue, i == 0 ? "rock_largeA" : "rock_tallA", at, Random.Range(0f, 360f), Random.Range(3f, 4.5f));
+                float d = i < 2 ? Random.Range(20f, InnerHalf - 6f) : Random.Range(InnerHalf + 2f, 47f);
+                Vector3 at = along * d + across * (i % 2 == 0 ? -6f : 6f);
+                Grown(avenue, i == 1 ? "rock_tallA" : "rock_largeA", at, Random.Range(0f, 360f), Random.Range(3f, 4.5f));
             }
         }
 
@@ -381,66 +416,68 @@ public static class ZooBuilder
 
     // ---------------------------------------------------------------- the enclosures
 
-    /// NE. A drained pool: a 3m drop into a stone basin, a ramp back out along one side, and a
-    /// railing round part of the rim.
+    /// NE. A drained pool: a 3m drop into a stone basin, a ramp back out along one side, a railing
+    /// round part of the rim - and the jungle getting into it.
     static void BuildPool(Transform map)
     {
         Transform pool = Group(map, "Pool");
         Material stone = kit["stone"];
 
-        Block(pool, "Basin", new Vector3(Pool.center.x, -PoolDepth - 0.25f, Pool.center.y),
-              new Vector3(Pool.width, 0.5f, Pool.height), stone);
+        // The slab's top is the pool floor; the ground's cut sits 20cm below it.
+        Block(pool, "Basin", new Vector3(Pool.center.x, -PoolDepth - 0.3f, Pool.center.y),
+              new Vector3(Pool.width + 0.8f, 0.6f, Pool.height + 0.8f), stone);
 
-        // Tiled sides over the floor slab's cut faces.
-        float y = -PoolDepth * 0.5f;
-        Block(pool, "SideNorth", new Vector3(Pool.center.x, y, Pool.yMax - 0.15f), new Vector3(Pool.width, PoolDepth, 0.3f), stone);
-        Block(pool, "SideSouth", new Vector3(Pool.center.x, y, Pool.yMin + 0.15f), new Vector3(Pool.width, PoolDepth, 0.3f), stone);
-        Block(pool, "SideEast", new Vector3(Pool.xMax - 0.15f, y, Pool.center.y), new Vector3(0.3f, PoolDepth, Pool.height), stone);
-        Block(pool, "SideWest", new Vector3(Pool.xMin + 0.15f, y, Pool.center.y), new Vector3(0.3f, PoolDepth, Pool.height), stone);
+        // Tiled walls standing over the ground's cut edge, half in and half out of it - the step in
+        // the heightmap sits within a sample of the edge, and these are thick enough to cover it.
+        const float t = 0.8f;
+        float y = (-PoolDepth + 0.05f) * 0.5f;
+        float h = PoolDepth + 0.05f;
+        Block(pool, "SideNorth", new Vector3(Pool.center.x, y, Pool.yMax), new Vector3(Pool.width + t, h, t), stone);
+        Block(pool, "SideSouth", new Vector3(Pool.center.x, y, Pool.yMin), new Vector3(Pool.width + t, h, t), stone);
+        Block(pool, "SideEast", new Vector3(Pool.xMax, y, Pool.center.y), new Vector3(t, h, Pool.height + t), stone);
+        Block(pool, "SideWest", new Vector3(Pool.xMin, y, Pool.center.y), new Vector3(t, h, Pool.height + t), stone);
 
         // Out along the west side, north to south: from the rim down to the basin.
-        Ramp(pool, "Ramp", new Vector3(Pool.xMin + 2f, 0f, Pool.yMax - 0.5f),
-             new Vector3(Pool.xMin + 2f, -PoolDepth, Pool.yMax - 9f), 3f, stone);
+        Ramp(pool, "Ramp", new Vector3(Pool.xMin + 2.4f, 0.05f, Pool.yMax - 0.4f),
+             new Vector3(Pool.xMin + 2.4f, -PoolDepth, Pool.yMax - 9f), 3f, stone);
 
         // Cover in the basin, so dropping in isn't only a way to die.
         Block(pool, "LifeguardChair", new Vector3(Pool.center.x + 3f, -PoolDepth + 1f, Pool.center.y), new Vector3(2f, 2f, 2f), kit["woodDark"]);
         Block(pool, "DrainCover", new Vector3(Pool.center.x - 2f, -PoolDepth + 0.4f, Pool.center.y - 3f), new Vector3(3f, 0.8f, 1.5f), stone);
 
+        // Growing up through the cracks.
+        foreach ((string model, Vector2 at, float size) in new[] { ("plant_bushLarge", new Vector2(33f, 32f), 5.5f),
+                                                                    ("plant_flatTall", new Vector2(29f, 24f), 3.5f),
+                                                                    ("grass_leafsLarge", new Vector2(25f, 31f), 3.5f),
+                                                                    ("plant_bushDetailed", new Vector2(35f, 23f), 5f),
+                                                                    ("grass_large", new Vector2(31f, 28f), 3f) })
+            Prop(pool, model, new Vector3(at.x, -PoolDepth, at.y), at.x * 37f, size, false);
+        Prop(pool, "tree_thin", new Vector3(34.5f, -PoolDepth, 32.5f), 70f, 5f);
+
         // A railing on the plaza-facing edges, with gaps to get through.
         Material wood = kit["woodBark"];
-        Block(pool, "RailSouthWest", new Vector3(Pool.xMin + 4f, 0.5f, Pool.yMin - 0.4f), new Vector3(8f, 1f, 0.2f), wood);
-        Block(pool, "RailSouthEast", new Vector3(Pool.xMax - 3f, 0.5f, Pool.yMin - 0.4f), new Vector3(6f, 1f, 0.2f), wood);
-        Block(pool, "RailWest", new Vector3(Pool.xMin - 0.4f, 0.5f, Pool.center.y - 2f), new Vector3(0.2f, 1f, 8f), wood);
+        Block(pool, "RailSouthWest", new Vector3(Pool.xMin + 4f, 0.5f, Pool.yMin - 0.6f), new Vector3(8f, 1f, 0.2f), wood);
+        Block(pool, "RailSouthEast", new Vector3(Pool.xMax - 3f, 0.5f, Pool.yMin - 0.6f), new Vector3(6f, 1f, 0.2f), wood);
+        Block(pool, "RailWest", new Vector3(Pool.xMin - 0.6f, 0.5f, Pool.center.y - 2f), new Vector3(0.2f, 1f, 8f), wood);
     }
 
-    /// SE. A rock enclosure - a stepped mound of the kit's cliff blocks to climb, a fence round the
-    /// plaza-facing sides with gaps in it, and trees.
-    static void BuildRocks(Transform map)
+    /// <summary>
+    /// SE. The rock hill - the ground itself (see ShapeGround): a shelf 3m up you can jump onto from
+    /// the plaza side, cliffs above it to the top 7m up, and a long dirt slope up the far side. A
+    /// fence round the plaza-facing sides with gaps in it, trees and rocks on the slopes.
+    /// </summary>
+    static void BuildRockHill(Transform map)
     {
-        Transform rocks = Group(map, "RockEnclosure");
-        Vector3 centre = new Vector3(28f, 0f, -28f);
+        Transform rocks = Group(map, "RockHill");
+        Vector2 c = RockHill;
 
-        // Three tiers, 3m blocks, each smaller than the last.
-        int[] widths = { 3, 2, 1 };
-        for (int tier = 0; tier < widths.Length; tier++)
-        {
-            int n = widths[tier];
-            for (int x = 0; x < n; x++)
-            {
-                for (int z = 0; z < n; z++)
-                {
-                    Vector3 at = centre + new Vector3((x - (n - 1) * 0.5f) * 3f, tier * 2.6f, (z - (n - 1) * 0.5f) * 3f);
-                    Prop(rocks, "cliff_block_rock", at, 90f * ((x + z + tier) % 4), 3f);
-                }
-            }
-        }
-
-        // A slope up onto the first tier from the plaza side.
-        Prop(rocks, "cliff_blockSlope_rock", centre + new Vector3(-6f, 0f, 0f), 90f, 3f);
-
-        Prop(rocks, "tree_tall_dark", centre + new Vector3(8f, 0f, -8f), 20f, 7f);
-        Prop(rocks, "tree_detailed_dark", centre + new Vector3(-8f, 0f, -9f), 140f, 6f);
-        Prop(rocks, "rock_largeB", centre + new Vector3(9f, 0f, 6f), 60f, 4f);
+        Grown(rocks, "tree_tall_dark", c + new Vector2(2f, -2f), 20f, 7f);
+        Grown(rocks, "tree_detailed_dark", c + new Vector2(-8f, -9f), 140f, 6f);
+        Grown(rocks, "tree_palmDetailedTall", c + new Vector2(-6f, 5f), 200f, 6f);
+        Grown(rocks, "rock_largeB", c + new Vector2(9f, 6f), 60f, 4f);
+        Grown(rocks, "rock_tallB", c + new Vector2(-3f, 8f), 10f, 3f);
+        Grown(rocks, "rock_largeA", c + new Vector2(-9f, -2f), 200f, 3.5f);
+        Grown(rocks, "stone_tallA", c + new Vector2(4f, 3f), 90f, 3f);
 
         Fence(rocks, new Vector3(14.5f, 0f, -14.5f), new Vector3(14.5f, 0f, -42f));
         Fence(rocks, new Vector3(14.5f, 0f, -14.5f), new Vector3(42f, 0f, -14.5f));
@@ -454,6 +491,9 @@ public static class ZooBuilder
         Material stone = kit["stone"];
         float x0 = -38f, x1 = -18f, z0 = -35f, z1 = -21f, height = 6f, t = 0.6f;
         float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
+
+        // A floor, so no lawn grows indoors.
+        Slab(house, x0, x1, z0, z1, stone);
 
         // Back wall with a door in the middle.
         Block(house, "BackLeft", new Vector3(cx - 6f, height * 0.5f, z0), new Vector3(8f, height, t), stone);
@@ -509,26 +549,324 @@ public static class ZooBuilder
         Block(aviary, "PerchHigh", new Vector3(x0 + 5f, 9f, z1 - 5f), new Vector3(4f, 0.4f, 4f), kit["woodDark"]);
 
         Prop(aviary, "tree_tall", new Vector3((x0 + x1) * 0.5f, 0f, (z0 + z1) * 0.5f), 0f, 9f);
+
+        // Nobody's cut the aviary back either.
+        System.Random random = new System.Random(38);
+        Rect inside = Rect.MinMaxRect(x0 + 1f, z0 + 1f, x1 - 1f, z1 - 1f);
+        TerrainKit.Spread(aviary, ground, random, Undergrowth, 26, inside, null, null);
+        TerrainKit.Spread(aviary, ground, random, Bushes, 6, inside, at => (at - inside.center).magnitude > 3f, taken);
     }
 
-    /// Two per enclosure, never in the plaza or the pool, facing the middle of the map.
+    // ---------------------------------------------------------------- the new ground (2026-09-30)
+
+    /// East, where the avenue ends: a big barn the path runs straight through, doors at both ends,
+    /// a keeper's walkway along the north wall to fight down from, hay bales for cover.
+    static void BuildElephantHouse(Transform map)
+    {
+        Transform house = Group(map, "ElephantHouse");
+        Material wood = kit["woodDark"];
+        float x0 = 49f, x1 = 64f, z0 = -11f, z1 = 11f, height = 9f, t = 0.8f, door = 7f, doorHeight = 6.5f;
+        float cx = (x0 + x1) * 0.5f;
+
+        Slab(house, x0, x1, z0, z1, kit["stone"]);
+
+        Block(house, "North", new Vector3(cx, height * 0.5f, z1), new Vector3(x1 - x0, height, t), wood);
+        Block(house, "South", new Vector3(cx, height * 0.5f, z0), new Vector3(x1 - x0, height, t), wood);
+
+        // The two ends, each a wall with a doorway on the avenue's line.
+        foreach ((float x, string end) in new[] { (x0, "West"), (x1, "East") })
+        {
+            float side = (z1 - z0 - door) * 0.5f;
+            Block(house, end + "Left", new Vector3(x, height * 0.5f, z0 + side * 0.5f), new Vector3(t, height, side), wood);
+            Block(house, end + "Right", new Vector3(x, height * 0.5f, z1 - side * 0.5f), new Vector3(t, height, side), wood);
+            Block(house, end + "Lintel", new Vector3(x, (height + doorHeight) * 0.5f, 0f), new Vector3(t, height - doorHeight, door), wood);
+        }
+
+        Block(house, "Roof", new Vector3(cx, height + 0.25f, 0f), new Vector3(x1 - x0 + t, 0.5f, z1 - z0 + t), kit["stoneDark"]);
+
+        // The walkway, 3.5m up along the north wall, and a ramp up to it from the west door.
+        Block(house, "Walkway", new Vector3(cx, 3.3f, 9f), new Vector3(x1 - x0 - 1f, 0.4f, 3.6f), kit["woodBark"]);
+        Ramp(house, "WalkwayRamp", new Vector3(x0 + 2f, 0f, 5.6f), new Vector3(x0 + 10f, 3.5f, 5.6f), 2.8f, kit["woodBark"]);
+
+        // Hay, and a trough.
+        foreach (Vector2 at in new[] { new Vector2(54f, -7f), new Vector2(59f, -5f), new Vector2(61f, 3f), new Vector2(56f, 1f) })
+            Block(house, "Hay", new Vector3(at.x, 0.7f, at.y), new Vector3(2.2f, 1.4f, 1.4f), kit["dirt"]);
+        Block(house, "Trough", new Vector3(cx, 0.5f, -9.5f), new Vector3(8f, 1f, 1.2f), kit["stone"]);
+    }
+
+    /// West, either side of the avenue: tall palms and two feeding towers - a deck 6m up on posts,
+    /// a long ramp to each - the high ground on that side.
+    static void BuildGiraffePaddock(Transform map)
+    {
+        Transform paddock = Group(map, "GiraffePaddock");
+        Material wood = kit["woodBark"];
+
+        foreach (float z in new[] { 13f, -13f })
+        {
+            Transform tower = Group(paddock, z > 0 ? "TowerNorth" : "TowerSouth");
+            float x = -58f, deck = 6f;
+
+            foreach (Vector2 corner in new[] { new Vector2(-2f, -2f), new Vector2(2f, -2f), new Vector2(-2f, 2f), new Vector2(2f, 2f) })
+                Block(tower, "Post", new Vector3(x + corner.x, deck * 0.5f, z + corner.y), new Vector3(0.4f, deck, 0.4f), wood);
+
+            Block(tower, "Deck", new Vector3(x, deck, z), new Vector3(4.8f, 0.4f, 4.8f), kit["woodDark"]);
+            Block(tower, "Rail", new Vector3(x - 2.3f, deck + 0.6f, z), new Vector3(0.2f, 1f, 4.8f), wood);
+            Ramp(tower, "Ramp", new Vector3(x + 14f, 0f, z), new Vector3(x + 2.4f, deck + 0.2f, z), 2.6f, wood);
+        }
+
+        Random.State saved = Random.state;
+        Random.InitState(20260930);
+        foreach (Vector2 at in new[] { new Vector2(-52f, 22f), new Vector2(-63f, 6f), new Vector2(-50f, -22f), new Vector2(-63f, -6f), new Vector2(-54f, 30f), new Vector2(-54f, -30f) })
+            Grown(paddock, "tree_palmTall", new Vector3(at.x, 0f, at.y), Random.Range(0f, 360f), Random.Range(7f, 9f));
+        Random.state = saved;
+
+        // A low fence along the avenue, with its gaps.
+        Fence(paddock, new Vector3(-48f, 0f, 4f), new Vector3(-66f, 0f, 4f));
+        Fence(paddock, new Vector3(-48f, 0f, -4f), new Vector3(-66f, 0f, -4f));
+    }
+
+    /// North, beside the avenue: a cafe with a counter, an open front, and tables under umbrellas
+    /// out on its terrace.
+    static void BuildCafe(Transform map)
+    {
+        Transform cafe = Group(map, "Cafe");
+        Material stone = kit["stone"];
+        float x0 = 14f, x1 = 34f, z0 = 54f, z1 = 64f, height = 5f, t = 0.6f;
+        float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
+
+        Slab(cafe, x0, x1, z0 - 8f, z1, stone);   // the building and its terrace
+
+        Block(cafe, "Back", new Vector3(cx, height * 0.5f, z1), new Vector3(x1 - x0, height, t), stone);
+        Block(cafe, "West", new Vector3(x0, height * 0.5f, cz), new Vector3(t, height, z1 - z0), stone);
+        Block(cafe, "East", new Vector3(x1, height * 0.5f, cz), new Vector3(t, height, z1 - z0), stone);
+        Block(cafe, "Roof", new Vector3(cx, height + 0.25f, cz), new Vector3(x1 - x0 + t, 0.5f, z1 - z0 + t), kit["woodDark"]);
+        for (int i = 0; i <= 4; i++)
+            Block(cafe, $"Pillar{i}", new Vector3(Mathf.Lerp(x0, x1, i / 4f), height * 0.5f, z0), new Vector3(0.6f, height, 0.6f), stone);
+
+        Block(cafe, "Counter", new Vector3(cx, 0.55f, z1 - 3f), new Vector3(12f, 1.1f, 1.2f), kit["woodDark"]);
+
+        foreach (Vector2 at in new[] { new Vector2(17f, 50f), new Vector2(23f, 49f), new Vector2(29f, 50f), new Vector2(20f, 58f), new Vector2(28f, 58f) })
+        {
+            Block(cafe, "Table", new Vector3(at.x, 0.45f, at.y), new Vector3(1.4f, 0.9f, 1.4f), kit["woodBark"]);
+            if (at.y < z0)
+            {
+                Disc(cafe, "UmbrellaPole", new Vector3(at.x, 1.4f, at.y), 0.12f, 2.6f, kit["woodBark"]);
+                Disc(cafe, "Umbrella", new Vector3(at.x, 2.8f, at.y), 3f, 0.15f, kit["stoneDark"]);
+            }
+        }
+    }
+
+    /// South, east of the avenue: a monkey climbing frame - posts and beams on a 4m grid, two
+    /// levels of decks and a top the vine can catch, a ramp onto the first level.
+    static void BuildMonkeyFrame(Transform map)
+    {
+        Transform frame = Group(map, "MonkeyFrame");
+        Material wood = kit["woodBark"];
+        float x0 = 16f, x1 = 36f, z0 = -62f, z1 = -50f, cell = 4f, top = 8f;
+
+        for (float x = x0; x <= x1 + 0.01f; x += cell)
+        {
+            for (float z = z0; z <= z1 + 0.01f; z += cell)
+                Block(frame, "Post", new Vector3(x, top * 0.5f, z), new Vector3(0.3f, top, 0.3f), wood);
+
+            Block(frame, "BeamLow", new Vector3(x, 4f, (z0 + z1) * 0.5f), new Vector3(0.25f, 0.25f, z1 - z0), wood);
+            Block(frame, "BeamTop", new Vector3(x, top, (z0 + z1) * 0.5f), new Vector3(0.25f, 0.25f, z1 - z0), wood);
+        }
+
+        for (float z = z0; z <= z1 + 0.01f; z += cell)
+            Block(frame, "BeamTop", new Vector3((x0 + x1) * 0.5f, top, z), new Vector3(x1 - x0, 0.25f, 0.25f), wood);
+
+        // Decks on some cells, at the two levels - somewhere to stand, not a floor all the way.
+        foreach ((float x, float z, float y) in new[] { (x0 + 2f, z0 + 2f, 4f), (x0 + 6f, z0 + 2f, 4f), (x0 + 10f, z0 + 6f, 4f),
+                                                         (x1 - 2f, z1 - 2f, 4f), (x0 + 6f, z0 + 6f, 7.8f), (x1 - 6f, z0 + 2f, 7.8f) })
+            Block(frame, "Deck", new Vector3(x, y, z), new Vector3(3.8f, 0.3f, 3.8f), kit["woodDark"]);
+
+        Ramp(frame, "Ramp", new Vector3(x0 - 8f, 0f, z0 + 2f), new Vector3(x0 + 0.1f, 4.15f, z0 + 2f), 2.5f, wood);
+    }
+
+    /// South, west of the avenue: a small keeper's hut - a door, window gaps, crates inside.
+    static void BuildKeepersHut(Transform map)
+    {
+        Transform hut = Group(map, "KeepersHut");
+        Material stone = kit["stoneDark"];
+        float x0 = -38f, x1 = -26f, z0 = -62f, z1 = -52f, height = 4.5f, t = 0.5f;
+        float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
+
+        Slab(hut, x0, x1, z0, z1, kit["stone"]);
+
+        // The door faces the middle of the map; the side walls have window gaps.
+        Block(hut, "FrontLeft", new Vector3(x0 + 2.5f, height * 0.5f, z1), new Vector3(5f, height, t), stone);
+        Block(hut, "FrontRight", new Vector3(x1 - 2.5f, height * 0.5f, z1), new Vector3(5f, height, t), stone);
+        Block(hut, "FrontLintel", new Vector3(cx, height - 0.75f, z1), new Vector3(2f, 1.5f, t), stone);
+        Block(hut, "Back", new Vector3(cx, height * 0.5f, z0), new Vector3(x1 - x0, height, t), stone);
+
+        foreach (float x in new[] { x0, x1 })
+        {
+            Block(hut, "SideLow", new Vector3(x, 0.6f, cz), new Vector3(t, 1.2f, z1 - z0), stone);
+            Block(hut, "SideHigh", new Vector3(x, height - 0.9f, cz), new Vector3(t, 1.8f, z1 - z0), stone);
+            Block(hut, "SidePier", new Vector3(x, height * 0.5f, cz), new Vector3(t, height, 2f), stone);
+        }
+
+        Block(hut, "Roof", new Vector3(cx, height + 0.25f, cz), new Vector3(x1 - x0 + t, 0.5f, z1 - z0 + t), kit["woodDark"]);
+
+        foreach (Vector2 at in new[] { new Vector2(-35f, -60f), new Vector2(-29f, -59f), new Vector2(-33f, -56f) })
+            Block(hut, "Crate", new Vector3(at.x, 0.6f, at.y), new Vector3(1.2f, 1.2f, 1.2f), kit["woodBark"]);
+    }
+
+    /// The four outer corners: a water tower (NE) to climb or swing to, bamboo in a hollow (NW), a
+    /// rocky knoll (SW) with a slope up its east side, and a wooded hill (SE).
+    static void BuildCorners(Transform map)
+    {
+        System.Random random = new System.Random(20260931);
+
+        // NE - the water tower: four legs, a deck halfway up with a ramp to it, the tank on top.
+        Transform tower = Group(map, "WaterTower");
+        Vector3 c = new Vector3(56f, 0f, 56f);
+        foreach (Vector2 corner in new[] { new Vector2(-2.5f, -2.5f), new Vector2(2.5f, -2.5f), new Vector2(-2.5f, 2.5f), new Vector2(2.5f, 2.5f) })
+            Block(tower, "Leg", c + new Vector3(corner.x, 6f, corner.y), new Vector3(0.5f, 12f, 0.5f), kit["woodBark"]);
+        Block(tower, "Deck", c + new Vector3(0f, 6f, 0f), new Vector3(6f, 0.4f, 6f), kit["woodDark"]);
+        Ramp(tower, "Ramp", c + new Vector3(-15f, 0f, 0f), c + new Vector3(-3f, 6.2f, 0f), 2.6f, kit["woodBark"]);
+        Disc(tower, "Tank", c + new Vector3(0f, 14f, 0f), 7f, 4f, kit["stoneDark"]);
+
+        // NW - bamboo in the hollow: a thicket to hide in and swing between.
+        Transform bamboo = Group(map, "BambooHollow");
+        TerrainKit.Spread(bamboo, ground, random, new TerrainKit.Scatter
+        {
+            folder = Models, models = new[] { "crops_bambooStageB", "crops_bambooStageA" },
+            scale = new Vector2(4.5f, 7f), spacing = 1.6f, maxSteep = 0.35f,
+        }, 45, new Rect(-66f, 46f, 20f, 20f), at => (at - new Vector2(-56f, 56f)).magnitude < 10f, taken);
+
+        // SW - the rocky knoll: rocks round its foot and on its top.
+        Transform knoll = Group(map, "RockyKnoll");
+        foreach ((string model, Vector2 at, float size) in new[] { ("rock_largeA", new Vector2(-50f, -63f), 4.5f),
+                                                                    ("rock_largeB", new Vector2(-63f, -49f), 4f),
+                                                                    ("rock_tallA", new Vector2(-58f, -58f), 3.5f),
+                                                                    ("stone_largeA", new Vector2(-55f, -60f), 3f),
+                                                                    ("rock_tallB", new Vector2(-63f, -62f), 4f) })
+            Grown(knoll, model, at, at.x * 13f, size);
+        Grown(knoll, "tree_detailed_dark", new Vector2(-59f, -54f), 30f, 6f);
+
+        // SE - the wooded hill.
+        Transform copse = Group(map, "WoodedHill");
+        TerrainKit.Spread(copse, ground, random, Trees, 11, new Rect(44f, -66f, 22f, 22f),
+                          at => (at - new Vector2(56f, -56f)).magnitude < 10f, taken);
+    }
+
+    // ---------------------------------------------------------------- gone wild
+
+    static readonly TerrainKit.Scatter Trees = new TerrainKit.Scatter
+    {
+        folder = Models,
+        models = new[] { "tree_tall", "tree_default", "tree_detailed", "tree_tall_dark", "tree_detailed_dark",
+                         "tree_default_dark", "tree_palmTall", "tree_palmDetailedTall", "tree_thin", "tree_thin_dark" },
+        scale = new Vector2(4.5f, 8f), spacing = 6f, maxSteep = 0.3f,
+    };
+
+    static readonly TerrainKit.Scatter Bushes = new TerrainKit.Scatter
+    {
+        folder = Models,
+        models = new[] { "plant_bush", "plant_bushLarge", "plant_bushDetailed", "plant_bushSmall" },
+        scale = new Vector2(4f, 7f), solid = false, spacing = 2.6f, maxSteep = 0.35f,
+    };
+
+    static readonly TerrainKit.Scatter Undergrowth = new TerrainKit.Scatter
+    {
+        folder = Models,
+        models = new[] { "plant_flatTall", "plant_flatShort", "grass_large", "grass_leafsLarge", "grass_leafs",
+                         "flower_purpleA", "flower_redA", "flower_yellowA", "mushroom_redGroup", "mushroom_tanGroup" },
+        scale = new Vector2(2.4f, 4.2f), solid = false, spacing = 0f, maxSteep = 0.35f, sink = 0.02f, shadows = false,
+    };
+
+    static readonly TerrainKit.Scatter Rocks = new TerrainKit.Scatter
+    {
+        folder = Models,
+        models = new[] { "rock_largeA", "rock_largeB", "rock_tallA", "rock_smallA", "stone_largeA", "log", "log_large" },
+        scale = new Vector2(3.5f, 6f), spacing = 5f, maxSteep = 0.4f, sink = 0.1f,
+    };
+
+    /// <summary>
+    /// The zoo's been left to the jungle: trees, bushes, ferns, flowers and fallen logs across
+    /// every lawn - never on a path, a building or a spawnpoint. Bushes and undergrowth have no
+    /// collider, so they hide you without stopping you; trees, rocks and logs are solid cover.
+    /// </summary>
+    static int Overgrow(Transform map)
+    {
+        Transform wild = Group(map, "Overgrowth");
+        System.Random random = new System.Random(20261001);
+        Rect all = new Rect(-Half + 2f, -Half + 2f, Half * 2f - 4f, Half * 2f - 4f);
+
+        bool Open(Vector2 at, float margin)
+        {
+            if (TerrainKit.InAny(at, Pads, margin))
+                return false;
+
+            // Nothing growing across the slopes up the rock hill and the knoll.
+            foreach (Vector2[] way in Ways)
+            {
+                if (TerrainKit.DistanceToLine(at, way, out _) < 3f + margin)
+                    return false;
+            }
+
+            if (TerrainKit.DistanceToLine(at, LobbyView, out _) < 3f + margin)
+                return false;
+
+            // A clearing round every spawnpoint, wider for a tree than a fern - you come back with
+            // somewhere to look and shoot, not with a trunk in your face.
+            float clearing = 3f + margin * 1.5f;
+            foreach (Vector2 spawn in SpawnSpots)
+            {
+                if ((spawn - at).sqrMagnitude < clearing * clearing)
+                    return false;
+            }
+
+            return true;
+        }
+
+        int placed = 0;
+        placed += TerrainKit.Spread(wild, ground, random, Trees, 70, all, at => Open(at, 3f), taken);
+        placed += TerrainKit.Spread(wild, ground, random, Rocks, 18, all, at => Open(at, 2f), taken);
+        placed += TerrainKit.Spread(wild, ground, random, Bushes, 130, all, at => Open(at, 1f), taken);
+        placed += TerrainKit.Spread(wild, ground, random, Undergrowth, 340, all, at => Open(at, 0.5f), null);
+
+        // Along the foot of the walls, thickest - the edge of the map reads as jungle, not a wall.
+        foreach (Rect edge in new[] { Rect.MinMaxRect(-Half, Half - 5f, Half, Half), Rect.MinMaxRect(-Half, -Half, Half, -Half + 5f),
+                                      Rect.MinMaxRect(Half - 5f, -Half, Half, Half), Rect.MinMaxRect(-Half, -Half, -Half + 5f, Half) })
+        {
+            placed += TerrainKit.Spread(wild, ground, random, Bushes, 25, edge, at => Open(at, 0.5f), taken);
+            placed += TerrainKit.Spread(wild, ground, random, Undergrowth, 40, edge, at => Open(at, 0.5f), null);
+        }
+
+        return placed;
+    }
+
+    // The lobby camera's view (MapSetup.ViewSpots): from where it stands, past the gorilla, up the lawn.
+    static readonly Vector2[] LobbyView = { new Vector2(-8.5f, -37.5f), new Vector2(-4f, -26f) };
+
+    // Two per inner enclosure, one or two in each new area - never in the plaza or the pool.
+    static readonly Vector2[] SpawnSpots =
+    {
+        new Vector2(16f, 40f), new Vector2(40f, 17f),      // pool
+        new Vector2(18f, -40f), new Vector2(40f, -18f),    // rock hill
+        new Vector2(-28f, -31f), new Vector2(-40f, -17f),  // reptile house, inside and out
+        new Vector2(-30f, 23f), new Vector2(-16f, 43f),    // aviary, inside and out
+        new Vector2(61f, -7.3f),                           // elephant house, between the hay and the trough
+        new Vector2(-52f, 20f), new Vector2(-52f, -20f),   // giraffe paddock
+        new Vector2(24f, 58f),                             // cafe
+        new Vector2(12f, -57f),                            // by the monkey frame
+        new Vector2(-32f, -57f),                           // keeper's hut
+    };
+
+    /// Facing the middle of the map, standing on whatever the ground is there.
     static void BuildSpawns()
     {
         GameObject host = new GameObject("SpawnManager");
         host.AddComponent<SpawnManager>();
         GameObject pad = AssetDatabase.LoadAssetAtPath<GameObject>(SpawnpointPrefab);
-
-        Vector2[] spots =
-        {
-            new Vector2(16f, 40f), new Vector2(40f, 17f),      // pool
-            new Vector2(18f, -40f), new Vector2(40f, -18f),    // rocks
-            new Vector2(-28f, -31f), new Vector2(-40f, -17f),  // reptile house, inside and out
-            new Vector2(-30f, 23f), new Vector2(-16f, 40f),    // aviary, inside and out
-        };
+        Vector2[] spots = SpawnSpots;
 
         for (int i = 0; i < spots.Length; i++)
         {
-            Vector3 at = new Vector3(spots[i].x, 1.1f, spots[i].y);
+            Vector3 at = new Vector3(spots[i].x, ground.Height(spots[i].x, spots[i].y) + 1.1f, spots[i].y);
             GameObject point = (GameObject)PrefabUtility.InstantiatePrefab(pad, host.scene);
             point.name = $"Spawnpoint{i}";
             point.transform.SetParent(host.transform, false);
@@ -573,6 +911,14 @@ public static class ZooBuilder
         return block;
     }
 
+    /// A building's floor - a thin slab over its level pad, which is also what keeps the grass out.
+    /// Not called "Floor": that's the terrain's name, and what the lobby's grass copy looks for.
+    static void Slab(Transform parent, float x0, float x1, float z0, float z1, Material material)
+    {
+        Block(parent, "Slab", new Vector3((x0 + x1) * 0.5f, 0.01f, (z0 + z1) * 0.5f),
+              new Vector3(x1 - x0, 0.1f, z1 - z0), material);
+    }
+
     /// A cylinder with a real mesh collider - the primitive's own capsule collider is the wrong
     /// shape for anything flatter or taller than a pill.
     static GameObject Disc(Transform parent, string name, Vector3 centre, float diameter, float height, Material material)
@@ -604,7 +950,7 @@ public static class ZooBuilder
         ramp.GetComponent<Renderer>().sharedMaterial = material;
     }
 
-    /// Wooden fence posts and a rail between two points, leaving a 4m gap every 12m.
+    /// Wooden fence rails between two points, leaving a 4m gap every 12m.
     static void Fence(Transform parent, Vector3 from, Vector3 to)
     {
         Transform fence = Group(parent, "Fence");
@@ -620,37 +966,27 @@ public static class ZooBuilder
                 break;
 
             Vector3 mid = from + direction * (d + segment * 0.5f);
+            mid.y = ground.Height(mid.x, mid.z);
             GameObject rail = Block(fence, "Rail", mid + Vector3.up * 0.7f, new Vector3(0.2f, 1.4f, segment), wood);
             rail.transform.localRotation = facing;
         }
     }
 
-    /// One of the jungle kit's models, with a real collider on every mesh - the same way
-    /// MapExpansion places them, rather than trusting the FBX's import settings.
-    static GameObject Prop(Transform parent, string model, Vector3 at, float yaw, float scale)
+    /// One of the jungle kit's models, solid unless it's told not to be.
+    static GameObject Prop(Transform parent, string model, Vector3 at, float yaw, float scale, bool solid = true)
     {
-        GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>($"{Models}/{model}.fbx");
-
-        if (source == null)
-        {
-            Debug.LogWarning($"[zoo] no {model} in the jungle kit - skipped");
-            return null;
-        }
-
-        GameObject prop = (GameObject)PrefabUtility.InstantiatePrefab(source, parent.gameObject.scene);
-        prop.transform.SetParent(parent, false);
-        prop.transform.localPosition = at;
-        prop.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-        prop.transform.localScale = Vector3.one * scale;
-
-        foreach (MeshFilter mesh in prop.GetComponentsInChildren<MeshFilter>(true))
-        {
-            if (mesh.GetComponent<Collider>() == null)
-                mesh.gameObject.AddComponent<MeshCollider>().sharedMesh = mesh.sharedMesh;
-        }
-
-        return prop;
+        return TerrainKit.Prop(parent, $"{Models}/{model}.fbx", at, yaw, scale, solid);
     }
+
+    /// One standing on the ground wherever it is, a little sunk in so it doesn't perch on a slope.
+    static GameObject Grown(Transform parent, string model, Vector2 at, float yaw, float scale, bool solid = true)
+    {
+        taken.Add(new Vector3(at.x, at.y, 3f));
+        return Prop(parent, model, new Vector3(at.x, ground.Height(at.x, at.y) - 0.05f * scale, at.y), yaw, scale, solid);
+    }
+
+    static GameObject Grown(Transform parent, string model, Vector3 at, float yaw, float scale) =>
+        Grown(parent, model, new Vector2(at.x, at.z), yaw, scale);
 
     static void AddToBuildSettings(string path)
     {

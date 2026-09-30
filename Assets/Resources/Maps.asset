@@ -19,3 +19,6 @@ MonoBehaviour:
   - key: zoo
     displayName: THE ZOO
     sceneName: Zoo
+  - key: glacier
+    displayName: THE GLACIER
+    sceneName: Glacier

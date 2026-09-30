@@ -25,6 +25,15 @@ public class MenuBackdrop : MonoBehaviour
 
         [Tooltip("Where the menu gorilla stands while this map is shown.")]
         public Transform gorillaSpot;
+
+        [Tooltip("This map's own sky, when it isn't the menu's - the glacier's. Empty keeps the menu's sky and fog.")]
+        public Material sky;
+
+        [Tooltip("With its own sky: its fog, as its scene has it.")]
+        public bool fog;
+        public FogMode fogMode = FogMode.ExponentialSquared;
+        public Color fogColour = Color.grey;
+        public float fogDensity = 0.01f;
     }
 
     [SerializeField] View[] views = new View[0];
@@ -33,7 +42,23 @@ public class MenuBackdrop : MonoBehaviour
 
     string showing;
 
-    void Start() => Show(Wanted());
+    // The menu scene's own sky and fog, for every map that doesn't bring its own.
+    Material menuSky;
+    bool menuFog;
+    Color menuFogColour;
+    float menuFogDensity;
+    FogMode menuFogMode;
+
+    void Start()
+    {
+        menuSky = RenderSettings.skybox;
+        menuFog = RenderSettings.fog;
+        menuFogColour = RenderSettings.fogColor;
+        menuFogDensity = RenderSettings.fogDensity;
+        menuFogMode = RenderSettings.fogMode;
+
+        Show(Wanted());
+    }
 
     void Update()
     {
@@ -66,10 +91,18 @@ public class MenuBackdrop : MonoBehaviour
                 other.world.SetActive(other == view);
         }
 
-        // The sun belongs to whichever copy is showing.
+        // The sun belongs to whichever copy is showing, and so does the sky if it has its own.
         Light sun = view.world.GetComponentInChildren<Light>();
         if (sun != null)
             RenderSettings.sun = sun;
+
+        bool own = view.sky != null;
+        RenderSettings.skybox = own ? view.sky : menuSky;
+        RenderSettings.fog = own ? view.fog : menuFog;
+        RenderSettings.fogColor = own ? view.fogColour : menuFogColour;
+        RenderSettings.fogDensity = own ? view.fogDensity : menuFogDensity;
+        RenderSettings.fogMode = own ? view.fogMode : menuFogMode;
+        DynamicGI.UpdateEnvironment();
 
         if (menuCamera != null && view.cameraSpot != null)
             menuCamera.MoveTo(view.cameraSpot.position, view.cameraSpot.rotation);

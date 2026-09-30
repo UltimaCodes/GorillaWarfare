@@ -168,12 +168,14 @@ public class GrassField : MonoBehaviour
     }
 
     /// <summary>
-    /// A small box just above the ground, clear of the floor itself - so it finds a trunk, rock or
-    /// cliff standing on this spot rather than the floor it's standing on.
+    /// A small box from just above the ground up past the blades' height, clear of the floor itself -
+    /// so it finds a trunk, rock or cliff standing on this spot, and anything lying on the floor too:
+    /// paving, a path, a building's floor. It used to start 18cm up, so a 10cm paving slab passed
+    /// under it and the zoo's plaza and paths grew grass straight through the concrete.
     /// </summary>
     bool Blocked(Vector3 point)
     {
-        int count = Physics.OverlapBoxNonAlloc(point + Vector3.up * 0.3f, Vector3.one * 0.12f, overlap,
+        int count = Physics.OverlapBoxNonAlloc(point + Vector3.up * 0.22f, new Vector3(0.12f, 0.2f, 0.12f), overlap,
                                                Quaternion.identity, blockedBy, QueryTriggerInteraction.Ignore);
 
         for (int i = 0; i < count; i++)

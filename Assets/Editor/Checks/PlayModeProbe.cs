@@ -966,12 +966,29 @@ public class ProbeRunner : MonoBehaviour
             candidate.y = 0f;
             candidate.Normalize();
 
-            if (!Physics.SphereCast(cam.transform.position, 0.4f, candidate, out _, distance + 1.5f,
-                                    Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+            if (Physics.SphereCast(cam.transform.position, 0.4f, candidate, out _, distance + 1.5f,
+                                   Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
+                continue;
+
+            // And level ground all the way out, to stand a dummy on at the end. The maps are terrain
+            // now (2026-09-30): a line clear at eye height can still run over a rise that catches
+            // what's fired along it - grapes arc - or end on a slope, a dip or under a canopy.
+            // A dummy 15m off took no grapes at all and wasn't in the picture the probe took while
+            // aiming at it. So the ground under the line stays close to the height of your feet.
+            float feet = cam.transform.position.y - 1.6f;
+            bool level = true;
+            for (float d = 1.5f; d <= distance + 0.01f && level; d += 1.5f)
             {
-                direction = candidate;
-                return true;
+                Vector3 over = cam.transform.position + candidate * d + Vector3.up;
+                level = Physics.Raycast(over, Vector3.down, out RaycastHit ground, 6f, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                        && ground.normal.y > 0.75f && Mathf.Abs(ground.point.y - feet) < 1.2f;
             }
+
+            if (!level)
+                continue;
+
+            direction = candidate;
+            return true;
         }
 
         direction = cam.transform.forward;
@@ -982,8 +999,10 @@ public class ProbeRunner : MonoBehaviour
     /// sandbox drops its own.
     static TrainingDummy DummyAt(Camera cam, Vector3 point)
     {
+        // From just above the point, not 4m above it: in the jungle, 4m up is inside the canopy,
+        // and the dummy stood in a tree top.
         Vector3 at = point;
-        if (Physics.Raycast(point + Vector3.up * 4f, Vector3.down, out RaycastHit ground, 20f,
+        if (Physics.Raycast(point + Vector3.up, Vector3.down, out RaycastHit ground, 20f,
                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore))
             at = ground.point + Vector3.up;
 
@@ -1121,6 +1140,13 @@ public class ProbeRunner : MonoBehaviour
         Check(spent > 5, "then it fires", $"{spent} grapes in {firing:F1}s");
         Check(mostInTheAir > 3, "grapes are real things in the air", $"{mostInTheAir} at once at most");
         Check(dealt > 0f, "grapes hurt what they reach", $"{dealt:F0} damage to a dummy 15m out");
+        if (dealt <= 0f)
+        {
+            Vector3 chest = ChestOf(dummy);
+            string between = Physics.Linecast(cam.transform.position, chest, out RaycastHit block, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                ? $"'{block.collider.name}' {block.distance:F1}m out" : "nothing";
+            log.AppendLine($"  ..    grapes missed: dummy at {dummy.transform.position:F1}, you at {cam.transform.position:F1}, between you: {between}");
+        }
 
         // And mark it the way a bullet does - "purple haze doesnt have bullet impact or gore".
         BodyMarks grapeMarks = dummy.GetComponent<BodyMarks>();
@@ -2679,16 +2705,20 @@ public class ProbeRunner : MonoBehaviour
         movement.ResetVelocity();
         yield return Until(() => movement.Grounded, "stand on the ground");
 
-        // The clearest of four directions, so a tree in the way doesn't decide the result.
+        // The clearest of eight directions, so a tree in the way doesn't decide the result - clear at
+        // head height and at the height the swing lifts you to, up among the jungle's tree tops.
         Vector3 start = player.transform.position;
         Vector3 ahead = player.transform.forward;
         float bestClear = -1f;
 
-        for (int i = 0; i < 4; i++)
+        float Clear(Vector3 from, Vector3 dir) =>
+            Physics.SphereCast(from, 0.8f, dir, out RaycastHit block, 16f, Hitbox.WorldMask, QueryTriggerInteraction.Ignore)
+                ? block.distance : 16f;
+
+        for (int i = 0; i < 8; i++)
         {
-            Vector3 dir = Quaternion.Euler(0f, 90f * i, 0f) * player.transform.forward;
-            float clear = Physics.SphereCast(start + Vector3.up * 2f, 0.8f, dir, out RaycastHit block, 16f,
-                                             Hitbox.WorldMask, QueryTriggerInteraction.Ignore) ? block.distance : 16f;
+            Vector3 dir = Quaternion.Euler(0f, 45f * i, 0f) * player.transform.forward;
+            float clear = Mathf.Min(Clear(start + Vector3.up * 2f, dir), Clear(start + Vector3.up * 6.5f, dir));
             if (clear > bestClear)
             {
                 bestClear = clear;
@@ -2702,8 +2732,15 @@ public class ProbeRunner : MonoBehaviour
         branch.transform.localScale = new Vector3(1.2f, 0.4f, 1.2f);
         Physics.SyncTransforms();
 
-        // Aimed straight at it for the cast, the way a player lines up the crosshair.
-        camera.transform.rotation = Quaternion.LookRotation(branch.transform.position - camera.transform.position);
+        // Aimed straight at it, the way a player lines up the crosshair - through the look angles,
+        // not the camera's rotation. Setting the camera alone lasted one frame: the player's own
+        // look put it back, and the swing, which drives along where you look, pushed along the
+        // spawn's facing instead of at the branch. Fine while the clearest way was straight ahead;
+        // a weak sideways swing that stopped short whenever it wasn't - the "spawn-dependent" miss
+        // this check kept failing with, and most runs once the jungle got dense (2026-09-30).
+        float offLook = Vector3.Angle(player.transform.forward, ahead);
+        Face(player, camera, branch.transform.position);
+        log.AppendLine($"  ..    swing test: clear {bestClear:F1}m, {offLook:F0} degrees off where you were facing, from {start:F1}");
         KeyBinds.HeldOverride.Add(KeyBinds.Action.Grapple);
         typeof(VineGrapple).GetMethod("TryAttach", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(vine, null);
 

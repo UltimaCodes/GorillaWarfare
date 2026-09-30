@@ -27,12 +27,16 @@ public static class MapSetup
     const string BackdropName = "~MenuBackdrop";
 
     // Where the menu camera stands for each map's backdrop, picked from rendered candidates
-    // (ZooBuilder.Photograph with GW_ZOO_VIEWS). The first map's is wherever the camera already is.
+    // (MapPhotographer with GW_MAP_VIEWS). The first map's is wherever the camera already is.
     // Pitch -2, the same slight downward look the arena's has.
+    // The height is above the ground there, found on the copy's terrain.
     static readonly Dictionary<string, (Vector3 at, float yaw)> ViewSpots = new Dictionary<string, (Vector3, float)>
     {
         // The south avenue, up the path at the bandstand, trees either side.
         ["zoo"] = (new Vector3(-8f, 1.8f, -36f), 20f),
+
+        // Over the frozen lake to the ice pillars, the outpost's cabins and the pines behind.
+        ["glacier"] = (new Vector3(-10f, 1.8f, -36f), 30f),
     };
 
     [MenuItem("Tools/Gorilla Warfare/Set up the maps")]
@@ -83,6 +87,12 @@ public static class MapSetup
         MenuGorilla gorilla = root.GetComponentInChildren<MenuGorilla>(true);
         MenuBackdrop backdrop = root.GetComponent<MenuBackdrop>();
 
+        // GW_MAP_REFRESH="zoo,..." - copy these maps in again, for when a map's scene has been rebuilt
+        // (the zoo, 2026-09-30). Each keeps where its camera and gorilla stood.
+        Dictionary<string, (Pose camera, Pose gorilla)> kept = backdrop != null
+            ? DropViews(backdrop, System.Environment.GetEnvironmentVariable("GW_MAP_REFRESH"))
+            : new Dictionary<string, (Pose, Pose)>();
+
         if (backdrop == null)
         {
             backdrop = root.AddComponent<MenuBackdrop>();
@@ -116,7 +126,7 @@ public static class MapSetup
             if (HasView(backdrop, map.key))
                 continue;
 
-            GameObject group = CopyMap(menu, root, map);
+            GameObject group = CopyMap(menu, root, map, out Look own);
             if (group == null)
                 continue;
 
@@ -124,15 +134,73 @@ public static class MapSetup
                 ? chosen : (new Vector3(0f, 1.8f, -20f), 0f);
             Quaternion look = Quaternion.Euler(-2f, spot.yaw, 0f);
 
+            Terrain floor = group.GetComponentInChildren<Terrain>(true);
+            if (floor != null)
+                spot.at.y += floor.SampleHeight(spot.at) + floor.transform.position.y;
+
             // The gorilla where the arena's stands relative to its camera - ahead and to the right,
             // on the ground, turned a little off facing the camera - found with only this copy live.
             Transform placedGorilla = PlaceGorilla(backdrop, group, spot.at, look);
-            AddView(backdrop, map.key, group, spot.at, look, placedGorilla);
+
+            // A refreshed map goes back to exactly the spots it had.
+            if (kept.TryGetValue(map.key, out var before))
+            {
+                spot.at = before.camera.position;
+                look = before.camera.rotation;
+                placedGorilla.SetPositionAndRotation(before.gorilla.position, before.gorilla.rotation);
+            }
+
+            AddView(backdrop, map.key, group, spot.at, look, placedGorilla, own);
             Object.DestroyImmediate(placedGorilla.gameObject);
 
             group.SetActive(false);
             Debug.Log($"[maps] copied {map.displayName} in behind the menu, camera at {spot.at}");
         }
+    }
+
+    /// <summary>
+    /// Takes these maps' copies out of the backdrop - their groups and their views - so the loop
+    /// below copies them in fresh, and hands back where each one's camera and gorilla were. The
+    /// first map's copy is never dropped: it's the one that was already in the menu, not a copy of
+    /// its scene, and there's nothing to copy it again from.
+    /// </summary>
+    static Dictionary<string, (Pose, Pose)> DropViews(MenuBackdrop backdrop, string keys)
+    {
+        Dictionary<string, (Pose, Pose)> kept = new Dictionary<string, (Pose, Pose)>();
+        if (string.IsNullOrEmpty(keys))
+            return kept;
+
+        SerializedObject so = new SerializedObject(backdrop);
+        SerializedProperty views = so.FindProperty("views");
+
+        foreach (string raw in keys.Split(','))
+        {
+            string key = raw.Trim();
+            if (key.Length == 0 || key == MapRegistry.Default.key)
+                continue;
+
+            for (int i = views.arraySize - 1; i >= 0; i--)
+            {
+                SerializedProperty view = views.GetArrayElementAtIndex(i);
+                if (view.FindPropertyRelative("mapKey").stringValue != key)
+                    continue;
+
+                Transform cameraSpot = view.FindPropertyRelative("cameraSpot").objectReferenceValue as Transform;
+                Transform gorillaSpot = view.FindPropertyRelative("gorillaSpot").objectReferenceValue as Transform;
+                if (cameraSpot != null && gorillaSpot != null)
+                    kept[key] = (new Pose(cameraSpot.position, cameraSpot.rotation), new Pose(gorillaSpot.position, gorillaSpot.rotation));
+
+                GameObject world = view.FindPropertyRelative("world").objectReferenceValue as GameObject;
+                if (world != null)
+                    Object.DestroyImmediate(world);
+
+                views.DeleteArrayElementAtIndex(i);
+                Debug.Log($"[maps] dropped {key}'s backdrop copy to copy it in again");
+            }
+        }
+
+        so.ApplyModifiedPropertiesWithoutUndo();
+        return kept;
     }
 
     static GameObject Group(GameObject root, string name)
@@ -155,10 +223,21 @@ public static class MapSetup
         return false;
     }
 
-    /// A map's geometry, sun and grass copied under its own group, the grass pointed at the copy's
-    /// floor - the same copy MenuBuilder makes of the arena.
-    static GameObject CopyMap(Scene menu, GameObject root, MapRegistry.Map map)
+    /// A map's sky and fog, when they aren't the menu's - see MenuBackdrop.View.sky.
+    struct Look
     {
+        public Material sky;
+        public bool fog;
+        public FogMode mode;
+        public Color colour;
+        public float density;
+    }
+
+    /// A map's geometry, sun and grass copied under its own group, the grass pointed at the copy's
+    /// floor - the same copy MenuBuilder makes of the arena - and its sky, if it has one of its own.
+    static GameObject CopyMap(Scene menu, GameObject root, MapRegistry.Map map, out Look own)
+    {
+        own = default;
         string path = $"Assets/Scenes/{map.sceneName}.unity";
         if (!System.IO.File.Exists(path))
         {
@@ -167,7 +246,15 @@ public static class MapSetup
         }
 
         GameObject group = Group(root, map.key);
+        Material menuSky = RenderSettings.skybox;
         Scene source = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+
+        // Lighting belongs to whichever scene is active.
+        SceneManager.SetActiveScene(source);
+        if (RenderSettings.skybox != null && RenderSettings.skybox != menuSky)
+            own = new Look { sky = RenderSettings.skybox, fog = RenderSettings.fog, mode = RenderSettings.fogMode,
+                             colour = RenderSettings.fogColor, density = RenderSettings.fogDensity };
+        SceneManager.SetActiveScene(menu);
 
         foreach (GameObject candidate in source.GetRootGameObjects())
         {
@@ -245,7 +332,7 @@ public static class MapSetup
 
     /// Adds a view with its two markers, as children of the map's group so they move with it.
     static void AddView(MenuBackdrop backdrop, string key, GameObject group, Vector3 cameraAt, Quaternion cameraLook,
-                        Transform gorillaPose)
+                        Transform gorillaPose, Look own = default)
     {
         GameObject cameraSpot = new GameObject("CameraSpot");
         SceneManager.MoveGameObjectToScene(cameraSpot, group.scene);
@@ -266,6 +353,11 @@ public static class MapSetup
         view.FindPropertyRelative("world").objectReferenceValue = group;
         view.FindPropertyRelative("cameraSpot").objectReferenceValue = cameraSpot.transform;
         view.FindPropertyRelative("gorillaSpot").objectReferenceValue = gorillaSpot.transform;
+        view.FindPropertyRelative("sky").objectReferenceValue = own.sky;
+        view.FindPropertyRelative("fog").boolValue = own.fog;
+        view.FindPropertyRelative("fogMode").enumValueIndex = System.Array.IndexOf(System.Enum.GetValues(typeof(FogMode)), own.sky != null ? own.mode : FogMode.ExponentialSquared);
+        view.FindPropertyRelative("fogColour").colorValue = own.sky != null ? own.colour : Color.grey;
+        view.FindPropertyRelative("fogDensity").floatValue = own.sky != null ? own.density : 0.01f;
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 
@@ -275,7 +367,8 @@ public static class MapSetup
 
         if (registry != null)
         {
-            Debug.Log("[maps] map list already exists - left alone");
+            // Existing maps are left exactly as they are; a map added since goes on the end.
+            AddMissingRows(registry);
             return registry;
         }
 
@@ -304,6 +397,45 @@ public static class MapSetup
 
         Debug.Log($"[maps] created {RegistryPath} with {rows.Length} maps");
         return registry;
+    }
+
+    // Maps added after the list was first made. The key is the role, the name is what the lobby shows.
+    static readonly (string key, string name, string scene)[] AddedLater =
+    {
+        ("glacier", "THE GLACIER", "Glacier"),
+    };
+
+    static void AddMissingRows(MapRegistry registry)
+    {
+        SerializedObject so = new SerializedObject(registry);
+        SerializedProperty maps = so.FindProperty("maps");
+        int added = 0;
+
+        foreach ((string key, string name, string scene) in AddedLater)
+        {
+            bool present = false;
+            for (int i = 0; i < maps.arraySize; i++)
+                present |= maps.GetArrayElementAtIndex(i).FindPropertyRelative("key").stringValue == key;
+
+            if (present || !System.IO.File.Exists($"Assets/Scenes/{scene}.unity"))
+                continue;
+
+            maps.arraySize++;
+            SerializedProperty row = maps.GetArrayElementAtIndex(maps.arraySize - 1);
+            row.FindPropertyRelative("key").stringValue = key;
+            row.FindPropertyRelative("displayName").stringValue = name;
+            row.FindPropertyRelative("sceneName").stringValue = scene;
+            added++;
+        }
+
+        so.ApplyModifiedPropertiesWithoutUndo();
+        if (added > 0)
+        {
+            EditorUtility.SetDirty(registry);
+            AssetDatabase.SaveAssets();
+        }
+
+        Debug.Log($"[maps] map list: {maps.arraySize} maps, {added} added");
     }
 
     /// The menu first (RoomManager and the launcher treat index 0 as "not a map"), then every

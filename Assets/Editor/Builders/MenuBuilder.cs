@@ -242,11 +242,12 @@ public static class MenuBuilder
         // until transforms are pushed across (same trap PlayerModelCheck notes).
         Physics.SyncTransforms();
 
-        // Picked from rendered candidates (Tools/Gorilla Warfare/Photograph the main menu with
-        // GW_MENU_CANDIDATES): in the arena's south-east, looking north-west - the sun behind the
-        // camera so the foreground is lit, the cliffs and statues across the arena behind the menu.
-        Vector3 spot = new Vector3(4f, 0f, -24f);
-        const float yaw = 305f;
+        // Picked from rendered candidates (Tools/Gorilla Warfare/Photograph a map, GW_MAP_VIEWS):
+        // at the west edge of the clearing looking east, across it to the idol on its temple - the
+        // jungle's landmark behind the menu, the clearing open in front for the gorilla. Moved
+        // 2026-09-30 when the jungle went onto terrain; the old spot is in the creek bed now.
+        Vector3 spot = new Vector3(8f, 0f, 2f);
+        const float yaw = 85f;
 
         float ground = floor != null ? floor.position.y : 0f;
         Collider floorCollider = floor != null ? floor.GetComponentInChildren<Collider>() : null;

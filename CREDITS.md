@@ -122,6 +122,11 @@ Jungle props — Kenney's Nature Kit, and particle sprites — Kenney's Particle
 (licence files in `Assets/Art/Jungle` and `Assets/Resources/Particles`). The health banana sprite
 is credited in `Assets/Textures/UI/BananaHealth-CREDIT.txt`.
 
+The glacier - its snowy pines, rocks, snow walls, log cabins, lanterns, sleds and train wagons - is
+Kenney's Holiday Kit, **CC0** (licence file and `SOURCES.txt` in `Assets/Art/Glacier`; only the ice and
+cabin pieces were imported, none of the Christmas ones). The terrain on every map is coloured in the
+kits' own colours - see `Assets/Shaders/MapTerrain.shader`.
+
 The Grenada's pineapple, Purple Haze's grapes and Red Hot Chili Pepper's chili — Kenney's Food Kit,
 **CC0** (licence file in `Assets/Resources/Models/Weapons`, with the shared `foodColormap.png`).
 

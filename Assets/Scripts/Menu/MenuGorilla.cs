@@ -48,11 +48,44 @@ public class MenuGorilla : MonoBehaviour
             return;
         }
 
-        if (tinted)
-            rig.Tint(tint);
+        shown = Wanted();
+        rig.Tint(shown);
 
         rig.LookPitch = lookPitch;
         Arm(rig);
+    }
+
+    Color shown;
+
+    void Update()
+    {
+        if (rig == null)
+            return;
+
+        // Checked every frame rather than on a property callback: it's one comparison, and it
+        // catches every way the answer changes - picking a colour, joining or leaving a room, the
+        // master handing out teams.
+        Color wanted = Wanted();
+        if (wanted != shown)
+        {
+            shown = wanted;
+            rig.Tint(wanted);
+        }
+    }
+
+    /// <summary>
+    /// In a lobby, you - your colour, the way the lobby's backdrop already shows the map you've
+    /// picked; your team's colour once a team mode has put you on one, since that's what you'll be
+    /// drawn in. Reported: "when you change your gorilla's colour make that change be reflected in
+    /// the background... instead of it being black". Outside a room there's no colour of yours to
+    /// show, so it's the menu's own look.
+    /// </summary>
+    Color Wanted()
+    {
+        if (Photon.Pun.PhotonNetwork.InRoom && Photon.Pun.PhotonNetwork.LocalPlayer != null)
+            return PlayerColours.For(Photon.Pun.PhotonNetwork.LocalPlayer);
+
+        return tinted ? tint : Color.white;
     }
 
     void Arm(MonkeyRig built)

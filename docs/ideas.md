@@ -222,6 +222,12 @@ to run over it, the same rule as `MenuBuilder.Run`, because it's Ryaan's to rewo
 spawns, and checks the player lands on a spawnpoint on the ground; `MenuButtonAudit` covers the new
 map picker.
 
+**Since, 2026-09-30:** every map's ground is terrain (`TerrainKit`) - the zoo expanded to 135m with 14m
+walls and gone wild, the jungle rebuilt as a proper jungle with a creek ravine and the idol on a temple
+mesa (most of Jungle Temple, below), and a third map, **the Glacier** (Kenney's Holiday Kit): a frozen
+lake, crevasses, an ice shelf, ice pillars to swing between and a cabin outpost. See bug-log.md's
+forty-fifth pass.
+
 Still on the list after the Zoo:
 
 | map | shape | why |
@@ -748,7 +754,7 @@ different from the compound — two maps that play the same way is the same as o
 Canopy and the Zoo are better maps but both are much more work, and Canopy in particular needs
 the launcher and vine to exist first or half of it is unreachable. Both now do.
 
-**How to build them:** blocked out from code, the way `MapExpansion` already works, rather than
+**How to build them:** blocked out from code, the way the map builders work (`TerrainKit`; `MapExpansion`, the first, is retired), rather than
 placed by hand. A generated blockout is re-runnable, diffable and tunable by changing a number,
 which matters enormously while the layout is still wrong. Hand-placed art goes on top once the
 shape is settled and nobody is moving walls any more.

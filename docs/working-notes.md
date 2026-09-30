@@ -180,13 +180,18 @@ ground under it and room to stand), an `EventSystem`, a light, and grass if it w
 shared one arrives on its own. Then a row in `Resources/Maps.asset` (key, name, scene) and the scene
 in Build Settings, the menu staying index 0. Then `Tools/Gorilla Warfare/Set up the maps`, which
 also copies it in behind the lobby (`~MenuBackdrop/<key>`, with a `CameraSpot` and a `GorillaSpot`
-to move by hand) so the lobby's backdrop can show it. `ZooBuilder` is a worked example;
+to move by hand) so the lobby's backdrop can show it. `ZooBuilder`, `JungleBuilder` and `GlacierBuilder` are
+worked examples - all three shape their ground with `TerrainKit` (a Unity Terrain called `Floor`, coloured by
+`Custom/MapTerrain` from how steep it is), put buildings on flat pads, and scatter kit props with a clearing
+round every spawn. A map with no grass on purpose goes in `SceneCheck.Grassless`; a map with its own sky
+gets it behind the lobby too (`MenuBackdrop.View.sky`). Look before trusting a layout:
+`Tools/Gorilla Warfare/Photograph a map` (`GW_MAP_SCENE`, `GW_MAP_VIEWS`);
 `SceneCheck` checks all of it for every map in the list, and the host picks from the list in the
 lobby.
 
 Moving an asset: move it **with its `.meta`** (`git mv` both, or drag it inside Unity), so its GUID
 and every reference to it survive. Then search the code for its old path - a few tools load by path
-(`MapExpansion`, `MenuBuilder`'s row prefabs, the builders' `BananaHealth.png`) - and run the suite.
+(the map builders' kit folders, `MenuBuilder`'s row prefabs, the builders' `BananaHealth.png`) - and run the suite.
 
 **Everything is built at runtime, not wired in a scene.** Weapons, hitboxes, the rig, the HUDs,
 `MatchState`. The player prefab carries one `PhotonView` and an empty `ItemHolder`; anything

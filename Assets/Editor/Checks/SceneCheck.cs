@@ -124,9 +124,18 @@ public static class SceneCheck
     /// is one warning in the log and no grass, and a GrassField with no ground colliders grows
     /// nothing at all. Re-run Tools/Gorilla Warfare/Set up the grass to fix any of these.
     /// </summary>
+    // Maps with no grass on purpose - the glacier is ice. Anything else without it has lost it.
+    static readonly string[] Grassless = { "Glacier" };
+
     static void CheckGrass(string map)
     {
         GrassField field = Object.FindFirstObjectByType<GrassField>();
+        if (field == null && System.Array.IndexOf(Grassless, map) >= 0)
+        {
+            Notes.Add($"{map}: no grass, on purpose");
+            return;
+        }
+
         if (field == null)
         {
             Failures.Add($"{map} has no GrassField - no grass. Run Tools/Gorilla Warfare/Set up the grass");

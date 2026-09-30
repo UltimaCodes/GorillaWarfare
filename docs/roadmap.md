@@ -137,7 +137,16 @@ The first round of feedback from people playing it. Worked through in this order
 - [x] **Creating a room right after the connection dropped failed** ("CreateRoom failed. Client is
       on NameServer") and left the menu on loading. Room actions now wait for the lobby and
       reconnect first; a lost connection keeps retrying. Checked against the real servers.
-- [ ] **More maps** - Jungle Temple and Canopy next (ideas.md section 0); voting after that.
+- [x] **The maps on terrain, the zoo expanded, a glacier** (2026-09-30, bug-log.md forty-fifth pass).
+      Every map's ground is a Unity Terrain now (`TerrainKit`), coloured by how steep it is in the kits'
+      own colours - grass, a dirt slope you can climb, a stone cliff you can't. The jungle is rebuilt on
+      it (`JungleBuilder`): a creek ravine, the idol up on a temple mesa, a ridge, ruins, and thick
+      jungle everywhere. The zoo is 135m (was 90), 14m walls (were 8), a rock hill instead of stacked
+      blocks, overgrown, and grass only on its lawns. **The Glacier** is new (`GlacierBuilder`, Kenney's
+      Holiday Kit): a frozen lake, crevasses, an ice shelf, ice pillars, a cabin outpost. The lobby's
+      gorilla wears your colour, and the glacier's backdrop brings its own sky.
+- [ ] **More maps** - Canopy next (ideas.md section 0); voting after that. Much of Jungle Temple (a
+      stepped ruin, a gorge) went into the jungle's rebuild.
 
 ---
 
@@ -686,6 +695,9 @@ Summary:
 - [ ] Map selection in the lobby, backed by map voting
 - [ ] Spawn system that doesn't drop people on each other
 - [ ] **The Silo** as the second map — small, vertical, maximally different from the compound
+
+**Retired 2026-09-30:** `MapExpansion` and its stacked cliff blocks are gone - the jungle is on terrain now
+(`JungleBuilder`), its height the ground itself. What follows is kept as history.
 
 **The current jungle map got a density and verticality pass 2026-08-22** - not a replacement for
 the above, which is still the real plan. `Tools/Gorilla Warfare/Expand the jungle map`
